@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Chrome Extension - Settings Module V2
  * Comprehensive settings panel with all module toggles and configurations
  * Version: 2.0.0
@@ -1059,62 +1059,42 @@
               <div class="sk-row-desc">Monitors shoplifting security and alerts when it drops to a safe level</div>
               <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-shoplift" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
             </div>
-            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-shoplifting" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
           </div>
           <div class="sk-shelf" id="skp-shelf-shoplift" style="display:none;">
             <div class="sk-sh" style="margin-top:0;font-size:10px;">Shoplifting Alert Settings</div>
-            <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Shoplifting Alert</div><div class="sk-row-desc">Notify when security drops low enough</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-            <label class="sk-field-label" style="margin-top:8px;">Check Interval (seconds)</label>
-            <input type="number" class="sk-input" min="10" max="300" value="30">
-            <div class="sk-hint">Minimum 10s -- recommended 30s</div>
-            <label class="sk-field-label" style="margin-top:10px;">Security Threshold per shop</label>
-            <div class="sk-subtab-bar sk-shelf-tabs" style="margin:6px 0 0;font-size:11px;">
-              <button class="sk-subtab-btn active" data-tab="shop-sally">Sally's</button>
-              <button class="sk-subtab-btn" data-tab="shop-bits">Bits n Bobs</button>
-              <button class="sk-subtab-btn" data-tab="shop-tc">TC Clothing</button>
-              <button class="sk-subtab-btn" data-tab="shop-super">Super Store</button>
-              <button class="sk-subtab-btn" data-tab="shop-pharm">Pharmacy</button>
-              <button class="sk-subtab-btn" data-tab="shop-cyber">Cyber Force</button>
-              <button class="sk-subtab-btn" data-tab="shop-jewel">Jewelry Store</button>
-              <button class="sk-subtab-btn" data-tab="shop-als">Big Al's</button>
+            <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Shoplifting Alert</div><div class="sk-row-desc">Notify when security drops low enough</div></div><label class="sk-tog"><input type="checkbox" id="skp-shoplift-notify" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+            <label class="sk-field-label" style="margin-top:8px;">Check Interval (minutes)</label>
+            <input type="number" class="sk-input" id="skp-shoplift-interval" min="1" max="60" value="1" step="1">
+            <div class="sk-hint">Minimum 1 min &mdash; recommended 1</div>
+            <label class="sk-field-label" style="margin-top:10px;">Alert when disabled per shop</label>
+            <div style="display:flex;gap:6px;margin:6px 0 4px;">
+              <button id="skp-shoplift-sel-all" style="padding:3px 10px;font-size:10px;background:#5fcc6a;border:none;border-radius:4px;color:#111;font-weight:700;cursor:pointer;">Select All</button>
+              <button id="skp-shoplift-desel-all" style="padding:3px 10px;font-size:10px;background:rgba(255,255,255,0.12);border:none;border-radius:4px;color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;">Deselect All</button>
             </div>
-            <div class="sk-subtab-panel active" id="skp-tab-shop-sally" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-bits" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-tc" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Checkpoint</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-super" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Checkpoint</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-pharm" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Checkpoint</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-cyber" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Guard</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-jewel" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Guard</label></div>
-            </div>
-            <div class="sk-subtab-panel" id="skp-tab-shop-als" style="padding-top:8px;">
-              <div class="sk-hint" style="margin-bottom:6px;">Alert when these are disabled:</div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Cameras</label></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><input type="checkbox" checked style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;"><label style="font-size:11px;color:rgba(255,255,255,0.7);cursor:pointer;">Guards</label></div>
+            <div style="max-height:190px;overflow-y:auto;padding-right:6px;">
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:4px 0 3px;">Sally's Sweet Shop</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="sallys_sweet_shop" data-type="cameras" id="skp-shop-sally-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Bits 'n' Bobs</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="Bits_n_bobs" data-type="cameras" id="skp-shop-bits-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">TC Clothing</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="tc_clothing" data-type="cameras" id="skp-shop-tc-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="tc_clothing" data-type="checkpoint" id="skp-shop-tc-chk" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Checkpoint</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Super Store</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="super_store" data-type="cameras" id="skp-shop-super-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="super_store" data-type="checkpoint" id="skp-shop-super-chk" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Checkpoint</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Pharmacy</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="pharmacy" data-type="cameras" id="skp-shop-pharm-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="pharmacy" data-type="checkpoint" id="skp-shop-pharm-chk" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Checkpoint</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Cyber Force</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="cyber_force" data-type="cameras" id="skp-shop-cyber-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="cyber_force" data-type="guard" id="skp-shop-cyber-guard" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Guard</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Jewelry Store</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="jewelry_store" data-type="cameras" id="skp-shop-jewel-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="jewelry_store" data-type="guard" id="skp-shop-jewel-guard" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Guard</label>
+              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Big Al's Gun Shop</div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="big_als" data-type="cameras" id="skp-shop-als-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:6px;"><input type="checkbox" class="sk-shop-cb" data-shop="big_als" data-type="guards" id="skp-shop-als-guard" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Guards</label>
             </div>
           </div>
 
@@ -1125,18 +1105,16 @@
         </div>
         <div class="sk-subtab-panel" id="skp-tab-outcome">
           <div class="sk-sh">Crime Outcome Display</div>
-          <div class="sk-info">Controls how the crime result panel is shown after committing a crime.</div>
+          <div class="sk-info">Controls how the crime result panel is shown after committing a crime. The outcome stays until another crime is committed or the user dismisses it.</div>
           <label class="sk-field-label" style="margin-top:12px;">Display Mode</label>
           <select class="sk-select" id="skp-outcome-mode">
-            <option value="0">Disabled -- show outcome normally</option>
-            <option value="1">Hidden -- remove the outcome panel entirely</option>
-            <option value="2">Minimal -- hide story text, keep rewards</option>
-            <option value="3">Toast -- replace panel with a small pop-up card</option>
+            <option value="0">Disabled — show outcome normally</option>
+            <option value="1">Hidden — remove the outcome panel entirely</option>
+            <option value="2">Minimal — hide story text, keep rewards</option>
+            <option value="3">Toast — replace panel with a small dismissible card</option>
           </select>
-          <div class="sk-hint" style="margin-top:6px;">Hidden and Toast modes remove the outcome panel. Minimal keeps rewards but hides narrative text.</div>
-          <div class="sk-row" style="margin-top:12px;"><div class="sk-row-info"><div class="sk-row-title">Color by Result</div><div class="sk-row-desc">Toast border color changes based on success, failure, or jail</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <label class="sk-field-label" style="margin-top:8px;">Toast Duration (seconds)</label>
-          <div class="sk-slider-row"><input type="range" min="2" max="10" value="5" class="skp-slider" data-out="skp-toast-val" data-suffix="s"><span class="sk-slider-val" id="skp-toast-val">5s</span></div>
+          <div class="sk-hint" style="margin-top:6px;">Minimal keeps rewards but hides narrative text. Toast shows a compact dismissible card.</div>
+          <div class="sk-row" style="margin-top:12px;"><div class="sk-row-info"><div class="sk-row-title">Color by Result</div><div class="sk-row-desc">Toast border color changes based on success, failure, or jail</div></div><label class="sk-tog"><input type="checkbox" id="skp-outcome-color" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -1583,6 +1561,97 @@
                 });
             }
         },
+            // === Block Training: also write isBlocked field ===
+            const btInp = overlay.querySelector('#skp-tog-block-training');
+            if (btInp) {
+                btInp.addEventListener('change', async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_block_training') || {};
+                    d.isEnabled = btInp.checked;
+                    d.isBlocked = btInp.checked;
+                    await CS().set('sidekick_block_training', d);
+                    if (window.SidekickModules?.BlockTraining) {
+                        window.SidekickModules.BlockTraining.isBlocked = btInp.checked;
+                        if (btInp.checked) window.SidekickModules.BlockTraining.startBlocking?.();
+                        else window.SidekickModules.BlockTraining.stopBlocking?.();
+                    }
+                });
+                (async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_block_training') || {};
+                    btInp.checked = d.isBlocked === true || d.isEnabled === true;
+                })();
+            }
+
+            // === Crime Outcome: load mode + wire selector ===
+            const outcomeMode = overlay.querySelector('#skp-outcome-mode');
+            const outcomeColor = overlay.querySelector('#skp-outcome-color');
+            if (outcomeMode) {
+                (async () => {
+                    if (!CS()) return;
+                    const sett = await CS().get('sidekick_settings') || {};
+                    const s = sett['hide-crime-outcome'] || {};
+                    if (s.mode != null) outcomeMode.value = String(s.mode);
+                    if (outcomeColor) outcomeColor.checked = s.colorByResult !== false;
+                })();
+                const saveOutcome = async () => {
+                    if (!CS()) return;
+                    const sett = await CS().get('sidekick_settings') || {};
+                    if (!sett['hide-crime-outcome']) sett['hide-crime-outcome'] = {};
+                    const mode = parseInt(outcomeMode.value, 10);
+                    sett['hide-crime-outcome'].mode = mode;
+                    sett['hide-crime-outcome'].isEnabled = mode > 0;
+                    sett['hide-crime-outcome'].colorByResult = outcomeColor ? outcomeColor.checked : true;
+                    await CS().set('sidekick_settings', sett);
+                    if (window.SidekickModules?.HideCrimeOutcome) {
+                        window.SidekickModules.HideCrimeOutcome.mode = mode;
+                        window.SidekickModules.HideCrimeOutcome.isEnabled = mode > 0;
+                        window.SidekickModules.HideCrimeOutcome.apply?.();
+                    }
+                };
+                outcomeMode.addEventListener('change', saveOutcome);
+                if (outcomeColor) outcomeColor.addEventListener('change', saveOutcome);
+            }
+
+            // === Shoplifting alert sub-settings ===
+            const SL_KEY = 'crime-notifier';
+            const slNotify   = overlay.querySelector('#skp-shoplift-notify');
+            const slInterval = overlay.querySelector('#skp-shoplift-interval');
+            const slSelAll   = overlay.querySelector('#skp-shoplift-sel-all');
+            const slDeselAll = overlay.querySelector('#skp-shoplift-desel-all');
+            const slCBs = [...overlay.querySelectorAll('.sk-shop-cb')];
+            const saveShoplift = async () => {
+                if (!CS()) return;
+                const sett = await CS().get('sidekick_settings') || {};
+                if (!sett[SL_KEY]) sett[SL_KEY] = {};
+                sett[SL_KEY].notifySecurityDown = slNotify ? slNotify.checked : true;
+                const mins = parseFloat(slInterval?.value || 1);
+                sett[SL_KEY].checkInterval = Math.max(10000, Math.round(mins * 60 * 1000));
+                const selected = slCBs.filter(cb => cb.checked).map(cb => cb.dataset.shop + '_' + cb.dataset.type);
+                sett[SL_KEY].selectedShopSecurity = selected;
+                await CS().set('sidekick_settings', sett);
+                if (window.SidekickModules?.CrimeNotifier) {
+                    Object.assign(window.SidekickModules.CrimeNotifier, {
+                        notifySecurityDown: sett[SL_KEY].notifySecurityDown,
+                        checkInterval: sett[SL_KEY].checkInterval,
+                        selectedShopSecurity: selected
+                    });
+                }
+            };
+            (async () => {
+                if (!CS()) return;
+                const sett = await CS().get('sidekick_settings') || {};
+                const s = sett[SL_KEY] || {};
+                if (slNotify) slNotify.checked = s.notifySecurityDown !== false;
+                if (slInterval && s.checkInterval) slInterval.value = Math.max(1, Math.round(s.checkInterval / 60000));
+                const selected = s.selectedShopSecurity;
+                if (selected) slCBs.forEach(cb => { cb.checked = selected.includes(cb.dataset.shop + '_' + cb.dataset.type); });
+            })();
+            if (slNotify)   slNotify.addEventListener('change', saveShoplift);
+            if (slInterval) slInterval.addEventListener('change', saveShoplift);
+            slCBs.forEach(cb => cb.addEventListener('change', saveShoplift));
+            if (slSelAll)   slSelAll.addEventListener('click',   () => { slCBs.forEach(cb => cb.checked = true);  saveShoplift(); });
+            if (slDeselAll) slDeselAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = false); saveShoplift(); });
 
         // Attach all event listeners
         attachEventListeners(panel) {

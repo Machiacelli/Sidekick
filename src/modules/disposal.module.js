@@ -1,7 +1,6 @@
 /**
  * Disposal JARVIS Module
  * Color-codes disposal method buttons by safety level.
- * Selector approach adapted from Taznister's Disposal crime helper (MIT).
  *
  * Navigation detection: Torn's React Router uses history.pushState, not
  * hashchange, so we poll the URL every 300 ms to detect page transitions.
@@ -24,18 +23,18 @@ const DisposalModule = (() => {
     };
 
     const DISPOSAL_METHODS = {
-        'Biological Waste': { Abandon: 'risk', Bury: 'caut', Burn: 'risk',  Sink: 'safe', Dissolve: 'none' },
-        'Body Part':        { Abandon: 'risk', Bury: 'caut', Burn: 'caut',  Sink: 'caut', Dissolve: 'safe' },
-        'Broken Appliance': { Abandon: 'risk', Bury: 'risk', Burn: 'none',  Sink: 'safe', Dissolve: 'fail' },
-        'Building Debris':  { Abandon: 'caut', Bury: 'risk', Burn: 'none',  Sink: 'safe', Dissolve: 'none' },
-        'Dead Body':        { Abandon: 'caut', Bury: 'safe', Burn: 'risk',  Sink: 'risk', Dissolve: 'safe' },
-        'Documents':        { Abandon: 'risk', Bury: 'caut', Burn: 'safe',  Sink: 'fail', Dissolve: 'fail' },
-        'Firearm':          { Abandon: 'risk', Bury: 'caut', Burn: 'none',  Sink: 'safe', Dissolve: 'fail' },
-        'General Waste':    { Abandon: 'caut', Bury: 'safe', Burn: 'safe',  Sink: 'risk', Dissolve: 'fail' },
-        'Industrial Waste': { Abandon: 'risk', Bury: 'caut', Burn: 'none',  Sink: 'safe', Dissolve: 'none' },
-        'Murder Weapon':    { Abandon: 'risk', Bury: 'caut', Burn: 'none',  Sink: 'safe', Dissolve: 'fail' },
-        'Old Furniture':    { Abandon: 'caut', Bury: 'risk', Burn: 'safe',  Sink: 'caut', Dissolve: 'fail' },
-        'Vehicle':          { Abandon: 'risk', Bury: 'none', Burn: 'safe',  Sink: 'safe', Dissolve: 'none' }
+        'Biological Waste': { Abandon: 'risk', Bury: 'caut', Burn: 'risk', Sink: 'safe', Dissolve: 'none' },
+        'Body Part': { Abandon: 'risk', Bury: 'caut', Burn: 'caut', Sink: 'caut', Dissolve: 'safe' },
+        'Broken Appliance': { Abandon: 'risk', Bury: 'risk', Burn: 'none', Sink: 'safe', Dissolve: 'fail' },
+        'Building Debris': { Abandon: 'caut', Bury: 'risk', Burn: 'none', Sink: 'safe', Dissolve: 'none' },
+        'Dead Body': { Abandon: 'caut', Bury: 'safe', Burn: 'risk', Sink: 'risk', Dissolve: 'safe' },
+        'Documents': { Abandon: 'risk', Bury: 'caut', Burn: 'safe', Sink: 'fail', Dissolve: 'fail' },
+        'Firearm': { Abandon: 'risk', Bury: 'caut', Burn: 'none', Sink: 'safe', Dissolve: 'fail' },
+        'General Waste': { Abandon: 'caut', Bury: 'safe', Burn: 'safe', Sink: 'risk', Dissolve: 'fail' },
+        'Industrial Waste': { Abandon: 'risk', Bury: 'caut', Burn: 'none', Sink: 'safe', Dissolve: 'none' },
+        'Murder Weapon': { Abandon: 'risk', Bury: 'caut', Burn: 'none', Sink: 'safe', Dissolve: 'fail' },
+        'Old Furniture': { Abandon: 'caut', Bury: 'risk', Burn: 'safe', Sink: 'caut', Dissolve: 'fail' },
+        'Vehicle': { Abandon: 'risk', Bury: 'none', Burn: 'safe', Sink: 'safe', Dissolve: 'none' }
     };
 
     // ── Helpers ───────────────────────────────────────────────────────────────

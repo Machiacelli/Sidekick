@@ -2,7 +2,6 @@
  * Sidekick Chrome Extension - Debt Module
  * Handles loan and debt tracking with automated API integration
  * Version: 1.0.0
- * Author: Machiacelli
  */
 
 (function () {
@@ -645,7 +644,7 @@
                 if (window.SidekickModules?.UI?.showNotification) {
                     window.SidekickModules.UI.showNotification(
                         'WARNING',
-                        'Payment monitoring temporarily unavailable - API connection issue'
+                        'Payment monitoring temporarily unavailable - API connection throttle'
                     );
                 }
 

@@ -1,7 +1,6 @@
 /**
  * Extended Chain View Module
  * Extends faction chain attack history beyond the usual 10 attacks
- * Converted from xedx's Torn Extended Chain View userscript
  */
 
 const ExtendedChainViewModule = (() => {
@@ -260,7 +259,7 @@ const ExtendedChainViewModule = (() => {
 
             const hdrExtended = document.getElementById('hdr-extended');
             if (hdrExtended) hdrExtended.remove();
-            
+
             savedTarget = null;
         },
 

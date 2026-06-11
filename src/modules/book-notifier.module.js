@@ -102,7 +102,7 @@ const BookNotifierModule = {
         } else {
             // No book — dim/neutral, no link
             section.style.color = '';
-            section.innerHTML = '<span class="title">Book: </span><span style="color:#777;">None</span>';
+            section.innerHTML = `<a href="https://www.torn.com/missions.php" target="_blank" style="color:rgba(255,255,255,0.4);text-decoration:none;"><span class="title">Book: </span><span>None</span></a>`;
         }
     },
 

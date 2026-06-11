@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Smart Medical Button
  * Adapted from BBSmalls [3908857] Torn Smart FAK Button v4.43
  * Sidekick port: uses ChromeStorage, universal API key, morphine always included
@@ -154,7 +154,7 @@
                 };
                 labelEl.textContent = shortNames[item.name] || item.name;
             } else {
-                labelEl.textContent = hosp ? 'Calculating...' : 'Not in hospital';
+                labelEl.textContent = hosp ? '...' : '';
             }
         }
 
@@ -320,15 +320,17 @@
                 width: 72px;
                 height: 72px;
                 cursor: pointer;
+                transition: transform .15s ease;
             }
             #sk-med-svg {
                 position: absolute;
                 top: 0; left: 0;
                 width: 72px; height: 72px;
+                filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
             }
             #sk-med-bg-circle {
-                fill: #141920;
-                stroke: rgba(255,255,255,0.06);
+                fill: #1a2332;
+                stroke: rgba(95,204,106,0.15);
                 stroke-width: 1.5;
             }
             #sk-med-ring {
@@ -340,8 +342,8 @@
                 transform-origin: 36px 36px;
                 transform: rotate(-90deg);
             }
-            #sk-med-cross {
-                fill: rgba(255,255,255,0.9);
+            #sk-med-cross rect {
+                fill: rgba(255,255,255,0.35);
             }
             #sk-med-inner {
                 position: absolute;
@@ -351,25 +353,23 @@
                 align-items: center;
                 justify-content: center;
                 pointer-events: none;
+                gap: 1px;
             }
             #sk-med-timer {
-                font-size: 12px;
-                font-weight: 700;
-                color: #fff;
-                font-family: 'Inter', 'Roboto', sans-serif;
-                text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+                font-size: 11px;
+                font-weight: 800;
+                color: #e8f5e9;
+                font-family: 'Inter', 'Roboto', monospace;
+                text-shadow: 0 1px 6px rgba(0,0,0,0.9);
                 letter-spacing: -0.5px;
                 line-height: 1;
-                margin-top: 2px;
             }
             #sk-med-label {
                 font-size: 8px;
-                color: rgba(255,255,255,0.45);
+                color: rgba(95,204,106,0.7);
                 font-family: 'Inter', 'Roboto', sans-serif;
                 text-align: center;
-                padding: 0 4px;
-                line-height: 1.2;
-                margin-top: 1px;
+                line-height: 1.1;
                 max-width: 60px;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -377,28 +377,26 @@
             }
             #sk-med-cd {
                 position: absolute;
-                bottom: -18px;
+                bottom: -20px;
                 left: 50%;
                 transform: translateX(-50%);
                 background: rgba(139, 0, 0, 0.85);
-                border: 1px solid rgba(255,80,80,0.3);
+                border: 1px solid rgba(255,80,80,0.25);
                 border-radius: 8px;
                 padding: 2px 6px;
                 font-size: 9px;
-                font-weight: 600;
+                font-weight: 700;
                 color: #ffaaaa;
                 font-family: 'Inter', 'Roboto', sans-serif;
                 white-space: nowrap;
                 display: none;
+                backdrop-filter: blur(4px);
             }
             #sk-med-floater:hover #sk-med-body {
-                transform: scale(1.06);
+                transform: scale(1.07);
             }
-            #sk-med-body {
-                transition: transform .15s ease;
-            }
-            #sk-med-glow {
-                transition: filter .3s ease;
+            #sk-med-floater:active #sk-med-body {
+                transform: scale(0.95);
             }
         `;
         document.head.appendChild(style);
@@ -431,9 +429,9 @@
                         <!-- Medical cross icon -->
                         <g id="sk-med-cross">
                             <!-- Horizontal bar -->
-                            <rect x="24" y="31" width="24" height="10" rx="2.5" fill="rgba(255,255,255,0.88)"/>
+                            <rect x="24" y="31" width="24" height="10" rx="2.5" />
                             <!-- Vertical bar -->
-                            <rect x="31" y="24" width="10" height="24" rx="2.5" fill="rgba(255,255,255,0.88)"/>
+                            <rect x="31" y="24" width="10" height="24" rx="2.5" />
                         </g>
                     </g>
                 </svg>

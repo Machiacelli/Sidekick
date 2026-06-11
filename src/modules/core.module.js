@@ -1,9 +1,7 @@
 /**
  * Sidekick Chrome Extension - Core Module
  * Handles storage, notifications, and core functionality
- * Converted from Tampermonkey userscript to Chrome extension
  * Version: 1.0.1 - Fixed context monitoring bug
- * Author: Machiacelli
  */
 
 (function () {

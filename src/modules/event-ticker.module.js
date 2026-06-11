@@ -2,7 +2,6 @@
  * Sidekick Chrome Extension - Event Ticker Module
  * Shows rolling notifications for Torn events between clock and logo
  * Version: 1.0.0
- * Author: Machiacelli
  */
 
 (function () {

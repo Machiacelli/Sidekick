@@ -2,7 +2,7 @@
  * Sidekick Chrome Extension - Attack Button Mover Module
  * Moves the "Start Fight" button on top of weapon for faster attack speed
  * Version: 1.0.0
- * Author: Machiacelli
+ * Forked from Attack Better by smokey_
  */
 
 (function () {
