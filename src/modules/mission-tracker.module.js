@@ -19,12 +19,14 @@ const MissionTrackerModule = {
 
     pollTimer: null,
     observer: null,
+    activeMissions: null,
 
     // ─── Init ────────────────────────────────────────────────────────────────
 
     async init() {
         console.log('🎯 Mission Tracker: initializing...');
         await this.loadSettings();
+        await this.loadCachedMissions();
 
         if (this.isEnabled) {
             this.startPolling();
@@ -71,11 +73,33 @@ const MissionTrackerModule = {
             data[this.STORAGE_KEY] = {
                 isEnabled: this.isEnabled,
                 openInNewTab: this.openInNewTab,
-                checkIntervalMinutes: this.checkIntervalMinutes,
+                checkIntervalMinutes: this.checkIntervalMinutes
             };
             await window.SidekickModules.Core.ChromeStorage.set('sidekick_settings', data);
         } catch (e) {
             console.error('🎯 Mission Tracker: failed to save settings:', e);
+        }
+    },
+
+    async loadCachedMissions() {
+        try {
+            const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_missions_cache');
+            if (data && data.timestamp && (Date.now() - data.timestamp < 3600000)) { // 1 hour max cache age
+                this.activeMissions = data.missions || null;
+            }
+        } catch (e) {
+            console.error('🎯 Mission Tracker: failed to load cache:', e);
+        }
+    },
+
+    async saveCachedMissions() {
+        try {
+            await window.SidekickModules.Core.ChromeStorage.set('sidekick_missions_cache', {
+                missions: this.activeMissions,
+                timestamp: Date.now()
+            });
+        } catch (e) {
+            console.error('🎯 Mission Tracker: failed to save cache:', e);
         }
     },
 
@@ -120,26 +144,33 @@ const MissionTrackerModule = {
         if (!apiKey) return;
 
         try {
-            const data = await this.fetchData(`https://api.torn.com/user/?selections=missions&key=${apiKey}`);
+            const data = await this.fetchData(`https://api.torn.com/v2/user/missions?key=${apiKey}`);
             if (data.error) {
                 console.warn('🎯 Mission Tracker: API error:', data.error.error);
                 return;
             }
 
-            const missions = data.missions || {};
+            const givers = data.missions?.givers || [];
+            const allMissions = [];
+            givers.forEach(giver => {
+                if (Array.isArray(giver.contracts)) {
+                    allMissions.push(...giver.contracts);
+                }
+            });
 
-            // Only show icon for missions the player has actively CLAIMED.
-            // Dormant/available missions exist for every player always — ignore those.
-            const active = Object.values(missions).filter(m => {
+            const active = allMissions.filter(m => {
                 const s = (m.status || '').toLowerCase();
-                return s === 'accepted' || s === 'active' || s === 'started';
+                return s !== 'completed' && s !== 'failed' && s !== 'declined';
             });
 
             if (active.length > 0) {
+                this.activeMissions = active;
                 this.showIcon(active);
             } else {
+                this.activeMissions = null;
                 this.removeIcon();
             }
+            this.saveCachedMissions();
         } catch (e) {
             console.error('🎯 Mission Tracker: check failed:', e);
         }
@@ -153,46 +184,183 @@ const MissionTrackerModule = {
 
         this.ensureStyles();
 
-        const count = missions.length;
-        const firstName = missions[0]?.title || 'Unknown';
-        const label = count === 1
-            ? `Active Mission: ${firstName}`
-            : `${count} Active Missions — ${firstName}`;
+        let ready = 0;
+        let unaccepted = 0;
+        let accepted = 0;
+        missions.forEach(m => {
+            const s = (m.status || '').toLowerCase();
+            if (s === 'readyforreward') ready++;
+            else if (s === 'available') unaccepted++;
+            else if (s === 'accepted') accepted++;
+        });
 
-        const existing = document.getElementById(this.ICON_ID);
-        if (existing) {
-            const a = existing.querySelector('a');
-            if (a) {
-                a.href = 'https://www.torn.com/loader.php?sid=missions';
-                a.setAttribute('aria-label', label);
-                if (typeof a.__sidekickUpdateTipText === 'function') {
-                    a.__sidekickUpdateTipText(label);
-                }
+        const labels = [];
+        if (ready > 0) labels.push(`${ready} missions complete`);
+        if (accepted > 0) labels.push(`${accepted} active`);
+        if (unaccepted > 0) labels.push(`${unaccepted} unaccepted`);
+        const label = labels.join(', ') || 'Missions Available';
+
+        let li = document.getElementById(this.ICON_ID);
+        if (!li) {
+            li = document.createElement('li');
+            li.id = this.ICON_ID;
+
+            const a = document.createElement('a');
+            a.href = 'https://www.torn.com/page.php?sid=missions';
+            if (this.openInNewTab) {
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
             }
-            return;
+            a.tabIndex = 0;
+            a.setAttribute('data-is-tooltip-opened', 'false');
+            a.setAttribute('i-data', 'i_10_42_17_17');
+
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'sk-mission-icon-glyph';
+            iconSpan.textContent = '🎯';
+            
+            a.appendChild(iconSpan);
+            li.appendChild(a);
+            statusUl.appendChild(li);
+
+            this.enableNativeLikeTooltip(a);
         }
 
-        const li = document.createElement('li');
-        li.id = this.ICON_ID;
-
-        const a = document.createElement('a');
-        a.href = 'https://www.torn.com/loader.php?sid=missions';
-        if (this.openInNewTab) {
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
+        const a = li.querySelector('a');
+        if (a) {
+            a.setAttribute('aria-label', label);
+            if (typeof a.__sidekickUpdateTipText === 'function') {
+                a.__sidekickUpdateTipText(label);
+            }
         }
-        a.setAttribute('aria-label', label);
-        a.setAttribute('data-is-tooltip-opened', 'false');
+    },
 
-        const span = document.createElement('span');
-        span.className = 'sk-mission-icon-glyph';
-        span.textContent = '🎯';
+    // ─── Tooltip Logic ───────────────────────────────────────────────────────
 
-        a.appendChild(span);
-        li.appendChild(a);
-        statusUl.appendChild(li);
+    enableNativeLikeTooltip(anchor) {
+        let tipEl = null;
+        let hideTimer = null;
 
-        this._attachTooltip(a);
+        const CLS = {
+            tip: 'tooltip___aWICR tooltipCustomClass___gbI4V',
+            arrowWrap: 'arrow___yUDKb top___klE_Y',
+            arrowIcon: 'arrowIcon___KHyjw',
+        };
+
+        const buildTooltip = (text) => {
+            const el = document.createElement('div');
+            el.className = CLS.tip;
+            el.setAttribute('role', 'tooltip');
+            el.setAttribute('tabindex', '-1');
+            el.style.position = 'absolute';
+            el.style.transitionProperty = 'opacity';
+            el.style.transitionDuration = '200ms';
+            el.style.opacity = '0';
+            el.style.backgroundColor = '#000';
+            el.style.color = '#fff';
+            el.style.padding = '5px 10px';
+            el.style.borderRadius = '4px';
+            el.style.zIndex = '99999';
+            el.style.pointerEvents = 'none';
+            el.style.whiteSpace = 'nowrap';
+            el.style.fontSize = '12px';
+
+            const [title, subtitle] = this.parseTwoLines(text);
+            const b = document.createElement('b');
+            b.textContent = title;
+            el.appendChild(b);
+
+            if (subtitle) {
+                const div = document.createElement('div');
+                div.textContent = subtitle;
+                el.appendChild(div);
+            }
+            return el;
+        };
+
+        const setText = (text) => {
+            if (!tipEl) return;
+            const [title, subtitle] = this.parseTwoLines(text);
+            const b = tipEl.querySelector('b');
+            if (b) b.textContent = title;
+            let sub = b?.nextElementSibling;
+            if (subtitle) {
+                if (!sub || sub.tagName !== 'DIV') {
+                    sub = document.createElement('div');
+                    b.after(sub);
+                }
+                sub.textContent = subtitle;
+            } else if (sub) {
+                sub.remove();
+            }
+        };
+
+        anchor.__sidekickUpdateTipText = setText;
+
+        const positionTooltip = () => {
+            if (!tipEl) return;
+            const r = anchor.getBoundingClientRect();
+            tipEl.style.left = (r.left + window.scrollX + (r.width / 2) - (tipEl.offsetWidth / 2)) + 'px';
+            tipEl.style.top = (r.bottom + window.scrollY + 8) + 'px';
+        };
+
+        const showTip = () => {
+            clearTimeout(hideTimer);
+            const text = anchor.getAttribute('aria-label');
+            if (!text) return;
+
+            if (!tipEl) {
+                tipEl = buildTooltip(text);
+                document.body.appendChild(tipEl);
+                anchor.__sidekickTipEl = tipEl;
+            } else {
+                setText(text);
+            }
+
+            anchor.setAttribute('data-is-tooltip-opened', 'true');
+
+            tipEl.style.opacity = '0';
+            tipEl.style.left = '-9999px';
+            tipEl.style.top = '-9999px';
+            requestAnimationFrame(() => {
+                positionTooltip();
+                requestAnimationFrame(() => {
+                    if (tipEl) tipEl.style.opacity = '1';
+                });
+            });
+        };
+
+        const hideTip = (immediate = false) => {
+            if (!tipEl) return;
+            anchor.setAttribute('data-is-tooltip-opened', 'false');
+
+            if (immediate) {
+                tipEl.remove();
+                tipEl = null;
+                anchor.__sidekickTipEl = null;
+            } else {
+                tipEl.style.opacity = '0';
+                hideTimer = setTimeout(() => {
+                    if (tipEl) tipEl.remove();
+                    tipEl = null;
+                    anchor.__sidekickTipEl = null;
+                }, 200);
+            }
+        };
+
+        anchor.addEventListener('mouseenter', showTip);
+        anchor.addEventListener('mouseleave', () => hideTip(false));
+        anchor.addEventListener('focus', showTip);
+        anchor.addEventListener('blur', () => hideTip(false));
+        window.addEventListener('scroll', () => hideTip(true), { passive: true });
+    },
+
+    parseTwoLines(text) {
+        const parts = text.split(' - ');
+        if (parts.length >= 2) {
+            return [parts[0] + ' - ', parts.slice(1).join(' - ')];
+        }
+        return [text, ''];
     },
 
     removeIcon() {
@@ -204,17 +372,8 @@ const MissionTrackerModule = {
         const style = document.createElement('style');
         style.id = this.STYLES_ID;
         style.textContent = `
-            #${this.ICON_ID} {
-                background: none !important;
-                background-image: none !important;
-                -webkit-mask: none !important;
-                mask: none !important;
-            }
-            #${this.ICON_ID}::before,
-            #${this.ICON_ID}::after {
-                content: none !important;
-            }
             #${this.ICON_ID} a {
+                background-image: none !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
@@ -236,74 +395,6 @@ const MissionTrackerModule = {
         document.head.appendChild(style);
     },
 
-    // Reuses blood-bag-reminder tooltip pattern
-    _attachTooltip(anchor) {
-        const CLS = {
-            tip: 'tooltip___aWICR tooltipCustomClass___gbI4V',
-            arrowWrap: 'arrow___yUDKb top___klE_Y',
-            arrowIcon: 'arrowIcon___KHyjw',
-        };
-        let tipEl = null, hideTimer = null;
-
-        const build = (text) => {
-            const el = document.createElement('div');
-            el.className = CLS.tip;
-            el.setAttribute('role', 'tooltip');
-            el.setAttribute('tabindex', '-1');
-            el.style.cssText = 'position:absolute;transition-property:opacity;transition-duration:200ms;opacity:0;';
-            const b = document.createElement('b');
-            b.textContent = text;
-            el.appendChild(b);
-            const aw = document.createElement('div');
-            aw.className = CLS.arrowWrap;
-            const ai = document.createElement('div');
-            ai.className = CLS.arrowIcon;
-            aw.appendChild(ai);
-            el.appendChild(aw);
-            return el;
-        };
-
-        const setText = (text) => {
-            if (!tipEl) return;
-            const b = tipEl.querySelector('b');
-            if (b) b.textContent = text;
-        };
-
-        const position = () => {
-            if (!tipEl) return;
-            const r = anchor.getBoundingClientRect();
-            const left = Math.max(8, Math.min(Math.round(r.left + (r.width - tipEl.offsetWidth) / 2), window.innerWidth - tipEl.offsetWidth - 8));
-            const top = Math.round(r.top - tipEl.offsetHeight - 14);
-            tipEl.style.left = left + 'px';
-            tipEl.style.top = (top < 8 ? Math.round(r.bottom + 10) : top) + 'px';
-        };
-
-        const show = () => {
-            clearTimeout(hideTimer);
-            const text = anchor.getAttribute('aria-label');
-            if (!text) return;
-            if (!tipEl) { tipEl = build(text); document.body.appendChild(tipEl); }
-            else { setText(text); }
-            anchor.setAttribute('data-is-tooltip-opened', 'true');
-            tipEl.style.opacity = '0'; tipEl.style.left = '-9999px'; tipEl.style.top = '-9999px';
-            requestAnimationFrame(() => { position(); requestAnimationFrame(() => { if (tipEl) tipEl.style.opacity = '1'; }); });
-        };
-
-        const hide = (immediate = false) => {
-            if (!tipEl) return;
-            anchor.setAttribute('data-is-tooltip-opened', 'false');
-            if (immediate) { tipEl.remove(); tipEl = null; return; }
-            tipEl.style.opacity = '0';
-            hideTimer = setTimeout(() => { tipEl?.remove(); tipEl = null; }, 210);
-        };
-
-        anchor.__sidekickUpdateTipText = setText;
-        anchor.addEventListener('mouseenter', show);
-        anchor.addEventListener('mouseleave', () => hide(false));
-        anchor.addEventListener('focus', show);
-        anchor.addEventListener('blur', () => hide(true));
-    },
-
     // ─── Observer ────────────────────────────────────────────────────────────
 
     startObserver() {
@@ -312,11 +403,14 @@ const MissionTrackerModule = {
         this.observer = new MutationObserver(() => {
             if (!this.isEnabled) return;
             const statusUl = document.querySelector('ul[class*="status-icons"]');
-            // Only trigger when status bar exists but our icon is absent.
-            // Debounced 15 s to prevent looping when no missions are active.
+            
             if (statusUl && !document.getElementById(this.ICON_ID)) {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => this.checkMissions(), 15000);
+                if (this.activeMissions && this.activeMissions.length > 0) {
+                    this.showIcon(this.activeMissions);
+                } else {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => this.checkMissions(), 15000);
+                }
             }
         });
         this.observer.observe(document.documentElement, { childList: true, subtree: true });

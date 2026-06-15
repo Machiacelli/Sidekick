@@ -176,14 +176,7 @@
             }
 
 
-            // Initialize Book Notifier Module
-            console.log("📚 Sidekick: Initializing Book Notifier...");
-            if (window.SidekickModules.BookNotifier?.init) {
-                await window.SidekickModules.BookNotifier.init();
-                console.log("✅ Sidekick: Book Notifier initialized");
-            } else {
-                console.warn("⚠️ Book Notifier module not available");
-            }
+
 
 
             // Initialize Locked Items Module
@@ -438,6 +431,15 @@
                 console.log('✅ Sidekick: Mission Tracker initialized');
             } else {
                 console.warn('⚠️ Mission Tracker module not available');
+            }
+
+            // Initialize Book Notifier Module
+            console.log("📚 Sidekick: Initializing Book Notifier...");
+            if (window.SidekickModules.BookNotifier?.init) {
+                await window.SidekickModules.BookNotifier.init();
+                console.log("✅ Sidekick: Book Notifier initialized");
+            } else {
+                console.warn("⚠️ Book Notifier module not available");
             }
 
             // Initialize Disposal Module

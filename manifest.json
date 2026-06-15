@@ -67,7 +67,7 @@
                                            "src/modules/oc-weights.module.js",
                                            "src/modules/bunker-bucks.module.js",
                                            "src/modules/blood-bag-reminder.module.js",
-                                           "src/modules/book-notifier.module.js",
+
                                            "src/modules/locked-items.module.js",
                                            "src/modules/quick-deposit.module.js",
                                            "src/modules/crime-notifier.module.js",
@@ -86,6 +86,7 @@
                                            "src/modules/item-market-max-quantity.module.js",
                                            "src/modules/legible-names.module.js",
                                            "src/modules/mission-tracker.module.js",
+                                           "src/modules/book-notifier.module.js",
                                            "src/modules/hide-crime-outcome.module.js",
                                            "src/modules/holiday.module.js",
                                            "src/modules/special-gym-ratios.module.js",

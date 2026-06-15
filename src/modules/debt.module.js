@@ -127,11 +127,7 @@
                     console.log("💰 Manual testing: You can call window.SidekickModules.Debt.testPaymentDetection() to test patterns");
 
                     // Show user-friendly notification about missing API key
-                    if (window.SidekickModules?.UI?.showNotification) {
-                        window.SidekickModules.UI.showNotification(
-                            'Debt Tracker - API Key Required'
-                        );
-                    }
+                    // Notification removed as per request
                 }
             } catch (error) {
                 console.error("💰 Error loading API key:", error);

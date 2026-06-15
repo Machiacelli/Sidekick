@@ -2,7 +2,6 @@
  * Sidekick Chrome Extension - Bunker Bucks Calculator Module
  * Adds bunker bucks calculation to item previews on the Item Market
  * Version: 1.0.0
- * Author: Machiacelli
  */
 
 (function () {

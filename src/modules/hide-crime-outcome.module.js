@@ -60,6 +60,7 @@ const HideCrimeOutcomeModule = {
                 const s = data[this.STORAGE_KEY];
                 this.isEnabled = s.isEnabled || false;
                 this.mode = s.mode != null ? s.mode : this.MODES.DISABLED;
+                this.hideChainText = s.hideChainText || false;
             }
         } catch (e) {
             console.error('🦹 Hide Crime Outcome: failed to load settings:', e);
@@ -69,7 +70,7 @@ const HideCrimeOutcomeModule = {
     async saveSettings() {
         try {
             const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings') || {};
-            data[this.STORAGE_KEY] = { isEnabled: this.isEnabled, mode: this.mode };
+            data[this.STORAGE_KEY] = { isEnabled: this.isEnabled, mode: this.mode, hideChainText: this.hideChainText };
             await window.SidekickModules.Core.ChromeStorage.set('sidekick_settings', data);
         } catch (e) {
             console.error('🦹 Hide Crime Outcome: failed to save settings:', e);
@@ -79,7 +80,13 @@ const HideCrimeOutcomeModule = {
     // ─── Core Logic ──────────────────────────────────────────────────────────
 
     apply() {
-        if (!this.isCrimesPage() || !this.isEnabled || this.mode === this.MODES.DISABLED) {
+        if (!this.isCrimesPage()) {
+            this._teardown();
+            return;
+        }
+
+        const shouldHidePanel = this.isEnabled && this.mode !== this.MODES.DISABLED;
+        if (!shouldHidePanel && !this.hideChainText) {
             this._teardown();
             return;
         }
@@ -87,11 +94,17 @@ const HideCrimeOutcomeModule = {
         this._injectStyles();
         this._applyBodyClass();
 
-        if (this.mode === this.MODES.TOAST) {
+        if (this.isEnabled && this.mode === this.MODES.TOAST) {
             this._ensureToastContainer();
             this._injectFetchIntercept();
         } else {
             document.getElementById('sk-crime-toast-wrap')?.remove();
+        }
+
+        if (this.hideChainText) {
+            this._startChainTextObserver();
+        } else {
+            this._stopChainTextObserver();
         }
     },
 
@@ -101,15 +114,20 @@ const HideCrimeOutcomeModule = {
         document.body.classList.remove(
             'sk-crimes-hidden',
             'sk-crimes-minimal',
-            'sk-crimes-toast'
+            'sk-crimes-toast',
+            'sk-crimes-hide-chain'
         );
+        this._stopChainTextObserver();
     },
 
     _applyBodyClass() {
-        document.body.classList.remove('sk-crimes-hidden', 'sk-crimes-minimal', 'sk-crimes-toast');
+        document.body.classList.remove('sk-crimes-hidden', 'sk-crimes-minimal', 'sk-crimes-toast', 'sk-crimes-hide-chain');
         const map = ['', 'hidden', 'minimal', 'toast'];
-        if (this.mode > 0 && this.mode < map.length) {
+        if (this.isEnabled && this.mode > 0 && this.mode < map.length) {
             document.body.classList.add(`sk-crimes-${map[this.mode]}`);
+        }
+        if (this.hideChainText) {
+            document.body.classList.add('sk-crimes-hide-chain');
         }
     },
 
@@ -119,6 +137,11 @@ const HideCrimeOutcomeModule = {
         const style = document.createElement('style');
         style.id = this.STYLES_ID;
         style.textContent = `
+            /* ── HIDE CHAIN TEXT ── */
+            body.sk-crimes-hide-chain div[class*="streak___"] {
+                display: none !important;
+            }
+
             /* ── HIDDEN mode ── */
             body.sk-crimes-hidden [class*="outcomePanel_"],
             body.sk-crimes-hidden [class*="outcomeWrapper_"],
@@ -231,20 +254,23 @@ const HideCrimeOutcomeModule = {
         sub.className = 'sk-crime-toast-reward';
         sub.textContent = reward || '';
 
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '×';
+        closeBtn.style.cssText = 'position:absolute;top:4px;right:6px;background:none;border:none;color:#888;cursor:pointer;font-size:16px;line-height:1;padding:0;';
+        closeBtn.onclick = (e) => { e.stopPropagation(); card.remove(); };
+        card.appendChild(closeBtn);
+
         card.appendChild(title);
         card.appendChild(sub);
         wrap.appendChild(card);
 
-        // Keep max 4 toasts
+        // Keep only 1 toast visible as per user request
         const cards = wrap.querySelectorAll('.sk-crime-toast-card');
-        if (cards.length > 4) cards[cards.length - 1].remove();
-
-        setTimeout(() => {
-            card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-            card.style.opacity = '0';
-            card.style.transform = 'translateX(12px)';
-            setTimeout(() => card.remove(), 320);
-        }, 4500);
+        if (cards.length > 1) {
+            for (let i = 0; i < cards.length - 1; i++) {
+                cards[i].remove();
+            }
+        }
     },
 
     // ─── Fetch Intercept (toast mode) ────────────────────────────────────────
@@ -319,6 +345,41 @@ const HideCrimeOutcomeModule = {
                 }, 250);
             }
         }).observe(document.body || document.documentElement, { childList: true, subtree: true });
+    },
+
+    // ─── Chain Text Observer ─────────────────────────────────────────────────
+    _chainTextObserver: null,
+    _startChainTextObserver() {
+        if (this._chainTextObserver) return;
+        this._chainTextObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        if (node.textContent && node.textContent.includes('times in a row')) {
+                            const storyWrapper = node.closest('[class*="outcomePanel_"]') || node.closest('[class*="storyText"]');
+                            if (storyWrapper) {
+                                // Find the specific element containing the text and hide it
+                                const elements = storyWrapper.querySelectorAll('div, span, p');
+                                for (const el of elements) {
+                                    if (el.textContent.includes('times in a row') && el.children.length === 0) {
+                                        el.style.display = 'none';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        const container = document.querySelector('[class*="crimesContainer"]') || document.body;
+        this._chainTextObserver.observe(container, { childList: true, subtree: true });
+    },
+
+    _stopChainTextObserver() {
+        if (this._chainTextObserver) {
+            this._chainTextObserver.disconnect();
+            this._chainTextObserver = null;
+        }
     },
 
     // ─── Public API ──────────────────────────────────────────────────────────

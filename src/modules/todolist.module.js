@@ -1132,10 +1132,10 @@
                 // Direct array format
                 logsArray = logData;
                 console.log(`📊 [${timezone}] Using direct array format for ${itemName}: ${logsArray.length} entries`);
-            } else if (logData.log && Array.isArray(logData.log)) {
+            } else if (logData.log && (Array.isArray(logData.log) || typeof logData.log === 'object')) {
                 // Nested under 'log' property
-                logsArray = logData.log;
-                console.log(`📊 [${timezone}] Using nested log array for ${itemName}: ${logsArray.length} entries`);
+                logsArray = Array.isArray(logData.log) ? logData.log : Object.values(logData.log);
+                console.log(`📊 [${timezone}] Using nested log array/object for ${itemName}: ${logsArray.length} entries`);
             } else if (typeof logData === 'object') {
                 // Object format - convert values to array
                 logsArray = Object.values(logData);
@@ -1238,8 +1238,9 @@
             let logsArray = [];
             if (Array.isArray(logData)) {
                 logsArray = logData;
-            } else if (logData.log && Array.isArray(logData.log)) {
-                logsArray = logData.log;
+            } else if (logData.log && typeof logData.log === 'object') {
+                // The Torn API returns logData.log as an object keyed by log ID
+                logsArray = Array.isArray(logData.log) ? logData.log : Object.values(logData.log);
             } else if (typeof logData === 'object') {
                 logsArray = Object.values(logData);
             }
@@ -1314,8 +1315,8 @@
 
             if (Array.isArray(logs)) {
                 logsArray = logs;
-            } else if (logs.log && Array.isArray(logs.log)) {
-                logsArray = logs.log;
+            } else if (logs.log && typeof logs.log === 'object') {
+                logsArray = Array.isArray(logs.log) ? logs.log : Object.values(logs.log);
             } else if (typeof logs === 'object') {
                 logsArray = Object.values(logs);
             }
@@ -1396,8 +1397,8 @@
             let logsArray = [];
             if (Array.isArray(logData)) {
                 logsArray = logData;
-            } else if (logData.log && Array.isArray(logData.log)) {
-                logsArray = logData.log;
+            } else if (logData.log && typeof logData.log === 'object') {
+                logsArray = Array.isArray(logData.log) ? logData.log : Object.values(logData.log);
             } else if (typeof logData === 'object') {
                 logsArray = Object.values(logData);
             }
@@ -1515,8 +1516,8 @@
             let logsArray = [];
             if (Array.isArray(logData)) {
                 logsArray = logData;
-            } else if (logData.log && Array.isArray(logData.log)) {
-                logsArray = logData.log;
+            } else if (logData.log && typeof logData.log === 'object') {
+                logsArray = Array.isArray(logData.log) ? logData.log : Object.values(logData.log);
             } else if (typeof logData === 'object') {
                 logsArray = Object.values(logData);
             }
@@ -1604,8 +1605,8 @@
 
             if (Array.isArray(logs)) {
                 logsArray = logs;
-            } else if (logs.log && Array.isArray(logs.log)) {
-                logsArray = logs.log;
+            } else if (logs.log && typeof logs.log === 'object') {
+                logsArray = Array.isArray(logs.log) ? logs.log : Object.values(logs.log);
             } else if (typeof logs === 'object') {
                 logsArray = Object.values(logs);
             }

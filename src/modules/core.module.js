@@ -964,12 +964,23 @@
         StateManager,
         ColorPicker,
 
-        // Initialize core functionality
         async init() {
             console.log("🔧 Initializing Core Module...");
 
             // Start extension context monitoring
             ExtensionContextMonitor.startMonitoring();
+
+            const apiKey = await ChromeStorage.get(STORAGE_KEYS.API_KEY);
+            if (!apiKey && !sessionStorage.getItem('sidekick_api_alert_shown')) {
+                sessionStorage.setItem('sidekick_api_alert_shown', '1');
+                setTimeout(() => {
+                    if (window.SidekickModules.UI?.showNotification) {
+                        window.SidekickModules.UI.showNotification('Sidekick Needs an API Key', 'Most features require an API key to work correctly.', 'warning', 6000);
+                    } else {
+                        NotificationSystem.show('Sidekick Needs an API Key', 'Most features require an API key to work correctly.', 'warning', 6000);
+                    }
+                }, 2000);
+            }
 
             console.log("✅ Core Module initialized successfully");
             return true;

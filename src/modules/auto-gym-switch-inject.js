@@ -2,10 +2,9 @@
 // Runs in MAIN world at document_start so it can override window.fetch
 // before Torn's own scripts load. Enabled flag is read from localStorage
 // (set by the isolated-world content script auto-gym-switch.module.js).
-//
-// Based on the original "Auto gym switch" by Stephen Lynx (MIT).
 // Key fix: gym switching uses a proper POST to changeGym (not a DOM click),
 // which prevents Torn navigating to the gym profile page.
+// Forked from Auto gym switch by Stephen Lynx
 (function () {
     'use strict';
 
@@ -189,9 +188,22 @@
         // 3. Intercept training — switch gym first if needed
         if (url.includes('/gym.php?step=train') && isEnabled()) {
             try {
-                const bodyStr = args[1]?.body;
-                const body = typeof bodyStr === 'string' ? JSON.parse(bodyStr) : {};
-                const stat = (body.stat || '').substring(0, 3); // str/def/spe/dex
+                const bodyStr = args[1]?.body || '';
+                let stat = '';
+                
+                if (bodyStr instanceof URLSearchParams) {
+                    stat = bodyStr.get('stat') || '';
+                } else if (typeof bodyStr === 'string') {
+                    try {
+                        // Sometimes it could be JSON if Torn changes, but normally form urlencoded
+                        const parsed = JSON.parse(bodyStr);
+                        stat = parsed.stat || '';
+                    } catch (e) {
+                        stat = new URLSearchParams(bodyStr).get('stat') || '';
+                    }
+                }
+                
+                stat = stat.substring(0, 3).toLowerCase(); // str/def/spe/dex
                 const bestGym = getBestGym(stat);
 
                 console.log(`💪 [AutoGym] Train intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);

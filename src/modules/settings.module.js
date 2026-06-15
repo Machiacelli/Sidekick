@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sidekick Chrome Extension - Settings Module V2
  * Comprehensive settings panel with all module toggles and configurations
  * Version: 2.0.0
@@ -71,7 +71,7 @@
                 ${this.createToggle('extended-chain-view', '⛓️ Extended Chain View', 'Shows more than 10 chain attacks on faction page')}
                 ${this.createToggle('mug-calculator', '🥊 Mug Calculator', 'Shows mug value calculations on Item Market and Bazaars')}
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Weapon XP Tracker</div><div class="sk-row-desc">Tracks weapon experience progress and shows XP gain rates</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-wxp"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-                ${this.createToggle('book-notifier', '📚 Mission Book Notifier', 'Alerts when books are available in mission rewards (checks every 12 hours)')}
+
                 ${this.createToggle('locked-items', '🔒 Locked Items Manager', 'Lock inventory items to prevent accidental trading, selling, or deleting')}
                 ${this.createToggle('price-filler', '🛒 Price Filler', 'Auto-fills prices on the Item Market and Bazaar pages')}
                 ${this.createToggle('bazaar-filler', '🏪 Bazaar Filler', 'Auto-fills bazaar prices using the Weav3r API — peek button shows 5 lowest listings without opening a popup automatically')}
@@ -1203,19 +1203,19 @@
     <!-- MISSIONS -->
     <div class="sk-sec-page" id="skp-missions">
       <div class="sk-subtab-bar">
-        <button class="sk-subtab-btn active" data-tab="miss-notifier">Book Notifier</button>
-        <button class="sk-subtab-btn" data-tab="miss-tracker">Tracker</button>
+        <button class="sk-subtab-btn active" data-tab="miss-tracker">Tracker</button>
+        <button class="sk-subtab-btn" data-tab="book-notifier">Book Notifier</button>
       </div>
       <div class="sk-scroll">
-        <div class="sk-subtab-panel active" id="skp-tab-miss-notifier">
-          <div class="sk-sh">Mission Book Notifier</div>
-          <div class="sk-info">Alerts when books become available in mission rewards. Checks periodically in the background.</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Book Notifier</div><div class="sk-row-desc">Alerts when books are available in mission rewards (checks every 12 hours)</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-book-notifier" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-        </div>
-        <div class="sk-subtab-panel" id="skp-tab-miss-tracker">
+        <div class="sk-subtab-panel active" id="skp-tab-miss-tracker">
           <div class="sk-sh">Mission Tracker</div>
-          <div class="sk-info">Tracks your mission progress and displays a summary of completed and active missions.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Mission Tracker</div><div class="sk-row-desc">Tracks if there is an active mission and displays an icon</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-mission-tracker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        </div>
+
+        <div class="sk-subtab-panel" id="skp-tab-book-notifier">
+          <div class="sk-sh">Book Notifier</div>
+          <div class="sk-info">Detects available book rewards from missions.</div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Book Notifier</div><div class="sk-row-desc">Displays an icon when you have unclaimed book rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-book-notifier" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -1410,7 +1410,7 @@
                 ['#skp-tog-war-monitor',      'sidekick_war_monitor',         null,              false],
                 ['#skp-tog-chain-view',       'sidekick_extended_chain_view', null,              false],
                 // Missions
-                ['#skp-tog-book-notifier',    'sidekick_settings',            'book-notifier',   false],
+
                 ['#skp-tog-mission-tracker',  'sidekick_settings',            'mission-tracker', false],
                 // Events
                 ['#skp-tog-event-calendar',   'sidekick_settings',            'event-calendar',  false],
@@ -1560,7 +1560,7 @@
                     }
                 });
             }
-        },
+
             // === Block Training: also write isBlocked field ===
             const btInp = overlay.querySelector('#skp-tog-block-training');
             if (btInp) {
@@ -1652,6 +1652,7 @@
             slCBs.forEach(cb => cb.addEventListener('change', saveShoplift));
             if (slSelAll)   slSelAll.addEventListener('click',   () => { slCBs.forEach(cb => cb.checked = true);  saveShoplift(); });
             if (slDeselAll) slDeselAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = false); saveShoplift(); });
+        },
 
         // Attach all event listeners
         attachEventListeners(panel) {

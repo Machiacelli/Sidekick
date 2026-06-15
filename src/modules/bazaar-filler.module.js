@@ -4,6 +4,7 @@
 // A small peek button (👁) next to each item lets the user manually view the
 // 5 lowest bazaar prices without the popup opening automatically.
 // Popup opens to the RIGHT of the item/row to stay out of the way.
+// Forked from Bazaar Filler by Weav3r
 
 const BazaarFillerModule = (() => {
     const SETTINGS_KEY = 'bazaar-filler';
@@ -437,7 +438,7 @@ const BazaarFillerModule = (() => {
     function injectAddButtons(li, priceWrap, itemId) {
         if (priceWrap.querySelector('.sk-bf-btn')) return;
 
-        // --- Fill button (lives in priceWrap next to the price input) ---
+        // --- Fill button ---
         const fillBtn = document.createElement('button');
         fillBtn.type = 'button';
         fillBtn.className = 'sk-bf-btn';
@@ -456,16 +457,19 @@ const BazaarFillerModule = (() => {
             )
         );
 
-        // --- Peek button (tiny 👁, same row) ---
-        const peekBtn = document.createElement('span');
-        peekBtn.className = 'sk-bf-peek';
+        // --- Info button (was peek) ---
+        const peekBtn = document.createElement('button');
+        peekBtn.type = 'button';
+        peekBtn.className = 'sk-bf-info-btn';
         peekBtn.title = 'Show 5 lowest bazaar prices';
-        peekBtn.innerHTML = '👁';
+        peekBtn.textContent = 'ℹ';
+        peekBtn.style.cssText = `cursor:pointer;background:rgba(91,155,213,0.12);color:#5b9bd5;border:1px solid rgba(91,155,213,0.3);
+            padding:0 8px;border-radius:4px;font-size:11px;font-weight:600;height:26px;line-height:24px;
+            vertical-align:middle;flex-shrink:0;transition:background 0.15s;`;
 
         peekBtn.addEventListener('click', e => {
             e.stopPropagation();
             const popup = document.getElementById('sk-bf-popup');
-            // Toggle: if already showing for this item, close it
             if (popup && popup.style.display === 'block' && popup.dataset.forItem === itemId) {
                 hidePopup();
                 return;
@@ -474,11 +478,16 @@ const BazaarFillerModule = (() => {
             showPeekPopup(peekBtn, itemId, () => [...li.querySelectorAll('div.price input')]);
         });
 
+        const wrap = document.createElement('span');
+        wrap.className = 'sk-bf-action-wrap';
+        wrap.style.cssText = 'display:flex;align-items:center;margin-left:8px;gap:4px;';
+        wrap.append(fillBtn, peekBtn);
+
         const group = priceWrap.querySelector('.input-money-group') || priceWrap.firstElementChild || priceWrap;
-        group.style.display = 'flex';
-        group.style.alignItems = 'center';
-        group.prepend(fillBtn);
-        group.append(peekBtn);
+        const parent = group.parentElement || li;
+        parent.style.display = 'flex';
+        parent.style.alignItems = 'center';
+        parent.appendChild(wrap);
     }
 
     // -----------------------------------------------------------------------
@@ -506,11 +515,10 @@ const BazaarFillerModule = (() => {
         fillBtn.type = 'button';
         fillBtn.className = 'sk-bf-btn';
         fillBtn.textContent = 'Fill';
-        fillBtn.title = 'Fill price from cheapest Bazaar listing (Weav3r)';
+        fillBtn.title = 'Fill price & quantity from cheapest Bazaar listing (Weav3r)';
 
         fillBtn.addEventListener('click', async e => {
             e.stopPropagation();
-            // Expand item if collapsed
             const itemContainer = row.querySelector('div[class*=item___]');
             const isExpanded = itemContainer?.className?.includes('active___');
             if (itemContainer && !isExpanded) {
@@ -524,7 +532,6 @@ const BazaarFillerModule = (() => {
             await handleFill(
                 e, itemId,
                 () => {
-                    // Mobile-aware price input search
                     const isMobile = window.innerWidth <= 784;
                     if (isMobile) return [...row.querySelectorAll('[class*=priceMobile___] .input-money-group input')];
                     return [...row.querySelectorAll('div[class*=price___] .input-money-group input, div.price input')];
@@ -540,10 +547,14 @@ const BazaarFillerModule = (() => {
             );
         });
 
-        const peekBtn = document.createElement('span');
-        peekBtn.className = 'sk-bf-peek';
+        const peekBtn = document.createElement('button');
+        peekBtn.type = 'button';
+        peekBtn.className = 'sk-bf-info-btn';
         peekBtn.title = 'Show 5 lowest bazaar prices';
-        peekBtn.innerHTML = '👁';
+        peekBtn.textContent = 'ℹ';
+        peekBtn.style.cssText = `cursor:pointer;background:rgba(91,155,213,0.12);color:#5b9bd5;border:1px solid rgba(91,155,213,0.3);
+            padding:0 8px;border-radius:4px;font-size:11px;font-weight:600;height:26px;line-height:24px;
+            vertical-align:middle;flex-shrink:0;transition:background 0.15s;`;
 
         peekBtn.addEventListener('click', e => {
             e.stopPropagation();
@@ -560,13 +571,17 @@ const BazaarFillerModule = (() => {
             });
         });
 
-        const group = priceWrap.querySelector('.input-money-group') || priceWrap.firstElementChild || priceWrap;
-        group.style.cssText = (group.style.cssText || '') + 'display:flex!important;align-items:center!important;flex-wrap:nowrap!important;min-width:160px!important;';
-        // Widen the actual price text input so full values like "49,999" are visible
-        const priceInput = group.querySelector('input[type="text"], input[type="number"], input:not([type])');
-        if (priceInput) priceInput.style.cssText = (priceInput.style.cssText || '') + 'min-width:80px!important;width:80px!important;';
-        group.prepend(fillBtn);
-        group.append(peekBtn);
+        const wrap = document.createElement('span');
+        wrap.className = 'sk-bf-action-wrap';
+        wrap.style.cssText = 'display:flex;align-items:center;margin-left:8px;gap:4px;';
+        wrap.append(fillBtn, peekBtn);
+
+        const priceCell = priceWrap.closest('div[class*="price___"]') || priceWrap;
+        if (priceCell && priceCell.parentNode) {
+            priceCell.parentNode.insertBefore(wrap, priceCell.nextSibling);
+        } else {
+            row.appendChild(wrap);
+        }
     }
 
     // -----------------------------------------------------------------------

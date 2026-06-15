@@ -249,7 +249,7 @@ const PriceFillerModule = (() => {
     // BAZAAR – Manage page (#/manage)
     // -------------------------------------------------------------------------
     async function fillManageRow(row, checked) {
-        const priceInput = row.querySelector('.price___DoKP7 .input-money-group.success input.input-money');
+        const priceInput = row.querySelector('.price___DoKP7 input.input-money') || row.querySelector('[class*="priceInputWrapper"] input.input-money') || row.querySelector('input.input-money[placeholder="Price"]');
         if (!priceInput) return;
 
         if (!checked) {
@@ -265,18 +265,39 @@ const PriceFillerModule = (() => {
             return;
         }
 
-        const itemName = row.querySelector('.desc___VJSNQ b')?.textContent.trim();
-        if (!itemName) return;
-        const itemId = getItemIdByName(itemName);
-        const items = getStoredItems();
-        const matchedItem = Object.values(items).find(i => i.name === itemName);
+        let itemId = null;
+        let matchedItem = null;
 
-        const result = await calculatePrice(itemName, itemId, matchedItem).catch(() => null);
+        const img = row.querySelector('div[class*=imgContainer___] img, div.image-wrap img, img[src*="/images/items/"]');
+        if (img) {
+            itemId = (img.src.match(/\/items\/(\d+)\//i) || img.src.match(/\/(\d+)\//) || [])[1];
+        }
+
+        const items = getStoredItems();
+        if (itemId && items[itemId]) {
+            matchedItem = items[itemId];
+        } else {
+            const itemName = row.querySelector('.desc___VJSNQ b')?.textContent.trim() || row.querySelector('[class*="nameWrap"] b')?.textContent.trim();
+            if (itemName) {
+                itemId = getItemIdByName(itemName);
+                matchedItem = Object.values(items).find(i => i.name === itemName);
+            }
+        }
+
+        const result = await calculatePrice(matchedItem?.name || '', itemId, matchedItem).catch(() => null);
         if (!result) return;
 
         priceInput.value = fmt(result.price);
         priceInput.style.color = result.marketValue ? getPriceColor(result.price, result.marketValue) : '';
         triggerEvents(priceInput, 'input');
+        
+        // Fill quantity
+        const qty = row.querySelector('div.amount input, [class*=amount___] input, input.input-money[placeholder="Qty"]');
+        if (qty) {
+            const qtyVal = row.querySelector('span.t-hide span:last-child')?.textContent?.trim() || '9999999';
+            qty.value = qtyVal;
+            triggerEvents(qty, 'input', 'keyup');
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -315,8 +336,6 @@ const PriceFillerModule = (() => {
                 padding:4px 8px; margin:0 4px;
                 background:rgba(91,155,213,0.15); border:1px solid rgba(91,155,213,0.3);
                 border-radius:4px; cursor:pointer; font-size:12px; color:#5b9bd5;
-                text-decoration:none;
-            }
             .sk-pf-settings-link:hover { background:rgba(91,155,213,0.25); }
             .sk-pf-bf-link { color:#28a745 !important; border-color:rgba(40,167,69,0.4) !important; background:rgba(40,167,69,0.1) !important; }
         `;
@@ -326,7 +345,7 @@ const PriceFillerModule = (() => {
     function addBazaarCheckboxes() {
         const hash = window.location.hash;
 
-        if (hash === '#/add') {
+        if (isOnBazaar() && hash === '#/add') {
             document.querySelectorAll('.items-cont .title-wrap').forEach(titleWrap => {
                 if (titleWrap.querySelector('.sk-pf-add-wrap')) return;
                 titleWrap.style.position = 'relative';
@@ -345,20 +364,37 @@ const PriceFillerModule = (() => {
             });
         }
 
-        if (hash === '#/manage') {
-            // Inject a compact Fill button into the price column area (not inside .desc which is cramped)
-            document.querySelectorAll('.item___jLJcf').forEach(row => {
-                if (row.querySelector('.sk-pf-manage-btn')) return;
+        if ((isOnBazaar() && hash === '#/manage') || isOnItemMarket()) {
+            const rows = document.querySelectorAll('.item___jLJcf, [class*="itemRowWrapper"]');
+            rows.forEach(row => {
+                if (row.querySelector('.sk-pf-action-wrap')) return;
 
-                // Find the price input wrapper
-                const priceWrap = row.querySelector('.price___DoKP7');
+                const priceWrap = row.querySelector('.price___DoKP7') || row.querySelector('[class*="priceInputWrapper"]');
                 if (!priceWrap) return;
+
+                const wrap = document.createElement('span');
+                wrap.className = 'sk-pf-action-wrap';
+                wrap.style.cssText = 'display:flex;align-items:center;margin-left:8px;gap:4px;';
 
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'sk-pf-manage-btn';
+                btn.className = 'sk-pf-manage-btn sk-pf-fill-btn';
                 btn.textContent = 'Fill';
-                btn.title = 'Fill price using Price Filler settings';
+                btn.title = 'Fill price & quantity using Price Filler settings';
+                btn.style.cssText = `cursor:pointer;background:linear-gradient(135deg, #3a8a3e, #4fa854);color:#fff;border:none;
+                    padding:0 8px;border-radius:4px;font-size:11px;font-weight:600;height:26px;line-height:26px;
+                    margin-right:0px;vertical-align:middle;flex-shrink:0;transition:background 0.15s, box-shadow 0.15s;`;
+                btn.addEventListener('mouseenter', () => { if (!btn.classList.contains('active')) { btn.style.background = 'linear-gradient(135deg, #4aa84e, #62c066)'; btn.style.boxShadow = '0 0 6px rgba(79,168,84,0.5)'; } });
+                btn.addEventListener('mouseleave', () => { if (!btn.classList.contains('active')) { btn.style.background = 'linear-gradient(135deg, #3a8a3e, #4fa854)'; btn.style.boxShadow = ''; } });
+
+                const infoBtn = document.createElement('button');
+                infoBtn.type = 'button';
+                infoBtn.className = 'sk-pf-info-btn';
+                infoBtn.textContent = 'ℹ';
+                infoBtn.title = 'Show prices';
+                infoBtn.style.cssText = `cursor:pointer;background:rgba(91,155,213,0.12);color:#5b9bd5;border:1px solid rgba(91,155,213,0.3);
+                    padding:0 8px;border-radius:4px;font-size:11px;font-weight:600;height:26px;line-height:24px;
+                    vertical-align:middle;flex-shrink:0;transition:background 0.15s;`;
 
                 let isFilled = false;
                 btn.addEventListener('click', async (e) => {
@@ -366,14 +402,53 @@ const PriceFillerModule = (() => {
                     isFilled = !isFilled;
                     btn.classList.toggle('active', isFilled);
                     btn.textContent = isFilled ? 'Clear' : 'Fill';
+                    btn.style.background = isFilled ? 'linear-gradient(135deg, #1a4a2e, #254f30)' : 'linear-gradient(135deg, #3a8a3e, #4fa854)';
                     await fillManageRow(row, isFilled).catch(err => console.error('[PriceFiller]', err));
                 });
 
-                // Insert button before the price input wrapper, inside the price cell
-                priceWrap.style.display = 'flex';
-                priceWrap.style.alignItems = 'center';
-                priceWrap.style.gap = '4px';
-                priceWrap.insertBefore(btn, priceWrap.firstChild);
+                infoBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const img = row.querySelector('div[class*=imgContainer___] img, div.image-wrap img, img[src*="/images/items/"]');
+                    const itemId = img ? (img.src.match(/\/items\/(\d+)\//i) || img.src.match(/\/(\d+)\//) || [])[1] : null;
+                    if (!itemId) return;
+
+                    ensureImPopup();
+                    const popup = document.getElementById('sk-pf-im-popup');
+                    
+                    if (prefs.pricingSource === 'Item Market') {
+                        popup.querySelector('#sk-pf-im-delta-lbl').textContent = String(prefs.itemMarketOffset);
+                        popup.querySelector('#sk-pf-im-slot-lbl').textContent = String(prefs.itemMarketListing);
+                    } else {
+                        popup.querySelector('#sk-pf-im-delta-lbl').textContent = String(prefs.bazaarMarginOffset);
+                        popup.querySelector('#sk-pf-im-slot-lbl').textContent = String(prefs.bazaarListing);
+                    }
+                    
+                    showImPopup(infoBtn, null, true);
+                    
+                    if (prefs.pricingSource === 'Item Market') {
+                        const data = await fetchItemMarketData(itemId).catch(() => null);
+                        const listings = data?.itemmarket?.listings;
+                        showImPopup(infoBtn, listings, false);
+                    } else {
+                        const wData = await fetchWeav3rData(itemId).catch(() => null);
+                        if (wData?.listings) {
+                            const formattedListings = wData.listings.slice(0, 5).map(l => ({
+                                price: l.price,
+                                amount: l.quantity || 1
+                            }));
+                            showImPopup(infoBtn, formattedListings, false);
+                        } else {
+                            showImPopup(infoBtn, [], false);
+                        }
+                    }
+                });
+
+                wrap.append(btn, infoBtn);
+
+                const parent = priceWrap.parentElement || row;
+                parent.style.display = 'flex';
+                parent.style.alignItems = 'center';
+                parent.appendChild(wrap);
             });
         }
     }
@@ -569,7 +644,6 @@ const PriceFillerModule = (() => {
     // -------------------------------------------------------------------------
     // ITEM MARKET – Fill button
     // -------------------------------------------------------------------------
-    let imRecentInputs = null;
     let imPopupDragX = 0, imPopupDragY = 0, imDragging = false;
 
     function ensureImPopup() {
@@ -583,17 +657,17 @@ const PriceFillerModule = (() => {
             pointer-events:auto;top:80px;left:200px;`;
         el.innerHTML = `
             <div id="sk-pf-im-drag" style="cursor:move;font-size:11px;color:#666;border-bottom:1px solid #333;padding-bottom:6px;margin-bottom:8px;user-select:none;">
-                &#9776; Item Market Filler
+                &#9776; Prices Info
                 <span id="sk-pf-im-close" style="float:right;cursor:pointer;color:#888;font-size:16px;line-height:1;">&times;</span>
             </div>
             <div id="sk-pf-im-body" style="min-height:30px;"></div>
             <div style="margin-top:8px;border-top:1px solid #333;padding-top:6px;font-size:11px;color:#666;">
-                Offset: <b id="sk-pf-im-delta-lbl"></b> &nbsp;|&nbsp; Slot: <b id="sk-pf-im-slot-lbl"></b>
+                Margin: <b id="sk-pf-im-delta-lbl"></b> &nbsp;|&nbsp; Slot: <b id="sk-pf-im-slot-lbl"></b>
                 &nbsp;&nbsp;<a id="sk-pf-im-edit" href="#" style="color:#5b9bd5;">Edit</a>
             </div>`;
         document.body.appendChild(el);
         el.querySelector('#sk-pf-im-close').onclick = () => { el.style.display = 'none'; };
-        el.querySelector('#sk-pf-im-edit').onclick = e => { e.preventDefault(); openImSettings(); };
+        el.querySelector('#sk-pf-im-edit').onclick = e => { e.preventDefault(); openSettingsModal(); };
         const drag = el.querySelector('#sk-pf-im-drag');
         drag.addEventListener('mousedown', e => {
             imDragging = true; imPopupDragX = e.clientX - el.offsetLeft; imPopupDragY = e.clientY - el.offsetTop; e.preventDefault();
@@ -610,8 +684,6 @@ const PriceFillerModule = (() => {
         if (!popup) return;
         const body = popup.querySelector('#sk-pf-im-body');
         const MARKET_TAX = 0.05;
-        popup.querySelector('#sk-pf-im-delta-lbl').textContent = prefs.imPriceDelta;
-        popup.querySelector('#sk-pf-im-slot-lbl').textContent = `#${(prefs.imSlotOffset || 0) + 1}`;
         if (loading) {
             body.innerHTML = '<span style="color:#888;">Loading prices...</span>';
         } else if (!listings?.length) {
@@ -619,8 +691,7 @@ const PriceFillerModule = (() => {
         } else {
             body.innerHTML = listings.slice(0, 5).map((l, i) => {
                 const net = Math.round(l.price * (1 - MARKET_TAX));
-                return `<div class="sk-pf-im-row" data-price="${l.price}" style="cursor:pointer;padding:3px 0;"
-                    title="Click to use this as base price">
+                return `<div class="sk-pf-im-row" data-price="${l.price}" style="padding:3px 0;">
                     <b>#${i + 1}</b> ${l.amount}x @ $${fmt(l.price)}
                     <span style="color:#666;font-size:11px;"> ($${fmt(net)} after tax)</span>
                 </div>`;
@@ -628,131 +699,23 @@ const PriceFillerModule = (() => {
             popup.querySelectorAll('.sk-pf-im-row').forEach(row => {
                 row.addEventListener('mouseenter', () => { row.style.background = 'rgba(255,255,255,0.06)'; });
                 row.addEventListener('mouseleave', () => { row.style.background = ''; });
-                row.addEventListener('click', () => {
-                    const p = parseInt(row.getAttribute('data-price'), 10) - 1;
-                    if (imRecentInputs) { imRecentInputs.forEach(i => { i.value = p; }); imRecentInputs[0]?.dispatchEvent(new Event('input', { bubbles: true })); }
-                });
             });
         }
         popup.style.display = 'block';
         const rect = anchor.getBoundingClientRect();
-        popup.style.left = Math.max(8, rect.left - 250) + 'px';
-        popup.style.top = Math.max(8, rect.top + window.scrollY - 10) + 'px';
-    }
-
-    function openImSettings() {
-        const current = (prefs.imSlotOffset || 0) > 0 ? `${prefs.imPriceDelta}[${prefs.imSlotOffset}]` : prefs.imPriceDelta;
-        const input = prompt(
-            'Item Market price offset formula:\n' +
-            '  -1      → cheapest listing minus $1 (default)\n' +
-            '  +0      → exact match\n' +
-            '  -1%     → 1% below cheapest\n' +
-            '  -1[1]   → 2nd cheapest minus $1\n\n' +
-            'Current:', current
-        );
-        if (input === null) return;
-        const slotM = input.match(/\[(\d+)\]$/);
-        prefs.imSlotOffset = slotM ? parseInt(slotM[1], 10) : 0;
-        prefs.imPriceDelta = (slotM ? input.replace(/\[\d+\]$/, '') : input).trim();
-        savePrefs();
-    }
-
-    async function handleImFill(e, itemId, priceInputs, qtyInputs) {
-        e.preventDefault();
-        e.stopPropagation();
-        imRecentInputs = priceInputs;
-        const btn = e.currentTarget;
-        const wasActive = btn.classList.contains('sk-pf-im-active');
-        if (wasActive) {
-            btn.classList.remove('sk-pf-im-active');
-            btn.textContent = 'Fill';
-            btn.style.background = 'linear-gradient(135deg, #3a8a3e, #4fa854)';
-            priceInputs.forEach(i => { i.value = ''; });
-            qtyInputs?.forEach(i => { i.value = ''; });
-            priceInputs[0]?.dispatchEvent(new Event('input', { bubbles: true }));
-            document.getElementById('sk-pf-im-popup')?.style && (document.getElementById('sk-pf-im-popup').style.display = 'none');
-            return;
+        
+        const row = anchor.closest('li.clearfix, div[class*=row___], div[class*=itemRowWrapper___]') || anchor;
+        const rowRect = row.getBoundingClientRect();
+        
+        let left = rowRect.right + 10;
+        let top = Math.max(8, rect.top + window.scrollY - 10);
+        
+        if (left + popup.offsetWidth > window.innerWidth) {
+            left = rowRect.left - popup.offsetWidth - 10;
         }
-        btn.classList.add('sk-pf-im-active');
-        btn.textContent = 'Clear';
-        btn.style.background = 'linear-gradient(135deg, #1a4a2e, #254f30)';
-        ensureImPopup();
-        showImPopup(btn, null, true);
-
-        const data = await fetchItemMarketData(itemId).catch(() => null);
-        const listings = data?.itemmarket?.listings;
-        if (listings?.length) {
-            const idx = Math.min(prefs.imSlotOffset || 0, listings.length - 1);
-            const price = applyDeltaFormula(listings[idx].price, prefs.imPriceDelta || '-1');
-            if (price > 0) {
-                priceInputs.forEach(i => { i.value = price; });
-                priceInputs[0]?.dispatchEvent(new Event('input', { bubbles: true }));
-                if (qtyInputs?.length) {
-                    qtyInputs.forEach(i => { i.value = 9999999; });
-                    qtyInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
-        }
-        showImPopup(btn, listings, false);
-    }
-
-    function getItemIdFromWrapper(rowWrapper) {
-        // aria-controls="wai-addListing-itemInfo-{itemId}-{index}" on the viewInfoButton
-        const btn = rowWrapper.querySelector('button[aria-controls]');
-        if (btn) {
-            const m = (btn.getAttribute('aria-controls') || '').match(/itemInfo-?(\d+)-/i);
-            if (m) return m[1];
-        }
-        // Fallback: image src contains item ID
-        const img = rowWrapper.querySelector('img[src*="/images/items/"]');
-        if (img) {
-            const m = (img.src || '').match(/\/items\/(\d+)\//i);
-            if (m) return m[1];
-        }
-        return null;
-    }
-
-    function addImFillButton(priceWrapper, itemId) {
-        if (priceWrapper.querySelector('.sk-pf-im-btn') || priceWrapper.dataset.skPfDone) return;
-        // Only inject into visible (non-hidden) price inputs
-        const priceInputs = [...priceWrapper.querySelectorAll('input.input-money:not([type="hidden"])')]
-            .filter(i => i.placeholder === 'Price');
-        if (!priceInputs.length) return;
-        priceWrapper.dataset.skPfDone = '1';
-
-        // Qty inputs are in the sibling amountInputWrapper___USwSs div
-        const rowEl = priceWrapper.closest('[class*="itemRowWrapper"]') || priceWrapper.closest('li');
-        const qtyInputs = rowEl
-            ? [...rowEl.querySelectorAll('[class*="amountInputWrapper___USwSs"] input.input-money:not([type="hidden"])')]
-                .filter(i => i.placeholder === 'Qty')
-            : [];
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'sk-pf-im-btn';
-        btn.textContent = 'Fill';
-        btn.title = 'Fill price from cheapest Item Market listing';
-        btn.style.cssText = `cursor:pointer;background:linear-gradient(135deg, #3a8a3e, #4fa854);color:#fff;border:none;
-            padding:0 8px;border-radius:4px;font-size:11px;font-weight:600;height:26px;line-height:26px;
-            margin-right:4px;vertical-align:middle;flex-shrink:0;transition:background 0.15s, box-shadow 0.15s;`;
-        btn.addEventListener('mouseenter', () => { if (!btn.classList.contains('sk-pf-im-active')) { btn.style.background = 'linear-gradient(135deg, #4aa84e, #62c066)'; btn.style.boxShadow = '0 0 6px rgba(79,168,84,0.5)'; } });
-        btn.addEventListener('mouseleave', () => { if (!btn.classList.contains('sk-pf-im-active')) { btn.style.background = 'linear-gradient(135deg, #3a8a3e, #4fa854)'; btn.style.boxShadow = ''; } });
-        btn.addEventListener('click', e => handleImFill(e, itemId, priceInputs, qtyInputs));
-
-        const group = priceWrapper.querySelector('.input-money-group') || priceWrapper;
-        group.style.display = 'flex';
-        group.style.alignItems = 'center';
-        group.prepend(btn);
-    }
-
-    function processImPage() {
-        document.querySelectorAll('[class*="priceInputWrapper"]:not([data-sk-pf-done])').forEach(wrapper => {
-            const row = wrapper.closest('[class*="itemRowWrapper"]');
-            if (!row) return;
-            const itemId = getItemIdFromWrapper(row);
-            if (!itemId) return;
-            addImFillButton(wrapper, itemId);
-        });
+        
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
     }
 
     function isOnItemMarket() {
@@ -766,16 +729,18 @@ const PriceFillerModule = (() => {
         return window.location.href.includes('bazaar.php');
     }
 
-    function setupImObserver() {
-        processImPage();
-        let tries = 0;
-        const poll = setInterval(() => { processImPage(); if (++tries >= 30) clearInterval(poll); }, 500);
-        const root = document.getElementById('item-market-root') ||
-            document.querySelector('[class*="itemMarket"]') ||
-            document.body;
-        if (pageObserver) pageObserver.disconnect();
-        pageObserver = new MutationObserver(() => processImPage());
-        pageObserver.observe(root, { childList: true, subtree: true });
+    function setupUIObserver() {
+        if (bazaarObserver) bazaarObserver.disconnect();
+        let debounce;
+        bazaarObserver = new MutationObserver(() => {
+            clearTimeout(debounce);
+            debounce = setTimeout(runBazaarUI, 150);
+        });
+        const root = document.querySelector('#bazaarRoot') || document.getElementById('item-market-root') || document.querySelector('[class*="itemMarket"]') || document.body;
+        bazaarObserver.observe(root, { childList: true, subtree: true });
+
+        window.addEventListener('hashchange', () => setTimeout(runBazaarUI, 200));
+        setTimeout(runBazaarUI, 300);
     }
 
     // -------------------------------------------------------------------------
@@ -800,13 +765,9 @@ const PriceFillerModule = (() => {
             this.isEnabled = true;
             maybeRefreshItems();
 
-            if (isOnBazaar()) {
-                setupBazaarObserver();
-            }
-
-            if (isOnItemMarket()) {
+            if (isOnBazaar() || isOnItemMarket()) {
                 ensureImPopup();
-                setupImObserver();
+                setupUIObserver();
             }
         },
 
@@ -814,10 +775,14 @@ const PriceFillerModule = (() => {
             this.isEnabled = false;
             bazaarObserver?.disconnect();
             bazaarObserver = null;
-            pageObserver?.disconnect();
-            pageObserver = null;
             document.getElementById('sk-pf-im-popup')?.remove();
             document.getElementById('sk-pf-bazaar-styles')?.remove();
+        },
+        
+        openSettings() {
+            if (typeof openSettingsModal === 'function') {
+                openSettingsModal();
+            }
         }
     };
 })();

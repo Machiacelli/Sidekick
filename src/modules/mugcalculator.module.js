@@ -46,7 +46,7 @@ const MugCalculatorModule = (() => {
 
         setup() {
             setTimeout(() => {
-                this.waitForElements('.rowWrapper___me3Ox, .sellerRow___Ca2pK', () => {
+                this.waitForElements('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]', () => {
                     this.processAllMarketRows();
                     this.observeMarketRows();
                 });
@@ -407,15 +407,17 @@ const MugCalculatorModule = (() => {
             if (processedRows.has(row) && row.querySelector('.mugInfoIcon')) return;
             if (processedRows.has(row) && !row.querySelector('.mugInfoIcon')) processedRows.delete(row);
 
-            const honorElem = row.querySelector('.honorWrap___BHau4 a.linkWrap___ZS6r9');
-            const priceElement = row.querySelector('.price___Uwiv2') || row.querySelector('.price___v8rRx');
-            if (!honorElem || !priceElement) return;
+            const sellerLink = row.querySelector("a[href*='profiles.php?XID=']");
+            const priceElement = row.querySelector('[class*="price___"]') || row.querySelector('.price');
+            if (!sellerLink || !priceElement) return;
 
-            const price = parseInt(priceElement.textContent.replace('$', '').replace(/,/g, ''), 10);
-            const availText = row.querySelector('.available___xegv_')?.textContent.replace(/ available|,/g, '')
-                || row.querySelector('.available___jtANf')?.textContent.replace(/ available|,/g, '')
-                || '0';
-            const available = parseInt(availText, 10);
+            const priceText = priceElement.textContent.replace('$', '').replace(/,/g, '');
+            const price = parseInt(priceText, 10);
+            if (isNaN(price)) return;
+
+            const availableElem = row.querySelector('[class*="available___"]');
+            const availText = availableElem ? availableElem.textContent.replace(/ available|,/g, '') : '1';
+            const available = parseInt(availText, 10) || 1;
             const listingTotal = price * available;
 
             const threshold = parseInt(await window.SidekickModules.Core.ChromeStorage.get('mugThreshold') || 0, 10);
@@ -430,7 +432,7 @@ const MugCalculatorModule = (() => {
             icon.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.closeAllPopups();
-                this.handleMugIconClick(listingTotal, available, threshold, honorElem, icon);
+                this.handleMugIconClick(listingTotal, available, threshold, sellerLink, icon);
             });
 
             processedRows.add(row);
@@ -469,21 +471,20 @@ const MugCalculatorModule = (() => {
         },
 
         processAllMarketRows() {
-            document.querySelectorAll('.rowWrapper___me3Ox, .sellerRow___Ca2pK')
+            document.querySelectorAll('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]')
                 .forEach(row => this.attachInfoIconForMarketRow(row));
         },
 
         observeMarketRows() {
-            const container = document.querySelector('.sellerListWrapper___PN32N');
+            const container = document.querySelector('[class*="sellerListWrapper"], [class*="items___"], [class*="itemMarket"]') || document.body;
             if (!container) return;
             new MutationObserver((mutations) => {
                 mutations.forEach(m => m.addedNodes.forEach(node => {
-                    if (node.nodeType !== 1) return;
-                    if (node.matches('.rowWrapper___me3Ox, .sellerRow___Ca2pK')) {
-                        this.attachInfoIconForMarketRow(node);
-                    } else {
-                        node.querySelectorAll?.('.rowWrapper___me3Ox, .sellerRow___Ca2pK')
-                            ?.forEach(r => this.attachInfoIconForMarketRow(r));
+                    if (node.nodeType === 1) {
+                        if (node.matches && node.matches('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]')) {
+                            this.attachInfoIconForMarketRow(node);
+                        }
+                        node.querySelectorAll?.('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]').forEach(r => this.attachInfoIconForMarketRow(r));
                     }
                 }));
             }).observe(container, { childList: true, subtree: true });

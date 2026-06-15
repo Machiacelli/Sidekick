@@ -2,6 +2,7 @@
  * Blood Bag Reminder Module
  * Shows blood bag icon when ready to fill blood bags
  * Configurable 1-3 bags with dynamic life/cooldown thresholds
+ * Forked from Torn: Refill Blood Bag Reminder by ButtChew
  */
 
 const BloodBagReminderModule = {
@@ -233,7 +234,10 @@ const BloodBagReminderModule = {
             }
 
             if (existing) {
-                this.updateIconTooltip(existing, label);
+                const a = existing.querySelector('a');
+                if (a) {
+                    a.setAttribute('aria-label', label);
+                }
                 return;
             }
 
@@ -248,7 +252,6 @@ const BloodBagReminderModule = {
     buildBloodBagIcon(tooltipText) {
         const li = document.createElement('li');
         li.id = this.CONFIG.fullLifeIconId;
-        li.style.background = 'none';
         li.style.animation = 'sidekickBloodBagPulse 900ms ease-out 1';
 
         const a = document.createElement('a');
@@ -260,6 +263,7 @@ const BloodBagReminderModule = {
         a.setAttribute('aria-label', tooltipText);
         a.tabIndex = 0;
         a.setAttribute('data-is-tooltip-opened', 'false');
+        a.setAttribute('i-data', 'i_10_42_17_17');
 
         const img = document.createElement('img');
         img.src = this.CONFIG.bloodBagPng;
@@ -271,180 +275,13 @@ const BloodBagReminderModule = {
         a.appendChild(img);
         li.appendChild(a);
 
-        this.enableNativeLikeTooltip(a);
-
         return li;
-    },
-
-    // Update icon tooltip
-    updateIconTooltip(li, text) {
-        const a = li.querySelector('a');
-        if (!a) return;
-        a.href = this.getDestinationURL();
-        if (this.settings.openInNewTab) {
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-        } else {
-            a.removeAttribute('target');
-            a.removeAttribute('rel');
-        }
-        a.setAttribute('aria-label', text);
-        if (typeof a.__sidekickUpdateTipText === 'function') {
-            a.__sidekickUpdateTipText(text);
-        }
     },
 
     // Remove icon
     removeIcon() {
         const existing = document.getElementById(this.CONFIG.fullLifeIconId);
         if (existing) existing.remove();
-    },
-
-    // Enable native-like tooltip
-    enableNativeLikeTooltip(anchor) {
-        let tipEl = null;
-        let hideTimer = null;
-
-        const CLS = {
-            tip: 'tooltip___aWICR tooltipCustomClass___gbI4V',
-            arrowWrap: 'arrow___yUDKb top___klE_Y',
-            arrowIcon: 'arrowIcon___KHyjw',
-        };
-
-        const buildTooltip = (text) => {
-            const el = document.createElement('div');
-            el.className = CLS.tip;
-            el.setAttribute('role', 'tooltip');
-            el.setAttribute('tabindex', '-1');
-            el.style.position = 'absolute';
-            el.style.transitionProperty = 'opacity';
-            el.style.transitionDuration = '200ms';
-            el.style.opacity = '0';
-
-            const [title, subtitle] = this.parseTwoLines(text);
-            const b = document.createElement('b');
-            b.textContent = title;
-            el.appendChild(b);
-
-            if (subtitle) {
-                const div = document.createElement('div');
-                div.textContent = subtitle;
-                el.appendChild(div);
-            }
-
-            const arrowWrap = document.createElement('div');
-            arrowWrap.className = CLS.arrowWrap;
-            const arrowIcon = document.createElement('div');
-            arrowIcon.className = CLS.arrowIcon;
-            arrowWrap.appendChild(arrowIcon);
-            el.appendChild(arrowWrap);
-
-            return el;
-        };
-
-        const setText = (text) => {
-            if (!tipEl) return;
-            const [title, subtitle] = this.parseTwoLines(text);
-            const b = tipEl.querySelector('b');
-            if (b) b.textContent = title;
-            let sub = b?.nextElementSibling;
-            if (subtitle) {
-                if (!sub || sub.tagName !== 'DIV') {
-                    sub = document.createElement('div');
-                    b.after(sub);
-                }
-                sub.textContent = subtitle;
-            } else if (sub) {
-                sub.remove();
-            }
-        };
-
-        const positionTooltip = () => {
-            if (!tipEl) return;
-
-            const r = anchor.getBoundingClientRect();
-            const ew = tipEl.offsetWidth;
-            const eh = tipEl.offsetHeight;
-
-            let left = Math.round(r.left + (r.width - ew) / 2);
-            let top = Math.round(r.top - eh - 14);
-
-            left = Math.max(8, Math.min(left, window.innerWidth - ew - 8));
-            if (top < 8) {
-                top = Math.round(r.bottom + 10);
-            }
-
-            tipEl.style.left = `${left}px`;
-            tipEl.style.top = `${top}px`;
-
-            const arrow = tipEl.querySelector(`.${CLS.arrowWrap.split(' ')[0]}`);
-            if (arrow) {
-                const iconCenter = r.left + r.width / 2;
-                const arrowLeft = Math.round(iconCenter - left - 6 + 14);
-                arrow.style.left = `${arrowLeft}px`;
-            }
-        };
-
-        const showTip = () => {
-            clearTimeout(hideTimer);
-            const text = anchor.getAttribute('aria-label');
-            if (!text) return;
-
-            if (!tipEl) {
-                tipEl = buildTooltip(text);
-                document.body.appendChild(tipEl);
-                anchor.__sidekickTipEl = tipEl;
-            } else {
-                setText(text);
-            }
-
-            anchor.setAttribute('data-is-tooltip-opened', 'true');
-
-            tipEl.style.opacity = '0';
-            tipEl.style.left = '-9999px';
-            tipEl.style.top = '-9999px';
-            requestAnimationFrame(() => {
-                positionTooltip();
-                requestAnimationFrame(() => {
-                    if (tipEl) tipEl.style.opacity = '1';
-                });
-            });
-        };
-
-        const hideTip = (immediate = false) => {
-            if (!tipEl) return;
-            anchor.setAttribute('data-is-tooltip-opened', 'false');
-
-            if (immediate) {
-                tipEl.remove();
-                anchor.__sidekickTipEl = null;
-                tipEl = null;
-                return;
-            }
-            tipEl.style.opacity = '0';
-            hideTimer = setTimeout(() => {
-                tipEl?.remove();
-                anchor.__sidekickTipEl = null;
-                tipEl = null;
-            }, 210);
-        };
-
-        anchor.__sidekickUpdateTipText = (text) => setText(text);
-
-        anchor.addEventListener('mouseenter', showTip);
-        anchor.addEventListener('mouseleave', () => hideTip(false));
-        anchor.addEventListener('focus', showTip);
-        anchor.addEventListener('blur', () => hideTip(true));
-        window.addEventListener('scroll', () => hideTip(true), { passive: true });
-    },
-
-    // Parse two lines from tooltip text
-    parseTwoLines(text) {
-        const parts = text.split(' - ');
-        if (parts.length >= 2) {
-            return [parts[0].trim(), parts[1].trim()];
-        }
-        return [text.trim(), ''];
     },
 
     // Inject CSS styles
@@ -454,21 +291,14 @@ const BloodBagReminderModule = {
         const style = document.createElement('style');
         style.id = 'sidekick-bloodbag-styles';
         style.textContent = `
-            #${this.CONFIG.fullLifeIconId},
-            #${this.CONFIG.fullLifeIconId} a,
-            #${this.CONFIG.fullLifeIconId} img {
-                background: none !important;
+            #${this.CONFIG.fullLifeIconId} a {
                 background-image: none !important;
-                -webkit-mask: none !important;
-                mask: none !important;
-                box-shadow: none !important;
-                border: none !important;
-            }
-            #${this.CONFIG.fullLifeIconId}::before,
-            #${this.CONFIG.fullLifeIconId}::after,
-            #${this.CONFIG.fullLifeIconId} a::before,
-            #${this.CONFIG.fullLifeIconId} a::after {
-                content: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                text-decoration: none !important;
+                width: 100% !important;
+                height: 100% !important;
             }
             ul[class*="status-icons"] {
                 height: auto !important;

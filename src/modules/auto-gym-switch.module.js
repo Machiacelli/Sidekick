@@ -3,6 +3,7 @@
 // document_start) because content scripts cannot override window.fetch for the
 // page's own JavaScript. This module (isolated world) only manages the
 // enabled/disabled state, written to localStorage so the inject script can read it.
+// Forked from Auto gym switch by Stephen Lynx
 
 const AutoGymSwitchModule = {
     isEnabled: false,

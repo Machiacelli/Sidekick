@@ -2,7 +2,6 @@
  * Sidekick Chrome Extension - Chain Timer Module
  * Floating timer display for faction chain countdown
  * Version: 1.0.0
- * Author: Machiacelli
  */
 
 (function () {

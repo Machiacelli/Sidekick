@@ -2,7 +2,7 @@
  * Sidekick Chrome Extension - Block Training Module
  * Blocks gym access to prevent accidental training
  * Version: 1.0.0
- * Author: Machiacelli
+ * Author Machiacelli
  */
 
 (function () {
@@ -61,9 +61,9 @@
         // Load settings from storage
         async loadSettings() {
             try {
-                const saved = await window.SidekickModules.Core.ChromeStorage.get('sidekick_block_training');
+                const saved = await window.SidekickModules.Core.ChromeStorage.get('sidekick_blocktraining');
                 if (saved) {
-                    this.isBlocked = saved.isBlocked === true;
+                    this.isBlocked = saved.isEnabled === true || saved.isBlocked === true;
                 } else {
                     this.isBlocked = false; // Default disabled
                 }
@@ -77,9 +77,10 @@
         // Save settings to storage
         async saveSettings() {
             try {
-                await window.SidekickModules.Core.ChromeStorage.set('sidekick_block_training', {
-                    isBlocked: this.isBlocked
-                });
+                const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_blocktraining') || {};
+                data.isEnabled = this.isBlocked;
+                data.isBlocked = this.isBlocked;
+                await window.SidekickModules.Core.ChromeStorage.set('sidekick_blocktraining', data);
                 console.log('💾 Block Training settings saved');
             } catch (error) {
                 console.error('Failed to save block training settings:', error);
