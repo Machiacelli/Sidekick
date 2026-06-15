@@ -124,7 +124,7 @@ const BookNotifierModule = {
             }
 
             const rewards = data.missions?.rewards || [];
-            
+
             // Look for any reward that is a Book
             const books = rewards.filter(r => r.details && r.details.type === 'Book');
 
@@ -147,7 +147,7 @@ const BookNotifierModule = {
 
         const anchor = document.getElementById('companyAddictionLevel') || document.querySelector('.tt-sidebar-information section');
         const container = document.querySelector('.tt-sidebar-information');
-        
+
         if (!container && !anchor) return false;
 
         const section = document.createElement('section');
@@ -159,7 +159,7 @@ const BookNotifierModule = {
         } else if (container) {
             container.appendChild(section);
         }
-        
+
         return true;
     },
 
@@ -171,7 +171,7 @@ const BookNotifierModule = {
         }
 
         const count = books ? books.length : 0;
-        
+
         if (count > 0) {
             const firstName = books[0]?.details?.name?.replace(/^Book\s*:\s*/i, '') || 'Book Available';
             section.innerHTML = `<a class="title" href="/page.php?sid=missions">Book: </a><span><a href="/page.php?sid=missions" style="color:#4CAF50;font-weight:bold;text-decoration:none;">${firstName}</a></span>`;
@@ -191,7 +191,7 @@ const BookNotifierModule = {
         let debounceTimer = null;
         this.observer = new MutationObserver(() => {
             if (!this.isEnabled) return;
-            
+
             const container = document.querySelector('.tt-sidebar-information');
             if (container && !document.getElementById(this.ICON_ID)) {
                 if (this.activeBooks !== null) {
