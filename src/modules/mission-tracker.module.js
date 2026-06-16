@@ -198,7 +198,7 @@ const MissionTrackerModule = {
         if (ready > 0) labels.push(`${ready} missions complete`);
         if (accepted > 0) labels.push(`${accepted} active`);
         if (unaccepted > 0) labels.push(`${unaccepted} unaccepted`);
-        const label = labels.join(', ') || 'Missions Available';
+        const label = 'Missions|' + (labels.join(', ') || 'Available');
 
         let li = document.getElementById(this.ICON_ID);
         if (!li) {
@@ -241,57 +241,44 @@ const MissionTrackerModule = {
         let tipEl = null;
         let hideTimer = null;
 
-        const CLS = {
-            tip: 'tooltip___aWICR tooltipCustomClass___gbI4V',
-            arrowWrap: 'arrow___yUDKb top___klE_Y',
-            arrowIcon: 'arrowIcon___KHyjw',
-        };
-
         const buildTooltip = (text) => {
             const el = document.createElement('div');
-            el.className = CLS.tip;
+            el.className = 'sidekick-tooltip';
             el.setAttribute('role', 'tooltip');
             el.setAttribute('tabindex', '-1');
-            el.style.position = 'absolute';
-            el.style.transitionProperty = 'opacity';
-            el.style.transitionDuration = '200ms';
-            el.style.opacity = '0';
-            el.style.backgroundColor = '#000';
-            el.style.color = '#fff';
-            el.style.padding = '5px 10px';
-            el.style.borderRadius = '4px';
-            el.style.zIndex = '99999';
-            el.style.pointerEvents = 'none';
-            el.style.whiteSpace = 'nowrap';
-            el.style.fontSize = '12px';
+
+            const content = document.createElement('div');
+            content.className = 'sidekick-tooltip-custom';
 
             const [title, subtitle] = this.parseTwoLines(text);
-            const b = document.createElement('b');
-            b.textContent = title;
-            el.appendChild(b);
+            const p1 = document.createElement('p');
+            p1.innerHTML = `<b>${title}</b>`;
+            content.appendChild(p1);
 
             if (subtitle) {
-                const div = document.createElement('div');
-                div.textContent = subtitle;
-                el.appendChild(div);
+                const p2 = document.createElement('p');
+                p2.textContent = subtitle;
+                content.appendChild(p2);
             }
+            el.appendChild(content);
             return el;
         };
 
         const setText = (text) => {
             if (!tipEl) return;
+            const content = tipEl.querySelector('.sidekick-tooltip-custom');
+            if (!content) return;
+            content.innerHTML = '';
+            
             const [title, subtitle] = this.parseTwoLines(text);
-            const b = tipEl.querySelector('b');
-            if (b) b.textContent = title;
-            let sub = b?.nextElementSibling;
+            const p1 = document.createElement('p');
+            p1.innerHTML = `<b>${title}</b>`;
+            content.appendChild(p1);
+
             if (subtitle) {
-                if (!sub || sub.tagName !== 'DIV') {
-                    sub = document.createElement('div');
-                    b.after(sub);
-                }
-                sub.textContent = subtitle;
-            } else if (sub) {
-                sub.remove();
+                const p2 = document.createElement('p');
+                p2.textContent = subtitle;
+                content.appendChild(p2);
             }
         };
 
@@ -301,7 +288,7 @@ const MissionTrackerModule = {
             if (!tipEl) return;
             const r = anchor.getBoundingClientRect();
             tipEl.style.left = (r.left + window.scrollX + (r.width / 2) - (tipEl.offsetWidth / 2)) + 'px';
-            tipEl.style.top = (r.bottom + window.scrollY + 8) + 'px';
+            tipEl.style.top = (r.top + window.scrollY - tipEl.offsetHeight - 8) + 'px';
         };
 
         const showTip = () => {
@@ -356,6 +343,10 @@ const MissionTrackerModule = {
     },
 
     parseTwoLines(text) {
+        if (text.includes('|')) {
+            const parts = text.split('|');
+            return [parts[0], parts.slice(1).join('|')];
+        }
         const parts = text.split(' - ');
         if (parts.length >= 2) {
             return [parts[0] + ' - ', parts.slice(1).join(' - ')];
@@ -385,11 +376,38 @@ const MissionTrackerModule = {
                 font-size: 15px;
                 line-height: 1;
                 display: block;
-                animation: sk-mission-pulse 2.5s ease-in-out infinite;
             }
-            @keyframes sk-mission-pulse {
-                0%, 100% { filter: none; }
-                50% { filter: drop-shadow(0 0 4px rgba(102,187,106,0.9)); }
+            .sidekick-tooltip {
+                background: #f2f2f2;
+                background: var(--tooltip-bg-color, #f2f2f2);
+                box-shadow: 0 0 8px rgba(0,0,0,.3);
+                box-shadow: var(--tooltip-shadow, 0 0 8px rgba(0,0,0,.3));
+                width: -moz-max-content;
+                width: max-content;
+                z-index: 999999;
+                border-radius: 4px;
+                padding: 8px;
+                line-height: 14px;
+                position: absolute;
+                pointer-events: none;
+                transition: opacity 200ms;
+                opacity: 0;
+            }
+            .sidekick-tooltip-custom {
+                color: var(--default-color, #333);
+                line-height: 1rem;
+            }
+            .sidekick-tooltip-custom a {
+                color: var(--default-blue-color, #007bff);
+                text-decoration: none;
+            }
+            .sidekick-tooltip-custom p {
+                text-align: left;
+                white-space: nowrap;
+                margin: 0;
+            }
+            .sidekick-tooltip-custom p:not(:last-child) {
+                margin-bottom: 4px;
             }
         `;
         document.head.appendChild(style);

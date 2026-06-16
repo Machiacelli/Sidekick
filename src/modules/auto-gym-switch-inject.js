@@ -95,34 +95,63 @@
         return null;
     }
 
-    // Uses a proper POST to changeGym — same approach as the original script's
-    // getAction call. This avoids navigating to the gym profile page, which
-    // happens when clicking anchor/button elements in the DOM.
+    // Uses native DOM clicking to switch gym, letting Torn's React handle the API call
+    async function changeGymViaDOM(gymId) {
+        // Look for the specific gym icon (e.g. gym-25___abcd)
+        const icon = document.querySelector(`[class*="gym-${gymId}_"], [class*="gym-${gymId} "]`);
+        if (!icon) return false;
+        
+        const btn = icon.closest('button, [class*="gymButton"]');
+        if (!btn) return false;
+        
+        console.log(`💪 [AutoGym] Clicking native gym button for Gym ${gymId}`);
+        btn.click();
+        
+        // Wait up to 3 seconds for the fetch interceptor to register the change
+        for (let i = 0; i < 30; i++) {
+            if (currentGym === gymId) return true;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        return false;
+    }
+
+    // Fallback API POST to changeGym
     async function swapGyms(gymId) {
-        const params = new URLSearchParams({ step: 'changeGym', gymID: gymId });
         let changeResult;
+        
+        // Attempt 1: JSON payload with step in URL (Torn's modern standard)
         try {
-            const resp = await originalFetch('/gym.php', {
+            const resp = await originalFetch('/gym.php?step=changeGym', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ step: 'changeGym', gymID: gymId })
             });
             changeResult = await resp.json();
-        } catch (e) {
-            console.error('💪 [AutoGym] changeGym request failed:', e);
-            // On error, let training proceed rather than blocking
-            return null;
+        } catch(e) {}
+
+        // Attempt 2: Form payload with step in body
+        if (!changeResult || !changeResult.success) {
+            const params = new URLSearchParams({ step: 'changeGym', gymID: gymId });
+            try {
+                const resp = await originalFetch('/gym.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params
+                });
+                changeResult = await resp.json();
+            } catch (e) {
+                console.error('💪 [AutoGym] changeGym fallback request failed:', e);
+            }
         }
 
-        if (changeResult.success) {
+        if (changeResult && changeResult.success) {
             currentGym = gymId;
-            // Update visual UI (non-critical — ignore errors)
             try { updateGymUI(gymId); } catch (e) { /* ignore */ }
         }
 
         return new Response(JSON.stringify({
-            success: changeResult.success,
-            message: changeResult.message || `Switched to gym ${gymId}. Click Train again.`
+            success: changeResult ? changeResult.success : false,
+            message: (changeResult && changeResult.message) || `Switched to gym ${gymId}. Click Train again.`
         }));
     }
 
@@ -156,8 +185,27 @@
     window.fetch = async function (...args) {
         const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
 
+        // Determine the request type by checking both URL and body
+        let isGetInitial = url.includes('getInitialGymInfo');
+        let isChange = url.includes('changeGym') || url.includes('purchaseMembership');
+        let isTrain = url.includes('step=train');
+        let bodyText = '';
+
+        if (url.includes('gym.php')) {
+            if (args[1]?.body) {
+                const b = args[1].body;
+                if (b instanceof FormData || b instanceof URLSearchParams) {
+                    bodyText = Array.from(b.entries()).map(([k,v]) => `${k}=${v}`).join('&');
+                } else {
+                    bodyText = String(b);
+                }
+                if (bodyText.includes('changeGym') || bodyText.includes('purchaseMembership')) isChange = true;
+                if (bodyText.includes('train')) isTrain = true;
+            }
+        }
+
         // 1. Capture gym info on page load
-        if (url.includes('/gym.php?step=getInitialGymInfo')) {
+        if (isGetInitial) {
             const result = await originalFetch(...args);
             try {
                 const data = await result.clone().json();
@@ -170,15 +218,21 @@
         }
 
         // 2. Track manual gym changes so currentGym stays accurate
-        if (url.includes('/gym.php?step=changeGym') || url.includes('/gym.php?step=purchaseMembership')) {
+        if (isChange) {
             const result = await originalFetch(...args);
             try {
                 const data = await result.clone().json();
                 if (data.success) {
-                    const body = args[1]?.body;
                     let gymID = null;
-                    if (body instanceof URLSearchParams) gymID = body.get('gymID');
-                    else if (typeof body === 'string') gymID = new URLSearchParams(body).get('gymID');
+                    if (args[1]?.body instanceof URLSearchParams || args[1]?.body instanceof FormData) {
+                        gymID = args[1].body.get('gymID');
+                    } else if (typeof args[1]?.body === 'string') {
+                        try {
+                            gymID = JSON.parse(args[1].body).gymID;
+                        } catch(e) {
+                            gymID = new URLSearchParams(args[1].body).get('gymID');
+                        }
+                    }
                     if (gymID) currentGym = Number(gymID);
                 }
             } catch (e) { /* ignore */ }
@@ -186,38 +240,22 @@
         }
 
         // 3. Intercept training — switch gym first if needed
-        if (url.includes('/gym.php?step=train') && isEnabled()) {
+        if (isTrain && isEnabled()) {
             try {
-                const bodyStr = args[1]?.body || '';
                 let stat = '';
+                const searchStr = (url + '&' + bodyText).toLowerCase();
                 
-                if (bodyStr instanceof URLSearchParams) {
-                    stat = bodyStr.get('stat') || '';
-                } else if (typeof bodyStr === 'string') {
-                    try {
-                        // Sometimes it could be JSON if Torn changes, but normally form urlencoded
-                        const parsed = JSON.parse(bodyStr);
-                        stat = parsed.stat || '';
-                    } catch (e) {
-                        stat = new URLSearchParams(bodyStr).get('stat') || '';
-                    }
-                }
-                
-                stat = stat.substring(0, 3).toLowerCase(); // str/def/spe/dex
+                if (searchStr.includes('strength') || searchStr.includes('stat=str')) stat = 'str';
+                else if (searchStr.includes('defense') || searchStr.includes('stat=def')) stat = 'def';
+                else if (searchStr.includes('speed') || searchStr.includes('stat=spe')) stat = 'spe';
+                else if (searchStr.includes('dexterity') || searchStr.includes('stat=dex')) stat = 'dex';
                 const bestGym = getBestGym(stat);
 
-                console.log(`💪 [AutoGym] Train intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
-
                 if (bestGym !== null && bestGym !== currentGym) {
+                    console.log(`💪 [AutoGym] Fetch Train intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
                     console.log(`💪 [AutoGym] Switching ${currentGym} → ${bestGym} for ${stat}`);
                     const fakeResp = await swapGyms(bestGym);
-                    if (fakeResp !== null) {
-                        // Block the train request — user must click Train once more
-                        return fakeResp;
-                    }
-                    // swapGyms returned null (error) — fall through and train anyway
-                } else {
-                    console.log(`💪 [AutoGym] Already in best gym (${currentGym}), training normally.`);
+                    if (fakeResp !== null) return fakeResp;
                 }
             } catch (err) {
                 console.error('💪 [AutoGym] Train intercept error:', err);
@@ -226,6 +264,99 @@
 
         return originalFetch(...args);
     };
+
+    // ── DOM Interception (Fallback for XHR/React) ─────────────────────────────
+    let isProgrammaticAction = false;
+
+    // Intercepts clicks on the "Train" button BEFORE Torn's scripts process it.
+    document.addEventListener('click', async (e) => {
+        if (!isEnabled() || isProgrammaticAction) return;
+        
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        
+        const btnText = btn.textContent.trim().toLowerCase();
+        if (btnText === 'train' || btnText.includes('train')) {
+            const container = btn.closest('[class*="stat___"], [class*="gym-property"], li, .stat-wrapper, [class*="statItem___"]');
+            if (!container) return;
+            
+            const containerText = container.textContent.toLowerCase();
+            let stat = '';
+            
+            if (containerText.includes('strength')) stat = 'str';
+            else if (containerText.includes('defense')) stat = 'def';
+            else if (containerText.includes('speed')) stat = 'spe';
+            else if (containerText.includes('dexterity')) stat = 'dex';
+            
+            if (stat) {
+                const bestGym = getBestGym(stat);
+                if (bestGym !== null && bestGym !== currentGym) {
+                    console.log(`💪 [AutoGym] DOM Click intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Switching...';
+                    btn.disabled = true;
+                    
+                    isProgrammaticAction = true;
+                    const domSuccess = await changeGymViaDOM(bestGym);
+                    if (!domSuccess) await swapGyms(bestGym);
+                    
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    
+                    // We DO NOT simulate the second click to comply with Torn's 1-click-1-action rule.
+                    // The user must click train again.
+                    setTimeout(() => { isProgrammaticAction = false; }, 100);
+                    
+                    return false;
+                }
+            }
+        }
+    }, true);
+
+    // Intercepts hitting "Enter" in the energy input field
+    document.addEventListener('keydown', async (e) => {
+        if (!isEnabled() || isProgrammaticAction) return;
+        if (e.key !== 'Enter') return;
+        
+        const input = e.target.closest('input[type="text"], input[type="number"]');
+        if (!input) return;
+        
+        const container = input.closest('[class*="stat___"], [class*="gym-property"], li, .stat-wrapper, [class*="statItem___"]');
+        if (!container) return;
+        
+        const containerText = container.textContent.toLowerCase();
+        let stat = '';
+        
+        if (containerText.includes('strength')) stat = 'str';
+        else if (containerText.includes('defense')) stat = 'def';
+        else if (containerText.includes('speed')) stat = 'spe';
+        else if (containerText.includes('dexterity')) stat = 'dex';
+        
+        if (stat) {
+            const bestGym = getBestGym(stat);
+            if (bestGym !== null && bestGym !== currentGym) {
+                console.log(`💪 [AutoGym] DOM Enter intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
+                
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                isProgrammaticAction = true;
+                const domSuccess = await changeGymViaDOM(bestGym);
+                if (!domSuccess) await swapGyms(bestGym);
+                
+                // We DO NOT simulate the second enter to comply with Torn's 1-click-1-action rule.
+                setTimeout(() => { isProgrammaticAction = false; }, 100);
+                
+                return false;
+            }
+        }
+    }, true);
 
     console.log('💪 [AutoGym] Fetch interceptor ready (enabled:', isEnabled(), ')');
 })();

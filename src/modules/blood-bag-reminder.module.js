@@ -237,6 +237,9 @@ const BloodBagReminderModule = {
                 const a = existing.querySelector('a');
                 if (a) {
                     a.setAttribute('aria-label', label);
+                    if (typeof a.__sidekickUpdateTipText === 'function') {
+                        a.__sidekickUpdateTipText(label);
+                    }
                 }
                 return;
             }
@@ -275,6 +278,8 @@ const BloodBagReminderModule = {
         a.appendChild(img);
         li.appendChild(a);
 
+        this.enableNativeLikeTooltip(a);
+
         return li;
     },
 
@@ -308,6 +313,38 @@ const BloodBagReminderModule = {
                 0%   { transform: scale(0.9); }
                 60%  { transform: scale(1.1); }
                 100% { transform: scale(1.0); }
+            }
+            .sidekick-tooltip {
+                background: #f2f2f2;
+                background: var(--tooltip-bg-color, #f2f2f2);
+                box-shadow: 0 0 8px rgba(0,0,0,.3);
+                box-shadow: var(--tooltip-shadow, 0 0 8px rgba(0,0,0,.3));
+                width: -moz-max-content;
+                width: max-content;
+                z-index: 999999;
+                border-radius: 4px;
+                padding: 8px;
+                line-height: 14px;
+                position: absolute;
+                pointer-events: none;
+                transition: opacity 200ms;
+                opacity: 0;
+            }
+            .sidekick-tooltip-custom {
+                color: var(--default-color, #333);
+                line-height: 1rem;
+            }
+            .sidekick-tooltip-custom a {
+                color: var(--default-blue-color, #007bff);
+                text-decoration: none;
+            }
+            .sidekick-tooltip-custom p {
+                text-align: left;
+                white-space: nowrap;
+                margin: 0;
+            }
+            .sidekick-tooltip-custom p:not(:last-child) {
+                margin-bottom: 4px;
             }
         `;
         document.head.appendChild(style);
@@ -368,6 +405,119 @@ const BloodBagReminderModule = {
         } catch {
             return String(n);
         }
+    },
+
+    enableNativeLikeTooltip(anchor) {
+        let tipEl = null;
+        let hideTimer = null;
+
+        const buildTooltip = (text) => {
+            const el = document.createElement('div');
+            el.className = 'sidekick-tooltip';
+            el.setAttribute('role', 'tooltip');
+            el.setAttribute('tabindex', '-1');
+
+            const content = document.createElement('div');
+            content.className = 'sidekick-tooltip-custom';
+
+            const [title, subtitle] = this.parseTwoLines(text);
+            const p1 = document.createElement('p');
+            p1.innerHTML = `<b>${title}</b>`;
+            content.appendChild(p1);
+
+            if (subtitle) {
+                const p2 = document.createElement('p');
+                p2.textContent = subtitle;
+                content.appendChild(p2);
+            }
+            el.appendChild(content);
+            return el;
+        };
+
+        const setText = (text) => {
+            if (!tipEl) return;
+            const content = tipEl.querySelector('.sidekick-tooltip-custom');
+            if (!content) return;
+            content.innerHTML = '';
+            
+            const [title, subtitle] = this.parseTwoLines(text);
+            const p1 = document.createElement('p');
+            p1.innerHTML = `<b>${title}</b>`;
+            content.appendChild(p1);
+
+            if (subtitle) {
+                const p2 = document.createElement('p');
+                p2.textContent = subtitle;
+                content.appendChild(p2);
+            }
+        };
+
+        anchor.__sidekickUpdateTipText = setText;
+
+        const positionTooltip = () => {
+            if (!tipEl) return;
+            const r = anchor.getBoundingClientRect();
+            tipEl.style.left = (r.left + window.scrollX + (r.width / 2) - (tipEl.offsetWidth / 2)) + 'px';
+            tipEl.style.top = (r.top + window.scrollY - tipEl.offsetHeight - 8) + 'px';
+        };
+
+        const showTip = () => {
+            clearTimeout(hideTimer);
+            const text = anchor.getAttribute('aria-label');
+            if (!text) return;
+
+            if (!tipEl) {
+                tipEl = buildTooltip(text);
+                document.body.appendChild(tipEl);
+                anchor.__sidekickTipEl = tipEl;
+            } else {
+                setText(text);
+            }
+
+            anchor.setAttribute('data-is-tooltip-opened', 'true');
+
+            tipEl.style.opacity = '0';
+            tipEl.style.left = '-9999px';
+            tipEl.style.top = '-9999px';
+            requestAnimationFrame(() => {
+                positionTooltip();
+                requestAnimationFrame(() => {
+                    if (tipEl) tipEl.style.opacity = '1';
+                });
+            });
+        };
+
+        const hideTip = (immediate = false) => {
+            if (!tipEl) return;
+            anchor.setAttribute('data-is-tooltip-opened', 'false');
+
+            if (immediate) {
+                tipEl.remove();
+                tipEl = null;
+                anchor.__sidekickTipEl = null;
+            } else {
+                tipEl.style.opacity = '0';
+                hideTimer = setTimeout(() => {
+                    if (tipEl) tipEl.remove();
+                    tipEl = null;
+                    anchor.__sidekickTipEl = null;
+                }, 200);
+            }
+        };
+
+        anchor.addEventListener('mouseenter', showTip);
+        anchor.addEventListener('mouseleave', () => hideTip(false));
+        anchor.addEventListener('focus', showTip);
+        anchor.addEventListener('blur', () => hideTip(false));
+        window.addEventListener('scroll', () => hideTip(true), { passive: true });
+    },
+
+    parseTwoLines(text) {
+        const parts = text.split(' - ');
+        if (parts.length >= 2) {
+            return [parts[0] + ' - ', parts.slice(1).join(' - ')];
+        }
+        return [text, ''];
     },
 
     // Update settings (called from settings page)

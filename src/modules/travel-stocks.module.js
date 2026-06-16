@@ -24,6 +24,7 @@ const TravelStocksModule = {
         sortBy: "profit",
         sortDir: "desc",
         showOnlyProfit: false,
+        multiplier: 1,
         limit: 200
     },
 
@@ -227,6 +228,71 @@ const TravelStocksModule = {
             .travel-controls select:focus {
                 border-color: rgba(255,152,0,0.7);
                 box-shadow: 0 0 0 2px rgba(255,152,0,0.15);
+            }
+            .travel-multiplier-wrapper {
+                position: relative;
+                display: inline-block;
+                margin-right: 5px;
+            }
+            .travel-multiplier-btn {
+                min-width: 45px;
+                padding: 4px 6px;
+                background: linear-gradient(135deg, rgba(50,50,50,0.9), rgba(35,35,35,0.95));
+                border: 1px solid rgba(255,152,0,0.4);
+                border-radius: 6px;
+                color: #FF9800;
+                font-size: 10px;
+                font-weight: 700;
+                text-align: center;
+                cursor: pointer;
+                outline: none;
+            }
+            .travel-multiplier-btn:hover {
+                border-color: rgba(255,152,0,0.8);
+                background: linear-gradient(135deg, rgba(60,60,60,0.9), rgba(45,45,45,0.95));
+                box-shadow: 0 0 5px rgba(255,152,0,0.3);
+            }
+            .travel-multiplier-dropdown {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                margin-top: 4px;
+                background: #2a2a2a;
+                border: 1px solid #444;
+                border-radius: 6px;
+                max-height: 150px;
+                overflow-y: auto;
+                scrollbar-width: none;
+                display: none;
+                z-index: 10000;
+                list-style: none;
+                padding: 0;
+                min-width: 45px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            }
+            .travel-multiplier-dropdown::-webkit-scrollbar {
+                display: none;
+            }
+            .travel-multiplier-dropdown.show {
+                display: block;
+            }
+            .travel-multiplier-dropdown li {
+                padding: 5px 8px;
+                cursor: pointer;
+                font-size: 10px;
+                color: white;
+                text-align: center;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }
+            .travel-multiplier-dropdown li:last-child {
+                border-bottom: none;
+            }
+            .travel-multiplier-dropdown li:hover {
+                background: rgba(255,152,0,0.3);
+                color: #FF9800;
+            }
+            .travel-row-highlight td {
+                background-color: rgba(255,152,0,0.2) !important;
             }
             .travel-checkbox-label {
                 cursor: pointer;
@@ -432,7 +498,7 @@ const TravelStocksModule = {
                 font-size: 13px;
                 user-select: none;
             ">
-                <span class="window-title">💰 Travel Stock & Profit</span>
+                <span class="window-title">Travel Stocks</span>
                 <div class="window-controls" style="display: flex; gap: 4px;">
                     <button class="window-close" style="
                         background: #dc3545;
@@ -470,6 +536,12 @@ const TravelStocksModule = {
                         <input type="checkbox" class="travel-showprofit" />
                         Show Only Profit
                     </label>
+                    <div class="travel-multiplier-wrapper">
+                        <button class="travel-multiplier-btn">1x</button>
+                        <ul class="travel-multiplier-dropdown">
+                            ${Array.from({length: 88}, (_, i) => `<li data-value="${i+1}">${i+1}x</li>`).join('')}
+                        </ul>
+                    </div>
                     <button class="travel-refresh-btn">Refresh</button>
                     <span class="travel-meta"></span>
                 </div>
@@ -533,6 +605,9 @@ const TravelStocksModule = {
 
         // Initial render
         this.renderTable(win, true);
+
+        // Save state so it reopens on refresh
+        this.saveWindowState(win, true);
     },
 
     // Wire event listeners
@@ -656,6 +731,55 @@ const TravelStocksModule = {
             this.renderTable(win, false);
         });
 
+        const wrapper = win.querySelector('.travel-multiplier-wrapper');
+        const btn = wrapper.querySelector('.travel-multiplier-btn');
+        const dropdown = wrapper.querySelector('.travel-multiplier-dropdown');
+        
+        btn.textContent = (this.settings.multiplier || 1) + 'x';
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('show');
+        });
+
+        dropdown.addEventListener('click', async (e) => {
+            if (e.target.tagName === 'LI') {
+                const val = parseInt(e.target.dataset.value, 10);
+                this.settings.multiplier = val;
+                btn.textContent = val + 'x';
+                dropdown.classList.remove('show');
+                await this.saveSettings();
+                this.renderTable(win, false);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        // Row highlighting logic
+        const tbody = win.querySelector('.travel-tbody');
+        tbody.addEventListener('click', (e) => {
+            // Ignore clicks on links
+            if (e.target.tagName === 'A' || e.target.closest('a')) return;
+
+            const tr = e.target.closest('tr');
+            if (tr && tr.dataset.itemId) {
+                // If clicking an already highlighted row, just toggle it off
+                if (tr.classList.contains('travel-row-highlight')) {
+                    tr.classList.remove('travel-row-highlight');
+                } else {
+                    // Remove highlight from all rows
+                    const allRows = tbody.querySelectorAll('tr');
+                    allRows.forEach(r => r.classList.remove('travel-row-highlight'));
+                    // Add highlight to clicked row
+                    tr.classList.add('travel-row-highlight');
+                }
+            }
+        });
+
         refreshBtn.addEventListener('click', () => {
             console.log('💰 REFRESH BUTTON CLICKED');
             this.state.lastUpdated = new Date();
@@ -696,9 +820,17 @@ const TravelStocksModule = {
 
     // Apply settings to UI elements
     applySettingsToUI(win) {
-        win.querySelector('.travel-sortby').value = this.settings.sortBy;
-        win.querySelector('.travel-sortdir').value = this.settings.sortDir;
-        win.querySelector('.travel-showprofit').checked = this.settings.showOnlyProfit;
+        const sortBy = win.querySelector('.travel-sortby');
+        if (sortBy) sortBy.value = this.settings.sortBy;
+        
+        const sortDir = win.querySelector('.travel-sortdir');
+        if (sortDir) sortDir.value = this.settings.sortDir;
+
+        const showProfit = win.querySelector('.travel-showprofit');
+        if (showProfit) showProfit.checked = this.settings.showOnlyProfit;
+
+        const multBtn = win.querySelector('.travel-multiplier-btn');
+        if (multBtn) multBtn.textContent = (this.settings.multiplier || 1) + 'x';
     },
 
     // Save settings
@@ -896,10 +1028,12 @@ const TravelStocksModule = {
 
             // Decorate with cached avg/profit
             console.log('💰 Decorating rows with cached data...');
+            const mult = this.settings.multiplier || 1;
             rows = rows.map(r => {
                 const avg = this.getCachedAvg(r.id);
-                const profit = (typeof avg === 'number') ? (avg - r.cost) : null;
-                return { ...r, avg, profit };
+                const baseProfit = (typeof avg === 'number') ? (avg - r.cost) : null;
+                const profit = (typeof baseProfit === 'number') ? (baseProfit * mult) : null;
+                return { ...r, avg, cost: r.cost * mult, profit };
             });
             console.log('💰 Rows decorated, sample:', rows[0]);
 
@@ -924,7 +1058,7 @@ const TravelStocksModule = {
                 filtered = filtered.filter(x => x.country === this.settings.country);
             }
             if (this.settings.showOnlyProfit) {
-                filtered = filtered.filter(x => x.profit && x.profit > 0);
+                filtered = filtered.filter(x => x.profit === null || x.profit > 0);
             }
             console.log('💰 Filtered down to', filtered.length, 'rows');
 
@@ -951,7 +1085,7 @@ const TravelStocksModule = {
                 tr.innerHTML = `
                     <td style="color: #ffffff;">${this.esc(r.country)}</td>
                     <td style="color: #ffffff;">
-                        <a href="https://www.torn.com/travelagency.php" target="_blank" style="color: #90caf9; text-decoration: none;">
+                        <a href="https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${r.id}" target="_blank" style="color: #90caf9; text-decoration: none; display: block;">
                             ${this.esc(r.name)}
                         </a>
                     </td>
@@ -1027,8 +1161,13 @@ const TravelStocksModule = {
                     const tds = rowEl.querySelectorAll('td');
                     console.log(`💰 Row has ${tds.length} cells:`, Array.from(tds).map((td, i) => `[${i}]=${td.textContent.substring(0, 20)}`));
 
+                    const mult = this.settings.multiplier || 1;
                     const cost = Number((tds[2]?.textContent || '').replace(/[^0-9]/g, '')) || 0;
-                    const profit = avg - cost;
+                    const profit = (avg * mult) - cost;
+
+                    if (this.settings.showOnlyProfit && profit <= 0) {
+                        rowEl.style.display = 'none';
+                    }
                     console.log(`💰 Item ${itemId}: cost=${cost}, avg=${avg}, profit=${profit}`);
 
                     // Update profit cell (index 3: Country, Name, Cost, PROFIT, Qty)

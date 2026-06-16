@@ -408,15 +408,22 @@ const MugCalculatorModule = (() => {
             if (processedRows.has(row) && !row.querySelector('.mugInfoIcon')) processedRows.delete(row);
 
             const sellerLink = row.querySelector("a[href*='profiles.php?XID=']");
-            const priceElement = row.querySelector('[class*="price___"]') || row.querySelector('.price');
+            let priceElement = row.querySelector('[class*="price___" i]') || row.querySelector('.price') || row.querySelector('[class*="cost___" i]');
+            
+            if (!priceElement) {
+                // Fallback: look for an element with a dollar sign amount
+                const els = Array.from(row.querySelectorAll('span, div, p')).filter(e => e.children.length === 0 && /\$[\d,]+/.test(e.textContent));
+                if (els.length > 0) priceElement = els[0];
+            }
+
             if (!sellerLink || !priceElement) return;
 
-            const priceText = priceElement.textContent.replace('$', '').replace(/,/g, '');
+            const priceText = priceElement.textContent.replace(/\$/g, '').replace(/,/g, '');
             const price = parseInt(priceText, 10);
             if (isNaN(price)) return;
 
-            const availableElem = row.querySelector('[class*="available___"]');
-            const availText = availableElem ? availableElem.textContent.replace(/ available|,/g, '') : '1';
+            const availableElem = row.querySelector('[class*="available___" i]') || row.querySelector('[class*="qty___" i]') || row.querySelector('[class*="quantity" i]');
+            const availText = availableElem ? availableElem.textContent.replace(/ available|,/gi, '') : '1';
             const available = parseInt(availText, 10) || 1;
             const listingTotal = price * available;
 
@@ -471,22 +478,21 @@ const MugCalculatorModule = (() => {
         },
 
         processAllMarketRows() {
-            document.querySelectorAll('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]')
-                .forEach(row => this.attachInfoIconForMarketRow(row));
+            const links = document.querySelectorAll("a[href*='profiles.php?XID=']");
+            links.forEach(link => {
+                const row = link.closest('li, tr, [class*="row___" i], [class*="seller___" i], [class*="item___" i], .item-row');
+                if (row) {
+                    this.attachInfoIconForMarketRow(row);
+                }
+            });
         },
 
         observeMarketRows() {
-            const container = document.querySelector('[class*="sellerListWrapper"], [class*="items___"], [class*="itemMarket"]') || document.body;
+            const container = document.querySelector('[class*="sellerListWrapper" i], [class*="items___" i], [class*="itemMarket" i]') || document.body;
             if (!container) return;
             new MutationObserver((mutations) => {
-                mutations.forEach(m => m.addedNodes.forEach(node => {
-                    if (node.nodeType === 1) {
-                        if (node.matches && node.matches('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]')) {
-                            this.attachInfoIconForMarketRow(node);
-                        }
-                        node.querySelectorAll?.('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]').forEach(r => this.attachInfoIconForMarketRow(r));
-                    }
-                }));
+                // Throttle calls using the 2s interval rather than processing every single mutation
+                // The interval is already running setup().
             }).observe(container, { childList: true, subtree: true });
         },
 
@@ -519,7 +525,8 @@ const MugCalculatorModule = (() => {
         //   span.total-price   → total listing price
         // =============================================================
         async attachInfoIconForPMarketRow(li) {
-            if (!li || li.classList.contains('sidekick-pm-processed')) return;
+            if (!li) return;
+            if (li.classList.contains('sidekick-pm-processed') && li.querySelector('.mugInfoIcon')) return;
 
             const expander = li.querySelector('span.expander');
             if (!expander) return;
@@ -552,7 +559,7 @@ const MugCalculatorModule = (() => {
             li.classList.add('sidekick-pm-processed');
 
             const costEachSpan = expander.querySelector('span.cost-each');
-            if (!costEachSpan) return;
+            if (!costEachSpan || costEachSpan.querySelector('.mugInfoIcon')) return;
 
             const icon = document.createElement('div');
             icon.className = 'mugInfoIcon';
@@ -665,15 +672,9 @@ const MugCalculatorModule = (() => {
         },
 
         observePMarketRows() {
-            const container = document.querySelector('ul.users-point-sell');
-            if (!container) {
-                // Try again shortly — may not be rendered yet
-                setTimeout(() => this.observePMarketRows(), 1000);
-                return;
-            }
             new MutationObserver(() => this.processAllPMarketRows())
-                .observe(container, { childList: true, subtree: false });
-            console.log('[MugCalc] pmarket observer attached');
+                .observe(document.body, { childList: true, subtree: true });
+            console.log('[MugCalc] pmarket observer attached to body');
         },
 
         setupURLChangeListener() {

@@ -118,8 +118,8 @@
         ];
         if (bloodEnabled()) available.push({
             name: 'Blood Bag',
-            id: BLOOD_BAG_IDS[settings.bloodType],
-            ...ITEMS['Blood Bag']
+            ...ITEMS['Blood Bag'],
+            id: BLOOD_BAG_IDS[settings.bloodType]
         });
         available.sort((a, b) => a.removes - b.removes);
         for (const item of available) if (item.removes >= timer) return item;
@@ -249,10 +249,24 @@
         try {
             const body = new URLSearchParams({ step: 'useItem', itemID: item.id.toString() });
             if (settings.itemSource === 'Faction Armory') body.set('fac', '1');
+            
+            let rfcv = document.cookie.match(/(?:^|;)\s*rfcv=([^;]+)/)?.[1];
+            if (!rfcv) {
+                try { rfcv = localStorage.getItem('silmaril-loadout-switcher-rfcv'); } catch(e) {}
+            }
+            if (rfcv) body.set('rfcv', rfcv);
+
             const res = await fetch('https://www.torn.com/item.php', {
                 method: 'POST', body, credentials: 'include',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
             });
+            
+            const text = await res.text();
+            try {
+                const json = JSON.parse(text);
+                if (json.success === false) return false;
+            } catch(e) {}
+            
             return res.ok;
         } catch { return false; }
     }

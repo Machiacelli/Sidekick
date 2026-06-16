@@ -33,12 +33,48 @@
 
         // Initialize the settings module
         async init() {
-            if (this.isInitialized) {
-                console.log("⚙️ Settings Module already initialized");
-                return;
-            }
+            if (this.isInitialized) return;
 
             console.log("⚙️ Initializing Settings Module...");
+
+            // Bulletproof global event delegation for the WTC buttons
+            document.body.addEventListener('click', async (e) => {
+                if (e.target && e.target.id === 'skp-wtc-test-save') {
+                    console.error("🎯 GLOBAL DELEGATION: Save button clicked!");
+                    try {
+                        const testUserInp = document.getElementById('skp-wtc-test-user');
+                        const val = testUserInp ? testUserInp.value.trim() : '';
+
+                        const CS = window.SidekickModules?.Core?.ChromeStorage;
+                        if (CS) await CS.set('sidekick_wtc_test_user', val);
+                        localStorage.setItem('sidekick_wtc_test_user_backup', val);
+
+                        if (window.SidekickModules.WarTargetCaller) {
+                            window.SidekickModules.WarTargetCaller.testChatUser = val;
+                        }
+
+                        alert("GLOBAL DELEGATION: Settings Saved ✓ (" + val + ")");
+                    } catch (err) {
+                        alert("GLOBAL DELEGATION Error saving: " + err.message);
+                    }
+                }
+                if (e.target && e.target.id === 'skp-wtc-test-send') {
+                    console.error("🎯 GLOBAL DELEGATION: Test Send button clicked!");
+                    try {
+                        const testUserInp = document.getElementById('skp-wtc-test-user');
+                        const val = testUserInp ? testUserInp.value.trim() : '';
+
+                        if (window.SidekickModules.WarTargetCaller) {
+                            if (val) window.SidekickModules.WarTargetCaller.testChatUser = val;
+                            window.SidekickModules.WarTargetCaller.sendChatMessage('Test: Hitting Target in 5 minutes');
+                        } else {
+                            alert("GLOBAL DELEGATION: War Target Caller module not loaded!");
+                        }
+                    } catch (err) {
+                        alert("GLOBAL DELEGATION Test Send Error: " + err.message);
+                    }
+                }
+            });
 
             try {
                 await waitForCore();
@@ -631,7 +667,6 @@
                 position: fixed; inset: 0; z-index: 9999999;
                 background: rgba(0,0,0,0.7);
                 display: flex; align-items: center; justify-content: center;
-                backdrop-filter: blur(4px);
                 font-family: 'Segoe UI', Arial, sans-serif;
             `;
 
@@ -780,7 +815,51 @@
     padding:14px 16px;margin:6px 0 10px;animation:skShelfIn .18s ease;
 }
 @keyframes skShelfIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
-.sk-status{padding:9px 12px;border-radius:8px;background:rgba(95,204,106,.08);border:1px solid rgba(95,204,106,.18);font-size:12px;color:var(--green);text-align:center;margin-top:4px;}
+.sk-status{padding:9px 12px;border-radius:8px;background:rgba(95,204,106,.08);border:1px solid rgba(95,204,106,.18);font-size:12px;color:var(--green);text-align:center;margin-top:4px;}.sk-shop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+}
+.sk-custom-cb-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    margin: 0;
+}
+.sk-custom-cb-wrap span {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+}
+.sk-custom-cb-input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+.sk-custom-cb-input:checked {
+    background-color: var(--green);
+    border-color: var(--green);
+}
+.sk-custom-cb-input:checked::after {
+    content: '';
+    width: 4px;
+    height: 8px;
+    border: solid #111;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+}
 </style>
 
 <div class="sk-prev">
@@ -820,16 +899,17 @@
         <div class="sk-subtab-panel active" id="skp-tab-api">
           <div class="sk-sh">Torn API Key</div>
           <label class="sk-field-label">API Key</label>
-          <input type="password" class="sk-input" placeholder="Enter your Torn API key...">
+          <input type="password" class="sk-input" id="sidekick-api-key" placeholder="Enter your Torn API key...">
           <div class="sk-hint">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a></div>
-          <div class="sk-btn-row"><button class="sk-btn sk-btn-primary">Test Connection</button><button class="sk-btn sk-btn-ghost">Show Key</button></div>
-          <div class="sk-status">Enter your API key and click Test Connection</div>
+          <div class="sk-btn-row"><button class="sk-btn sk-btn-primary" id="sidekick-test-api">Test Connection</button><button class="sk-btn sk-btn-ghost" id="sidekick-show-key">Show Key</button></div>
+          <div class="sk-status" id="sidekick-api-status">Enter your API key and click Test Connection</div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-backup">
           <div class="sk-sh">Data Export &amp; Import</div>
-          <div class="sk-info">Export all Sidekick settings and data before uninstalling. Import a backup file to fully restore everything after reinstalling.</div>
-          <div class="sk-btn-row"><button class="sk-btn sk-btn-primary">Export Data</button><button class="sk-btn sk-btn-ghost">Import Data</button></div>
+          <div class="sk-btn-row"><button class="sk-btn sk-btn-primary" id="sidekick-export-data">Export Data</button><button class="sk-btn sk-btn-ghost" id="sidekick-import-data">Import Data</button></div>
           <div class="sk-hint" style="text-align:center;margin-top:-4px;">Exports a .json backup file to your Downloads folder</div>
+          <input type="file" id="sidekick-import-file" accept=".json" style="display:none">
+          <div class="sk-status" id="sidekick-backup-status" style="margin-top:10px;text-align:center;">Ready to export or import data</div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-notifications">
           <div class="sk-sh">In-Page Notifications</div>
@@ -855,6 +935,7 @@
       <div class="sk-scroll">
         <div class="sk-subtab-panel active" id="skp-tab-feat-utility">
           <div class="sk-sh">Utility</div>
+
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Time on Tab</div><div class="sk-row-desc">Display remaining travel time, hospital time, raceway time, and time left for chain on tab title.</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-time-on-tab" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Legible Player Names</div><div class="sk-row-desc">Improves readability of player names by formatting them with better spacing and styling</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-legible-names" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Random Target</div><div class="sk-row-desc">Adds a floater that opens a random level 1 profile</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-random-target" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -1072,32 +1153,103 @@
               <button id="skp-shoplift-sel-all" style="padding:3px 10px;font-size:10px;background:#5fcc6a;border:none;border-radius:4px;color:#111;font-weight:700;cursor:pointer;">Select All</button>
               <button id="skp-shoplift-desel-all" style="padding:3px 10px;font-size:10px;background:rgba(255,255,255,0.12);border:none;border-radius:4px;color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;">Deselect All</button>
             </div>
-            <div style="max-height:190px;overflow-y:auto;padding-right:6px;">
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:4px 0 3px;">Sally's Sweet Shop</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="sallys_sweet_shop" data-type="cameras" id="skp-shop-sally-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Bits 'n' Bobs</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="Bits_n_bobs" data-type="cameras" id="skp-shop-bits-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">TC Clothing</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="tc_clothing" data-type="cameras" id="skp-shop-tc-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="tc_clothing" data-type="checkpoint" id="skp-shop-tc-chk" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Checkpoint</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Super Store</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="super_store" data-type="cameras" id="skp-shop-super-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="super_store" data-type="checkpoint" id="skp-shop-super-chk" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Checkpoint</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Pharmacy</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="pharmacy" data-type="cameras" id="skp-shop-pharm-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="pharmacy" data-type="checkpoint" id="skp-shop-pharm-chk" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Checkpoint</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Cyber Force</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="cyber_force" data-type="cameras" id="skp-shop-cyber-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="cyber_force" data-type="guard" id="skp-shop-cyber-guard" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Guard</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Jewelry Store</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="jewelry_store" data-type="cameras" id="skp-shop-jewel-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="jewelry_store" data-type="guard" id="skp-shop-jewel-guard" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Guard</label>
-              <div style="font-size:10px;font-weight:700;color:rgba(95,204,106,0.7);margin:7px 0 3px;">Big Al's Gun Shop</div>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:3px;"><input type="checkbox" class="sk-shop-cb" data-shop="big_als" data-type="cameras" id="skp-shop-als-cam" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Cameras</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.75);cursor:pointer;margin-bottom:6px;"><input type="checkbox" class="sk-shop-cb" data-shop="big_als" data-type="guards" id="skp-shop-als-guard" checked style="accent-color:#5fcc6a;width:13px;height:13px;"> Guards</label>
+            <div class="sk-shop-grid">
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Sally's Sweet Shop</div>
+                <label class="sk-custom-cb-wrap">
+                  <span>Cameras</span>
+                  <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="sallys_sweet_shop" data-type="cameras" id="skp-shop-sally-cam" checked>
+                </label>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Bits 'n' Bobs</div>
+                <label class="sk-custom-cb-wrap">
+                  <span>Cameras</span>
+                  <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="Bits_n_bobs" data-type="cameras" id="skp-shop-bits-cam" checked>
+                </label>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">TC Clothing</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <label class="sk-custom-cb-wrap">
+                    <span>Cameras</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="tc_clothing" data-type="cameras" id="skp-shop-tc-cam" checked>
+                  </label>
+                  <label class="sk-custom-cb-wrap">
+                    <span>Checkpoint</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="tc_clothing" data-type="checkpoint" id="skp-shop-tc-chk" checked>
+                  </label>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Super Store</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <label class="sk-custom-cb-wrap">
+                    <span>Cameras</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="super_store" data-type="cameras" id="skp-shop-super-cam" checked>
+                  </label>
+                  <label class="sk-custom-cb-wrap">
+                    <span>Checkpoint</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="super_store" data-type="checkpoint" id="skp-shop-super-chk" checked>
+                  </label>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Pharmacy</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <label class="sk-custom-cb-wrap">
+                    <span>Cameras</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="pharmacy" data-type="cameras" id="skp-shop-pharm-cam" checked>
+                  </label>
+                  <label class="sk-custom-cb-wrap">
+                    <span>Checkpoint</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="pharmacy" data-type="checkpoint" id="skp-shop-pharm-chk" checked>
+                  </label>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Cyber Force</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <label class="sk-custom-cb-wrap">
+                    <span>Cameras</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="cyber_force" data-type="cameras" id="skp-shop-cyber-cam" checked>
+                  </label>
+                  <label class="sk-custom-cb-wrap">
+                    <span>Guard</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="cyber_force" data-type="guard" id="skp-shop-cyber-guard" checked>
+                  </label>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Jewelry Store</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <label class="sk-custom-cb-wrap">
+                    <span>Cameras</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="jewelry_store" data-type="cameras" id="skp-shop-jewel-cam" checked>
+                  </label>
+                  <label class="sk-custom-cb-wrap">
+                    <span>Guard</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="jewelry_store" data-type="guard" id="skp-shop-jewel-guard" checked>
+                  </label>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px 10px;">
+                <div style="font-size:11px;font-weight:700;color:#5fcc6a;margin-bottom:6px;">Big Al's Gun Shop</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <label class="sk-custom-cb-wrap">
+                    <span>Cameras</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="big_als" data-type="cameras" id="skp-shop-als-cam" checked>
+                  </label>
+                  <label class="sk-custom-cb-wrap">
+                    <span>Guards</span>
+                    <input type="checkbox" class="sk-shop-cb sk-custom-cb-input" data-shop="big_als" data-type="guards" id="skp-shop-als-guard" checked>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
+          <div class="sk-row" style="margin-top:4px;"><div class="sk-row-info"><div class="sk-row-title">Pickpocketing</div><div class="sk-row-desc">Color codes crimes based on difficulty and your current skill level</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-pickpocketing" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row" style="margin-top:4px;"><div class="sk-row-info"><div class="sk-row-title">Burglary</div><div class="sk-row-desc">Shows confidence percentage next to the burglary graphic</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-burglary" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Disposal</div><div class="sk-row-desc">Highlights best options and shows maximum nerve cost for Disposal</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-disposal" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Cracking</div><div class="sk-row-desc">Shows word suggestions while solving the Cracking crime</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-cracking" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -1168,12 +1320,18 @@
     <!-- WAR -->
     <div class="sk-sec-page" id="skp-war">
       <div class="sk-subtab-bar">
-        <button class="sk-subtab-btn active" data-tab="war-chain">Chain Timer</button>
+        <button class="sk-subtab-btn active" data-tab="war-chainview">War Utilities</button>
+        <button class="sk-subtab-btn" data-tab="war-chain">Chain Timer</button>
         <button class="sk-subtab-btn" data-tab="war-monitor">War Monitor</button>
-        <button class="sk-subtab-btn" data-tab="war-chainview">Chain View</button>
+        <button class="sk-subtab-btn" data-tab="war-target-caller">Target Caller</button>
       </div>
       <div class="sk-scroll">
-        <div class="sk-subtab-panel active" id="skp-tab-war-chain">
+        <div class="sk-subtab-panel active" id="skp-tab-war-chainview">
+          <div class="sk-sh">Tools</div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Extended Chain View</div><div class="sk-row-desc">Show more than 10 chain attacks on faction page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chain-view" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Termed War Mode</div><div class="sk-row-desc">Removes Mug and Hospitalize options after an attack</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-termed-war"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        </div>
+        <div class="sk-subtab-panel" id="skp-tab-war-chain">
           <div class="sk-sh">Chain Timer</div>
           <div class="sk-info">Floating countdown timer for your faction chain. Alerts you before the chain expires.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Chain Timer</div><div class="sk-row-desc">Show floating chain countdown timer on all Torn pages</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chain-timer" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -1192,10 +1350,19 @@
           <div class="sk-info">Monitors active faction wars and notifies you of incoming attacks and score changes.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable War Monitor</div><div class="sk-row-desc">Show travel status and hospital time and sort by hospital time on war page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-monitor"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
-        <div class="sk-subtab-panel" id="skp-tab-war-chainview">
-          <div class="sk-sh">Extended Chain View</div>
-          <div class="sk-info">Shows more than 10 chain attacks on the faction page, giving you a full view of the current chain history.</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Extended Chain View</div><div class="sk-row-desc">Show more than 10 chain attacks on faction page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chain-view" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        <div class="sk-subtab-panel" id="skp-tab-war-target-caller">
+          <div class="sk-sh">War Target Caller</div>
+          <div class="sk-info">Tracks claims in chat and visually tags claimed targets in the war panel. Allows you to claim targets directly from the war page.</div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable War Target Caller</div><div class="sk-row-desc">Tag claimed players and add claim buttons</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-target-caller"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-sh" style="margin-top:16px;">Test Settings</div>
+          <label class="sk-field-label">Test Chat User</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+              <input type="text" class="sk-input" id="skp-wtc-test-user" placeholder="Enter name of chat user for testing...">
+              <button id="skp-wtc-test-save" class="sk-btn" style="padding: 0 12px; border-radius: 4px; cursor: pointer; background: #4CAF50; color: white; border: none; font-weight: bold;">Save</button>
+              <button id="skp-wtc-test-send" class="sk-btn" style="padding: 0 12px; border-radius: 4px; cursor: pointer; background: #2196F3; color: white; border: none; font-weight: bold;">Test Send</button>
+          </div>
+          <div id="skp-wtc-test-status" style="color: #4CAF50; font-size: 12px; margin-bottom: 8px; display: none; font-weight: bold;">Successfully saved user! ✓</div>
+          <div class="sk-hint">If set, claim messages will be sent to the chat with this specific user instead of the faction chat. Leave empty to use faction chat.</div>
         </div>
       </div>
     </div>
@@ -1270,13 +1437,20 @@
                 img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
             });
 
-            // Close on backdrop click
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) { overlay.remove(); document.body.style.overflow = ''; }
-            });
+            // Track if settings changed for reload
+            overlay.addEventListener('change', () => { overlay.dataset.settingsChanged = 'true'; });
+            overlay.addEventListener('input', () => { overlay.dataset.settingsChanged = 'true'; });
+
+            // Close on backdrop click disabled as requested
 
             // Close button
-            overlay.querySelector('#skp-close').addEventListener('click', () => { overlay.remove(); document.body.style.overflow = ''; });
+            overlay.querySelector('#skp-close').addEventListener('click', () => {
+                overlay.remove();
+                document.body.style.overflow = '';
+                if (overlay.dataset.settingsChanged === 'true') {
+                    window.location.reload();
+                }
+            });
 
             // Section navigation
             const sectionTitles = {
@@ -1361,8 +1535,8 @@
             if (mugThreshInput) {
                 mugThreshInput.addEventListener('blur', () => {
                     const raw = mugThreshInput.value.trim().toLowerCase();
-                    if (/^\d+(\.\d+)?k$/.test(raw)) mugThreshInput.value = Math.round(parseFloat(raw)*1000);
-                    else if (/^\d+(\.\d+)?m$/.test(raw)) mugThreshInput.value = Math.round(parseFloat(raw)*1000000);
+                    if (/^\d+(\.\d+)?k$/.test(raw)) mugThreshInput.value = Math.round(parseFloat(raw) * 1000);
+                    else if (/^\d+(\.\d+)?m$/.test(raw)) mugThreshInput.value = Math.round(parseFloat(raw) * 1000000);
                 });
             }
 
@@ -1374,49 +1548,53 @@
             // subKey='X' means object at sidekick_settings['X'].isEnabled
             const TOGGLE_MAP = [
                 // Personal
-                ['#skp-tog-fast-attack',      'sidekick_attack_button_mover', null,              true],
-                ['#skp-tog-loadout',          'sidekick_settings',            'loadout-switcher', false],
-                ['#skp-tog-locked-items',     'sidekick_settings',            'locked-items',     false],
-                ['#skp-tog-wxp',              'sidekick_weapon_xp_tracker',   null,              false],
+                ['#skp-tog-fast-attack', 'sidekick_attack_button_mover', null, true],
+                ['#skp-tog-loadout', 'sidekick_settings', 'loadout-switcher', false],
+                ['#skp-tog-locked-items', 'sidekick_settings', 'locked-items', false],
+                ['#skp-tog-wxp', 'sidekick_weapon_xp_tracker', null, false],
                 // Gym
-                ['#skp-tog-gym-ratios',       'sidekick_settings',            'special-gym-ratios', true],
-                ['#skp-tog-auto-gym',         'sidekick_settings',            'auto-gym-switch',  false],
-                ['#skp-tog-block-training',   'sidekick_block_training',      null,              false],
+                ['#skp-tog-gym-ratios', 'sidekick_settings', 'special-gym-ratios', true],
+                ['#skp-tog-auto-gym', 'sidekick_settings', 'auto-gym-switch', false],
+
                 // Economy
-                ['#skp-tog-market-max-qty',  'sidekick_market_max_qty',    null,              true],
-                ['#skp-tog-market-filler',    'sidekick_settings',            'price-filler',    false],
-                ['#skp-tog-bazaar-filler',    'sidekick_settings',            'bazaar-filler',   false],
-                ['#skp-tog-quick-deposit',    'sidekick_settings',            'quick-deposit',   false],
-                ['#skp-tog-bunker-bucks',     'sidekick_settings',            'bunker-bucks',    false],
+                ['#skp-tog-market-max-qty', 'sidekick_market_max_qty', null, true],
+                ['#skp-tog-market-filler', 'sidekick_settings', 'price-filler', false],
+                ['#skp-tog-bazaar-filler', 'sidekick_settings', 'bazaar-filler', false],
+                ['#skp-tog-quick-deposit', 'sidekick_settings', 'quick-deposit', false],
+                ['#skp-tog-bunker-bucks', 'sidekick_settings', 'bunker-bucks', false],
                 // Utility
-                ['#skp-tog-time-on-tab',      'sidekick_time_on_tab',         null,              false],
-                ['#skp-tog-random-target',    'sidekick_random_target',       null,              false],
-                ['#skp-tog-legible-names',    'sidekick_settings',            'legible-names',   false],
-                ['#skp-tog-xanax-viewer',     'sidekick_xanax_viewer',        null,              false],
-                ['#skp-tog-refill-blocker',   'sidekick_refill_blocker',      null,              false],
-                ['#skp-tog-auction-bonus',    'sidekick_settings',            'auction-weapon-bonus', false],
+                ['#skp-tog-time-on-tab', 'sidekick_time_on_tab', null, false],
+                ['#skp-tog-random-target', 'sidekick_random_target', null, false],
+                ['#skp-tog-legible-names', 'sidekick_settings', 'legible-names', false],
+                ['#skp-tog-xanax-viewer', 'sidekick_xanax_viewer', null, false],
+                ['#skp-tog-refill-blocker', 'sidekick_refill_blocker', null, false],
+                ['#skp-tog-auction-bonus', 'sidekick_settings', 'auction-weapon-bonus', false],
+
                 // Reminders
-                ['#skp-tog-racing-alert',     'sidekick_racing_alert',        null,              false],
-                ['#skp-tog-blood-bag',        'sidekick_settings',            'blood-bag-reminder', false],
+                ['#skp-tog-racing-alert', 'sidekick_racing_alert', null, false],
+                ['#skp-tog-blood-bag', 'sidekick_settings', 'blood-bag-reminder', false],
                 // Crimes
-                ['#skp-tog-sfc',              'sidekick_settings',            'crime-sfc',       false],
-                ['#skp-tog-shoplifting',      'sidekick_settings',            'crime-notifier',  false],
-                ['#skp-tog-burglary',         'sidekick_settings',            'crime-burglary',  false],
-                ['#skp-tog-disposal',         'sidekick_settings',            'crime-disposal',  false],
-                ['#skp-tog-cracking',         'sidekick_settings',            'crime-cracking',  false],
-                ['#skp-tog-scamming',         'sidekick_settings',            'crime-scamming',  false],
+                ['#skp-tog-sfc', 'sidekick_settings', 'crime-sfc', false],
+                ['#skp-tog-shoplifting', 'sidekick_settings', 'crime-notifier', false],
+                ['#skp-tog-pickpocketing', 'sidekick_settings', 'crime-pickpocketing', false],
+                ['#skp-tog-burglary', 'sidekick_settings', 'crime-burglary', false],
+                ['#skp-tog-disposal', 'sidekick_settings', 'crime-disposal', false],
+                ['#skp-tog-cracking', 'sidekick_settings', 'crime-cracking', false],
+                ['#skp-tog-scamming', 'sidekick_settings', 'crime-scamming', false],
                 // War
-                ['#skp-tog-chain-timer',      'sidekick_chain_timer',         null,              false],
-                ['#skp-tog-war-monitor',      'sidekick_war_monitor',         null,              false],
-                ['#skp-tog-chain-view',       'sidekick_extended_chain_view', null,              false],
+                ['#skp-tog-chain-timer', 'sidekick_chain_timer', null, false],
+                ['#skp-tog-war-monitor', 'sidekick_war_monitor', null, false],
+                ['#skp-tog-chain-view', 'sidekick_extended_chain_view', null, false],
+                ['#skp-tog-termed-war', 'sidekick_settings', 'termed-war-mode', false],
+                ['#skp-tog-war-target-caller', 'sidekick_war_target_caller', null, false],
                 // Missions
 
-                ['#skp-tog-mission-tracker',  'sidekick_settings',            'mission-tracker', false],
+                ['#skp-tog-mission-tracker', 'sidekick_settings', 'mission-tracker', false],
                 // Events
-                ['#skp-tog-event-calendar',   'sidekick_settings',            'event-calendar',  false],
-                ['#skp-tog-easter',           'sidekick_holiday',             null,              false],
+                ['#skp-tog-event-calendar', 'sidekick_settings', 'event-calendar', false],
+                ['#skp-tog-easter', 'sidekick_holiday', null, false],
                 // Medical
-                ['#skp-tog-smart-medical',    'sidekick_smart_medical',       null,              false],
+                ['#skp-tog-smart-medical', 'sidekick_smart_medical', null, false],
             ];
 
             // Helper: read isEnabled from storage
@@ -1448,7 +1626,7 @@
             (async () => {
                 // Load API key into input
                 const apiKey = CS() ? await CS().get('sidekick_api_key') : null;
-                const apiInput = overlay.querySelector('#skp-api-key');
+                const apiInput = overlay.querySelector('#sidekick-api-key');
                 if (apiInput && apiKey) apiInput.value = apiKey;
 
                 // Load all module toggles
@@ -1458,7 +1636,7 @@
                     try {
                         const enabled = await loadToggle(storKey, subKey);
                         inp.checked = enabled;
-                    } catch(e) { /* storage not ready */ }
+                    } catch (e) { /* storage not ready */ }
                 }
             })();
 
@@ -1467,18 +1645,18 @@
                 const inp = overlay.querySelector(sel);
                 if (!inp) continue;
                 inp.addEventListener('change', async () => {
-                    try { await saveToggle(storKey, subKey, inp.checked); } catch(e) {}
+                    try { await saveToggle(storKey, subKey, inp.checked); } catch (e) { }
                 });
             }
 
             // ─── Medical settings: load and wire dropdowns ─────────────────
-            const medItemSrc   = overlay.querySelector('#skp-med-item-source');
+            const medItemSrc = overlay.querySelector('#skp-med-item-source');
             const medBloodType = overlay.querySelector('#skp-med-blood-type');
             if (medItemSrc || medBloodType) {
                 (async () => {
                     const medData = CS() ? (await CS().get('sidekick_smart_medical') || {}) : {};
-                    if (medItemSrc  && medData.itemSource)  medItemSrc.value  = medData.itemSource;
-                    if (medBloodType && medData.bloodType)  medBloodType.value = medData.bloodType;
+                    if (medItemSrc && medData.itemSource) medItemSrc.value = medData.itemSource;
+                    if (medBloodType && medData.bloodType) medBloodType.value = medData.bloodType;
                 })();
                 if (medItemSrc) {
                     medItemSrc.addEventListener('change', async () => {
@@ -1505,9 +1683,9 @@
             // ─── Chain Timer sub-settings save/load ────────────────────────
             const CT_KEY = 'sidekick_chain_timer';
             const ctSubMap = [
-                ['#skp-tog-ct-alerts',   'alertsEnabled'],
-                ['#skp-tog-ct-popup',    'popupEnabled'],
-                ['#skp-tog-ct-flash',    'screenFlashEnabled'],
+                ['#skp-tog-ct-alerts', 'alertsEnabled'],
+                ['#skp-tog-ct-popup', 'popupEnabled'],
+                ['#skp-tog-ct-flash', 'screenFlashEnabled'],
                 ['#skp-tog-ct-floating', 'floatingDisplayEnabled'],
             ];
             // Load chain timer sub-settings
@@ -1615,9 +1793,9 @@
 
             // === Shoplifting alert sub-settings ===
             const SL_KEY = 'crime-notifier';
-            const slNotify   = overlay.querySelector('#skp-shoplift-notify');
+            const slNotify = overlay.querySelector('#skp-shoplift-notify');
             const slInterval = overlay.querySelector('#skp-shoplift-interval');
-            const slSelAll   = overlay.querySelector('#skp-shoplift-sel-all');
+            const slSelAll = overlay.querySelector('#skp-shoplift-sel-all');
             const slDeselAll = overlay.querySelector('#skp-shoplift-desel-all');
             const slCBs = [...overlay.querySelectorAll('.sk-shop-cb')];
             const saveShoplift = async () => {
@@ -1647,11 +1825,29 @@
                 const selected = s.selectedShopSecurity;
                 if (selected) slCBs.forEach(cb => { cb.checked = selected.includes(cb.dataset.shop + '_' + cb.dataset.type); });
             })();
-            if (slNotify)   slNotify.addEventListener('change', saveShoplift);
+            if (slNotify) slNotify.addEventListener('change', saveShoplift);
             if (slInterval) slInterval.addEventListener('change', saveShoplift);
             slCBs.forEach(cb => cb.addEventListener('change', saveShoplift));
-            if (slSelAll)   slSelAll.addEventListener('click',   () => { slCBs.forEach(cb => cb.checked = true);  saveShoplift(); });
+            if (slSelAll) slSelAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = true); saveShoplift(); });
             if (slDeselAll) slDeselAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = false); saveShoplift(); });
+
+            // Attach specific tab listeners to the new preview overlay
+            this.attachGeneralTabListeners(overlay);
+            this.attachModulesTabListeners(overlay);
+            this.attachXanaxTabListeners(overlay);
+            this.attachChainTimerTabListeners(overlay);
+            this.attachNotificationsTabListeners(overlay);
+            this.attachMugCalculatorTabListeners(overlay);
+            this.attachBloodBagTabListeners(overlay);
+            this.attachQuickDepositTabListeners(overlay);
+            this.attachCrimeNotifierTabListeners(overlay);
+            this.attachCrimesTabListeners(overlay);
+            this.attachMugWarningTabListeners(overlay);
+            this.attachMissionTrackerTabListeners(overlay);
+            this.attachHideCrimeTabListeners(overlay);
+            this.attachHolidayTabListeners(overlay);
+            this.attachWarTargetCallerTabListeners(overlay);
+
         },
 
         // Attach all event listeners
@@ -1700,44 +1896,44 @@
 
 
             // General Tab listeners
-            this.attachGeneralTabListeners(panel);
+            this.attachGeneralTabListeners(overlay);
 
             // Modules Tab listeners
-            this.attachModulesTabListeners(panel);
+            this.attachModulesTabListeners(overlay);
 
             // Xanax Viewer Tab listeners
-            this.attachXanaxTabListeners(panel);
+            this.attachXanaxTabListeners(overlay);
 
             // Chain Timer Tab listeners
-            this.attachChainTimerTabListeners(panel);
+            this.attachChainTimerTabListeners(overlay);
 
             // Notifications Tab listeners
-            this.attachNotificationsTabListeners(panel);
+            this.attachNotificationsTabListeners(overlay);
 
             // Mug Calculator Tab listeners
-            this.attachMugCalculatorTabListeners(panel);
+            this.attachMugCalculatorTabListeners(overlay);
 
             // Blood Bag Reminder Tab listeners
-            this.attachBloodBagTabListeners(panel);
+            this.attachBloodBagTabListeners(overlay);
 
             // Quick Deposit Tab listeners
-            this.attachQuickDepositTabListeners(panel);
+            this.attachQuickDepositTabListeners(overlay);
 
             // Crime Notifier Tab listeners
-            this.attachCrimeNotifierTabListeners(panel);
-            this.attachCrimesTabListeners(panel);
+            this.attachCrimeNotifierTabListeners(overlay);
+            this.attachCrimesTabListeners(overlay);
 
             // Mug Warning Tab listeners
-            this.attachMugWarningTabListeners(panel);
+            this.attachMugWarningTabListeners(overlay);
 
             // Mission Tracker Tab listeners
-            this.attachMissionTrackerTabListeners(panel);
+            this.attachMissionTrackerTabListeners(overlay);
 
             // Hide Crime Outcome Tab listeners
-            this.attachHideCrimeTabListeners(panel);
+            this.attachHideCrimeTabListeners(overlay);
 
             // Holiday Tab listeners
-            this.attachHolidayTabListeners(panel);
+            this.attachHolidayTabListeners(overlay);
         },
 
         // Switch between tabs
@@ -1865,6 +2061,19 @@
                     this.showStatus(statusDiv, 'API test failed - check your connection', 'error');
                 }
             });
+
+            const showKeyBtn = panel.querySelector('#sidekick-show-key');
+            if (showKeyBtn && apiInput) {
+                showKeyBtn.addEventListener('click', () => {
+                    if (apiInput.type === 'password') {
+                        apiInput.type = 'text';
+                        showKeyBtn.textContent = 'Hide Key';
+                    } else {
+                        apiInput.type = 'password';
+                        showKeyBtn.textContent = 'Show Key';
+                    }
+                });
+            }
 
             // Calendar Refresh Button
             const refreshCalendarBtn = panel.querySelector('#sidekick-refresh-calendar');
@@ -3862,6 +4071,97 @@
                 if (thumb) thumb.style.transform = on ? 'translateX(26px)' : 'translateX(0)';
             } catch (e) {
                 console.error('Failed to load Holiday settings:', e);
+            }
+        },
+
+        attachWarTargetCallerTabListeners(panel) {
+            const testUserInp = panel.querySelector('#skp-wtc-test-user');
+            const saveBtn = panel.querySelector('#skp-wtc-test-save');
+            const statusIndicator = panel.querySelector('#skp-wtc-test-status');
+
+            if (testUserInp) {
+                // Initialize from storage synchronously first to prevent UI hanging
+                const backupUser = localStorage.getItem('sidekick_wtc_test_user_backup');
+                if (backupUser && typeof backupUser === 'string') {
+                    testUserInp.value = backupUser;
+                }
+
+                (async () => {
+                    const CS = window.SidekickModules?.Core?.ChromeStorage;
+                    if (!CS) return;
+                    try {
+                        // We race the CS.get against a 1-second timeout just in case it hangs
+                        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 1000));
+                        let testChatUser = await Promise.race([CS.get('sidekick_wtc_test_user'), timeoutPromise]);
+
+                        if (testChatUser && typeof testChatUser === 'string') {
+                            testUserInp.value = testChatUser;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load test user:', e);
+                    }
+                })();
+
+                const saveHandler = async () => {
+                    try {
+                        const CS = window.SidekickModules?.Core?.ChromeStorage;
+                        if (!CS) return;
+                        const val = testUserInp.value.trim();
+                        await CS.set('sidekick_wtc_test_user', val);
+                        localStorage.setItem('sidekick_wtc_test_user_backup', val);
+                        panel.dataset.settingsChanged = 'true';
+
+                        if (window.SidekickModules.WarTargetCaller) {
+                            window.SidekickModules.WarTargetCaller.testChatUser = val;
+                        }
+
+                        // Show visual feedback
+                        if (statusIndicator) {
+                            statusIndicator.style.display = 'block';
+                            setTimeout(() => {
+                                statusIndicator.style.display = 'none';
+                            }, 2000);
+                        }
+
+                        // Force an alert to prove it finished
+                        alert("Settings Saved: " + val);
+
+                    } catch (e) {
+                        console.error('Failed to save test user:', e);
+                        alert("Error saving: " + e.message);
+                    }
+                };
+
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', saveHandler);
+                }
+
+                // Allow pressing Enter in the input to save
+                testUserInp.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') saveHandler();
+                });
+
+                const testBtn = panel.querySelector('#skp-wtc-test-send');
+                if (testBtn) {
+                    testBtn.addEventListener('click', () => {
+                        try {
+                            if (!window.SidekickModules.WarTargetCaller) {
+                                alert("War Target Caller module is not loaded!");
+                                return;
+                            }
+
+                            const val = testUserInp.value.trim();
+                            if (val) {
+                                window.SidekickModules.WarTargetCaller.testChatUser = val;
+                            }
+
+                            console.log("Sending test chat message via Test Send button...");
+                            window.SidekickModules.WarTargetCaller.sendChatMessage('Test: Hitting Target in 5 minutes');
+                        } catch (err) {
+                            alert("Test Send Error: " + err.message);
+                        }
+                    });
+                }
             }
         }
     };

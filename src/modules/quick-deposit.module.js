@@ -228,8 +228,7 @@ const QuickDepositModule = {
         const balance = this.getBalance();
 
         if (balance <= 0) {
-            this.showToast('No cash to deposit');
-            return;
+            // Silently navigate without showing a toast
         }
 
         // Use configured target or auto mode
@@ -322,6 +321,8 @@ const QuickDepositModule = {
             return;
         }
 
+        if (amount <= 0) return;
+
         // Fill and submit
         this.setInputValue(input, amount);
         const btn = input.form?.querySelector('input[type="submit"], button[type="submit"]');
@@ -348,6 +349,8 @@ const QuickDepositModule = {
             document.querySelector('a[href*="tab=armoury"]')?.click();
             return;
         }
+
+        if (amount <= 0) return;
 
         const input = form.querySelector('.input-money');
         if (!input) return;
@@ -378,12 +381,16 @@ const QuickDepositModule = {
             if (vaultTab && !url.includes('tab=vault')) {
                 vaultTab.click();
                 // Wait for tab to load, then deposit
-                setTimeout(() => this.executePropertyDeposit(amount), 500);
+                if (amount > 0) {
+                    setTimeout(() => this.executePropertyDeposit(amount), 500);
+                }
                 return;
             }
 
             // Already on vault tab, try to deposit
-            this.executePropertyDeposit(amount);
+            if (amount > 0) {
+                this.executePropertyDeposit(amount);
+            }
         }, 300);
     },
 
@@ -425,6 +432,8 @@ const QuickDepositModule = {
         }
 
         if (!input) return;
+
+        if (amount <= 0) return;
 
         this.setInputValue(input, amount);
         const container = input.closest('.funds-cont');

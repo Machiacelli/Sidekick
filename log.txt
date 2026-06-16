@@ -1,0 +1,1737 @@
+﻿commit 25a88f7a25ff25dbdf2addeffacc3c7f93d736d3
+Author: Machiacelli <machiacelli@users.noreply.github.com>
+Date:   Mon Jun 15 02:42:05 2026 +0200
+
+    new settings page fixes, book notifier fix, mission tracker fix
+
+diff --git a/src/modules/smart-medical-button.module.js b/src/modules/smart-medical-button.module.js
+index e531463..2e35ed3 100644
+--- a/src/modules/smart-medical-button.module.js
++++ b/src/modules/smart-medical-button.module.js
+@@ -1,7 +1,6 @@
+-∩╗┐/**
++/**
+  * Sidekick Smart Medical Button
+  * Adapted from BBSmalls [3908857] Torn Smart FAK Button v4.43
+- * Sidekick port: uses ChromeStorage, universal API key, morphine always included
+  */
+ 
+ (function () {
+@@ -10,26 +9,26 @@
+     const STORAGE_KEY = 'sidekick_smart_medical';
+ 
+     const PERSONAL_URL = 'https://www.torn.com/item.php';
+-    const FACTION_URL  = 'https://www.torn.com/factions.php?step=your&type=1#/tab=armoury';
++    const FACTION_URL = 'https://www.torn.com/factions.php?step=your&type=1#/tab=armoury';
+ 
+     // Item definitions ΓÇö morphine always included
+     let ITEMS = {
+-        'Small First Aid Kit': { id: 68, removes: 1200, cd: 600,  baseRemoves: 1200, color: '#c0392b', icon: '≡ƒ⌐╣' },
+-        'First Aid Kit':       { id: 67, removes: 2400, cd: 900,  baseRemoves: 2400, color: '#1a6fc4', icon: '≡ƒ⌐╣' },
+-        'Morphine':            { id: 66, removes: 4200, cd: 1200, baseRemoves: 4200, color: '#e87722', icon: '≡ƒÆë' },
+-        'Blood Bag':           { id: null, removes: 7200, cd: 1800, baseRemoves: 7200, color: '#9333ea', icon: '≡ƒ⌐╕' }
++        'Small First Aid Kit': { id: 68, removes: 1200, cd: 600, baseRemoves: 1200, color: '#c0392b', icon: '≡ƒ⌐╣' },
++        'First Aid Kit': { id: 67, removes: 2400, cd: 900, baseRemoves: 2400, color: '#1a6fc4', icon: '≡ƒ⌐╣' },
++        'Morphine': { id: 66, removes: 4200, cd: 1200, baseRemoves: 4200, color: '#e87722', icon: '≡ƒÆë' },
++        'Blood Bag': { id: null, removes: 7200, cd: 1800, baseRemoves: 7200, color: '#9333ea', icon: '≡ƒ⌐╕' }
+     };
+ 
+-    const BLOOD_BAG_IDS = { 'A+':732,'A-':733,'B+':734,'B-':735,'AB+':736,'AB-':737,'O+':738,'O-':739 };
++    const BLOOD_BAG_IDS = { 'A+': 732, 'A-': 733, 'B+': 734, 'B-': 735, 'AB+': 736, 'AB-': 737, 'O+': 738, 'O-': 739 };
+ 
+-    let cachedTimer       = 0;
+-    let isDragging        = false;
++    let cachedTimer = 0;
++    let isDragging = false;
+     let totalMedicalBonus = 0;
+-    let isEnabled         = false;
+-    let settings          = { itemSource: 'Personal Items', bloodType: 'Disabled' };
++    let isEnabled = false;
++    let settings = { itemSource: 'Personal Items', bloodType: 'Disabled' };
+     let perkFetchInterval = null;
+-    let pollInterval      = null;
+-    let cdInterval        = null;
++    let pollInterval = null;
++    let cdInterval = null;
+ 
+     // ΓöÇΓöÇΓöÇ Storage ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     const CS = () => window.SidekickModules?.Core?.ChromeStorage;
+@@ -39,7 +38,7 @@
+         const saved = await CS().get(STORAGE_KEY) || {};
+         isEnabled = saved.isEnabled === true;
+         settings.itemSource = saved.itemSource || 'Personal Items';
+-        settings.bloodType  = saved.bloodType  || 'Disabled';
++        settings.bloodType = saved.bloodType || 'Disabled';
+     }
+ 
+     async function saveSettings(patch) {
+@@ -57,16 +56,19 @@
+         const h = Math.floor(sec / 3600);
+         const m = Math.floor((sec % 3600) / 60);
+         const s = sec % 60;
+-        if (h > 0) return `${h}h ${m}m`;
+-        if (m > 0) return `${m}m ${s.toString().padStart(2,'0')}s`;
+-        return `${s}s`;
++        const pad = n => n.toString().padStart(2, '0');
++        if (h > 0) return `${h}h ${pad(m)}m`;
++        return `${pad(m)}:${pad(s)}`;
+     };
+ 
+     const formatCDTime = sec => {
+         if (sec <= 0) return null;
+-        const m = Math.floor(sec / 60);
++        const h = Math.floor(sec / 3600);
++        const m = Math.floor((sec % 3600) / 60);
+         const s = sec % 60;
+-        return m > 0 ? `${m}m ${s.toString().padStart(2,'0')}s` : `${s}s`;
++        const pad = n => n.toString().padStart(2, '0');
++        if (h > 0) return `${h}h ${pad(m)}m`;
++        return m > 0 ? `${m}m ${pad(s)}s` : `${s}s`;
+     };
+ 
+     function inHospital() { return !!document.querySelector('a[aria-label^="Hospital:"]'); }
+@@ -88,7 +90,7 @@
+         const key = await getApiKey();
+         if (!key || key.length !== 16) return;
+         try {
+-            const res  = await fetch(`https://api.torn.com/user/?selections=education,perks&key=${encodeURIComponent(key)}`);
++            const res = await fetch(`https://api.torn.com/user/?selections=education,perks&key=${encodeURIComponent(key)}`);
+             if (!res.ok) return;
+             const data = await res.json();
+             if (data.error) return;
+@@ -103,7 +105,7 @@
+             const mult = 1 + totalMedicalBonus / 100;
+             Object.keys(ITEMS).forEach(n => { ITEMS[n].removes = Math.round(ITEMS[n].baseRemoves * mult); });
+             updateDisplay();
+-        } catch {}
++        } catch { }
+     }
+ 
+     // ΓöÇΓöÇΓöÇ Item selection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+@@ -111,12 +113,12 @@
+         if (timer <= 0) return null;
+         const available = [
+             { name: 'Small First Aid Kit', ...ITEMS['Small First Aid Kit'] },
+-            { name: 'First Aid Kit',       ...ITEMS['First Aid Kit'] },
+-            { name: 'Morphine',            ...ITEMS['Morphine'] },
++            { name: 'First Aid Kit', ...ITEMS['First Aid Kit'] },
++            { name: 'Morphine', ...ITEMS['Morphine'] },
+         ];
+         if (bloodEnabled()) available.push({
+             name: 'Blood Bag',
+-            id:   BLOOD_BAG_IDS[settings.bloodType],
++            id: BLOOD_BAG_IDS[settings.bloodType],
+             ...ITEMS['Blood Bag']
+         });
+         available.sort((a, b) => a.removes - b.removes);
+@@ -131,31 +133,22 @@
+         const el = document.getElementById('sk-med-floater');
+         if (!el) return;
+ 
+-        const timerEl  = el.querySelector('#sk-med-timer');
+-        const ringEl   = el.querySelector('#sk-med-ring');
+-        const labelEl  = el.querySelector('#sk-med-label');
+-        const cdEl     = el.querySelector('#sk-med-cd');
+-        const glowEl   = el.querySelector('#sk-med-glow');
++        const timerEl = el.querySelector('#sk-med-timer');
++        const ringEl = el.querySelector('#sk-med-ring');
++        const labelEl = el.querySelector('#sk-med-label');
++        const cdEl = el.querySelector('#sk-med-cd');
++        const glowEl = el.querySelector('#sk-med-glow');
+ 
+         const hosp = inHospital();
+         const item = hosp && cachedTimer > 0 ? selectBestItem(cachedTimer) : null;
+ 
+         // Timer text
+-        if (timerEl) timerEl.textContent = (hosp && cachedTimer > 0) ? formatTime(cachedTimer) : (hosp ? '...' : 'ΓÇö');
++        if (timerEl) timerEl.textContent = (hosp && cachedTimer > 0) ? formatTime(cachedTimer) : (hosp ? '...' : '');
+ 
+         // Item label
+         if (labelEl) {
+-            if (item) {
+-                const shortNames = {
+-                    'Small First Aid Kit': 'Small FAK',
+-                    'First Aid Kit': 'FAK',
+-                    'Morphine': 'Morphine',
+-                    'Blood Bag': `BB ${settings.bloodType}`
+-                };
+-                labelEl.textContent = shortNames[item.name] || item.name;
+-            } else {
+-                labelEl.textContent = hosp ? '...' : '';
+-            }
++            labelEl.textContent = '';
++            labelEl.style.display = 'none';
+         }
+ 
+         // Ring color gradient based on best item
+@@ -179,43 +172,43 @@
+     // ΓöÇΓöÇΓöÇ Position / dragging ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     const POS_KEY = 'sk-med-pos';
+     const savePos = (x, y) => {
+-        try { localStorage.setItem(POS_KEY, JSON.stringify({ xPct: x/window.innerWidth, yPct: y/window.innerHeight })); } catch {}
++        try { localStorage.setItem(POS_KEY, JSON.stringify({ xPct: x / window.innerWidth, yPct: y / window.innerHeight })); } catch { }
+     };
+     const loadPos = () => {
+         try {
+             const p = JSON.parse(localStorage.getItem(POS_KEY));
+-            return p ? { x: Math.round(p.xPct*window.innerWidth), y: Math.round(p.yPct*window.innerHeight) } : null;
++            return p ? { x: Math.round(p.xPct * window.innerWidth), y: Math.round(p.yPct * window.innerHeight) } : null;
+         } catch { return null; }
+     };
+     const clamp = (x, y, w, h) => ({
+-        x: Math.min(Math.max(8, x), window.innerWidth  - w - 8),
++        x: Math.min(Math.max(8, x), window.innerWidth - w - 8),
+         y: Math.min(Math.max(8, y), window.innerHeight - h - 8)
+     });
+ 
+     function enableDragging(el, handle) {
+-        let drag=false, startX, startY, initX, initY;
++        let drag = false, startX, startY, initX, initY;
+         const start = e => {
+-            drag=true; isDragging=false;
++            drag = true; isDragging = false;
+             const ev = e.touches ? e.touches[0] : e;
+-            startX=ev.clientX; startY=ev.clientY; initX=el.offsetLeft; initY=el.offsetTop;
++            startX = ev.clientX; startY = ev.clientY; initX = el.offsetLeft; initY = el.offsetTop;
+             e.preventDefault();
+         };
+         const move = e => {
+             if (!drag) return;
+             const ev = e.touches ? e.touches[0] : e;
+-            const dx=ev.clientX-startX, dy=ev.clientY-startY;
+-            if (Math.abs(dx)>5 || Math.abs(dy)>5) isDragging=true;
+-            const r=el.getBoundingClientRect();
+-            const c=clamp(initX+dx, initY+dy, r.width, r.height);
+-            el.style.left=c.x+'px'; el.style.top=c.y+'px'; el.style.right='auto';
++            const dx = ev.clientX - startX, dy = ev.clientY - startY;
++            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) isDragging = true;
++            const r = el.getBoundingClientRect();
++            const c = clamp(initX + dx, initY + dy, r.width, r.height);
++            el.style.left = c.x + 'px'; el.style.top = c.y + 'px'; el.style.right = 'auto';
+         };
+         const end = () => {
+-            if (!drag) return; drag=false;
+-            const r=el.getBoundingClientRect();
+-            const c=clamp(r.left, r.top, r.width, r.height);
+-            el.style.left=c.x+'px'; el.style.top=c.y+'px';
++            if (!drag) return; drag = false;
++            const r = el.getBoundingClientRect();
++            const c = clamp(r.left, r.top, r.width, r.height);
++            el.style.left = c.x + 'px'; el.style.top = c.y + 'px';
+             savePos(c.x, c.y);
+-            setTimeout(() => isDragging=false, 50);
++            setTimeout(() => isDragging = false, 50);
+         };
+         handle.addEventListener('mousedown', start);
+         document.addEventListener('mousemove', move);
+@@ -228,12 +221,12 @@
+     // ΓöÇΓöÇΓöÇ Hospital polling ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     async function fetchHospitalTime() {
+         try {
+-            const res  = await fetch('/page.php?sid=UserApiData', { credentials:'include', headers:{'X-Requested-With':'XMLHttpRequest'} });
++            const res = await fetch('/page.php?sid=UserApiData', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+             const data = await res.json();
+             const until = Number(data?.hospitalstamp) || 0;
+-            const now   = Math.floor(Date.now()/1000);
+-            return until > now ? Math.max(0, until-now) : 0;
+-        } catch { return inHospital() ? cachedTimer||60 : 0; }
++            const now = Math.floor(Date.now() / 1000);
++            return until > now ? Math.max(0, until - now) : 0;
++        } catch { return inHospital() ? cachedTimer || 60 : 0; }
+     }
+ 
+     function startPolling() {
+@@ -254,24 +247,24 @@
+     async function useItem(item) {
+         if (!item?.id) return false;
+         try {
+-            const body = new URLSearchParams({ step:'useItem', itemID: item.id.toString() });
++            const body = new URLSearchParams({ step: 'useItem', itemID: item.id.toString() });
+             if (settings.itemSource === 'Faction Armory') body.set('fac', '1');
+             const res = await fetch('https://www.torn.com/item.php', {
+-                method:'POST', body, credentials:'include',
+-                headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'}
++                method: 'POST', body, credentials: 'include',
++                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
+             });
+             return res.ok;
+         } catch { return false; }
+     }
+ 
+-    function isOnPersonalPage(){ return window.location.href.toLowerCase().includes('item.php'); }
++    function isOnPersonalPage() { return window.location.href.toLowerCase().includes('item.php'); }
+     function isOnFactionPage() {
+         const u = window.location.href.toLowerCase();
+         return u.includes('factions.php') && u.includes('tab=armoury');
+     }
+     function isOnCorrectPage() {
+         return (settings.itemSource === 'Personal Items' && isOnPersonalPage()) ||
+-               (settings.itemSource === 'Faction Armory' && isOnFactionPage());
++            (settings.itemSource === 'Faction Armory' && isOnFactionPage());
+     }
+ 
+     async function onButtonClick() {
+@@ -320,17 +313,15 @@
+                 width: 72px;
+                 height: 72px;
+                 cursor: pointer;
+-                transition: transform .15s ease;
+             }
+             #sk-med-svg {
+                 position: absolute;
+                 top: 0; left: 0;
+                 width: 72px; height: 72px;
+-                filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
+             }
+             #sk-med-bg-circle {
+-                fill: #1a2332;
+-                stroke: rgba(95,204,106,0.15);
++                fill: rgba(30, 40, 50, 0.85); /* Sidekick dark theme color */
++                stroke: rgba(255,255,255,0.1);
+                 stroke-width: 1.5;
+             }
+             #sk-med-ring {
+@@ -342,8 +333,8 @@
+                 transform-origin: 36px 36px;
+                 transform: rotate(-90deg);
+             }
+-            #sk-med-cross rect {
+-                fill: rgba(255,255,255,0.35);
++            #sk-med-cross {
++                fill: rgba(255,255,255,0.05); /* Made more subtle */
+             }
+             #sk-med-inner {
+                 position: absolute;
+@@ -353,50 +344,49 @@
+                 align-items: center;
+                 justify-content: center;
+                 pointer-events: none;
+-                gap: 1px;
+             }
+             #sk-med-timer {
+-                font-size: 11px;
+-                font-weight: 800;
+-                color: #e8f5e9;
+-                font-family: 'Inter', 'Roboto', monospace;
+-                text-shadow: 0 1px 6px rgba(0,0,0,0.9);
++                font-size: 12px;
++                font-weight: 700;
++                color: #fff;
++                font-family: 'Inter', 'Roboto', sans-serif;
++                text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+                 letter-spacing: -0.5px;
+                 line-height: 1;
++                margin-top: 2px;
+             }
+             #sk-med-label {
+                 font-size: 8px;
+-                color: rgba(95,204,106,0.7);
++                color: rgba(255,255,255,0.45);
+                 font-family: 'Inter', 'Roboto', sans-serif;
+                 text-align: center;
+-                line-height: 1.1;
++                padding: 0 4px;
++                line-height: 1.2;
++                margin-top: 1px;
+                 max-width: 60px;
+                 overflow: hidden;
+                 text-overflow: ellipsis;
+                 white-space: nowrap;
+             }
+             #sk-med-cd {
+-                position: absolute;
+-                bottom: -20px;
+-                left: 50%;
+-                transform: translateX(-50%);
+-                background: rgba(139, 0, 0, 0.85);
+-                border: 1px solid rgba(255,80,80,0.25);
+-                border-radius: 8px;
+-                padding: 2px 6px;
+-                font-size: 9px;
+-                font-weight: 700;
++                font-size: 10px;
++                font-weight: 600;
+                 color: #ffaaaa;
+                 font-family: 'Inter', 'Roboto', sans-serif;
+-                white-space: nowrap;
++                text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+                 display: none;
+-                backdrop-filter: blur(4px);
++                margin-top: 2px;
++                line-height: 1;
++                text-align: center;
+             }
+             #sk-med-floater:hover #sk-med-body {
+-                transform: scale(1.07);
++                transform: scale(1.06);
++            }
++            #sk-med-body {
++                transition: transform .15s ease;
+             }
+-            #sk-med-floater:active #sk-med-body {
+-                transform: scale(0.95);
++            #sk-med-glow {
++                transition: filter .3s ease;
+             }
+         `;
+         document.head.appendChild(style);
+@@ -428,19 +418,16 @@
+                             stroke-dashoffset="0"/>
+                         <!-- Medical cross icon -->
+                         <g id="sk-med-cross">
+-                            <!-- Horizontal bar -->
+-                            <rect x="24" y="31" width="24" height="10" rx="2.5" />
+-                            <!-- Vertical bar -->
+-                            <rect x="31" y="24" width="10" height="24" rx="2.5" />
++                            <path d="M 36 29 v 14 M 29 36 h 14" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round" fill="none"/>
+                         </g>
+                     </g>
+                 </svg>
+                 <div id="sk-med-inner">
+                     <div id="sk-med-timer">ΓÇö</div>
++                    <div id="sk-med-cd"></div>
+                     <div id="sk-med-label">Ready</div>
+                 </div>
+             </div>
+-            <div id="sk-med-cd"></div>
+         `;
+ 
+         document.body.appendChild(floater);
+@@ -450,7 +437,7 @@
+         if (pos) {
+             const c = clamp(pos.x, pos.y, 72, 72);
+             floater.style.left = c.x + 'px';
+-            floater.style.top  = c.y + 'px';
++            floater.style.top = c.y + 'px';
+             floater.style.right = 'auto';
+         }
+ 
+@@ -460,9 +447,19 @@
+ 
+         enableDragging(floater, body);
+         window.addEventListener('resize', () => {
+-            const r = floater.getBoundingClientRect();
+-            const c = clamp(r.left, r.top, r.width, r.height);
+-            floater.style.left = c.x + 'px'; floater.style.top = c.y + 'px';
++            let pos = loadPos();
++            if (!pos) {
++                pos = {
++                    x: parseInt(floater.style.left || 0, 10),
++                    y: parseInt(floater.style.top || 0, 10)
++                };
++            }
++            if (pos) {
++                const c = clamp(pos.x, pos.y, 72, 72);
++                floater.style.left = c.x + 'px';
++                floater.style.top = c.y + 'px';
++                floater.style.right = 'auto';
++            }
+         });
+     }
+ 
+@@ -470,7 +467,7 @@
+         document.getElementById('sk-med-floater')?.remove();
+         document.getElementById('sk-med-styles')?.remove();
+         if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+-        if (cdInterval)   { clearInterval(cdInterval);   cdInterval   = null; }
++        if (cdInterval) { clearInterval(cdInterval); cdInterval = null; }
+         if (perkFetchInterval) { clearInterval(perkFetchInterval); perkFetchInterval = null; }
+     }
+ 
+@@ -502,7 +499,7 @@
+             startPolling();
+             if (!perkFetchInterval) {
+                 setTimeout(() => fetchPerks(), 500);
+-                perkFetchInterval = setInterval(() => fetchPerks(), 15*60*1000);
++                perkFetchInterval = setInterval(() => fetchPerks(), 15 * 60 * 1000);
+             }
+         },
+ 
+
+commit d24b61481d398d7b878cfa134474f5e62e6cb727
+Author: Machiacelli <machiacelli@users.noreply.github.com>
+Date:   Thu Jun 11 16:14:00 2026 +0200
+
+    Fix shoplifting settings (scrollable list, IDs, select all, minutes), crime outcome wiring, block training isBlocked fix, book notifier None clickable, SMB design (Sidekick theme, dim cross, no not-in-hospital)
+
+diff --git a/src/modules/smart-medical-button.module.js b/src/modules/smart-medical-button.module.js
+index c0389ff..e531463 100644
+--- a/src/modules/smart-medical-button.module.js
++++ b/src/modules/smart-medical-button.module.js
+@@ -1,4 +1,4 @@
+-/**
++∩╗┐/**
+  * Sidekick Smart Medical Button
+  * Adapted from BBSmalls [3908857] Torn Smart FAK Button v4.43
+  * Sidekick port: uses ChromeStorage, universal API key, morphine always included
+@@ -154,7 +154,7 @@
+                 };
+                 labelEl.textContent = shortNames[item.name] || item.name;
+             } else {
+-                labelEl.textContent = hosp ? 'Calculating...' : 'Not in hospital';
++                labelEl.textContent = hosp ? '...' : '';
+             }
+         }
+ 
+@@ -320,15 +320,17 @@
+                 width: 72px;
+                 height: 72px;
+                 cursor: pointer;
++                transition: transform .15s ease;
+             }
+             #sk-med-svg {
+                 position: absolute;
+                 top: 0; left: 0;
+                 width: 72px; height: 72px;
++                filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
+             }
+             #sk-med-bg-circle {
+-                fill: #141920;
+-                stroke: rgba(255,255,255,0.06);
++                fill: #1a2332;
++                stroke: rgba(95,204,106,0.15);
+                 stroke-width: 1.5;
+             }
+             #sk-med-ring {
+@@ -340,8 +342,8 @@
+                 transform-origin: 36px 36px;
+                 transform: rotate(-90deg);
+             }
+-            #sk-med-cross {
+-                fill: rgba(255,255,255,0.9);
++            #sk-med-cross rect {
++                fill: rgba(255,255,255,0.35);
+             }
+             #sk-med-inner {
+                 position: absolute;
+@@ -351,25 +353,23 @@
+                 align-items: center;
+                 justify-content: center;
+                 pointer-events: none;
++                gap: 1px;
+             }
+             #sk-med-timer {
+-                font-size: 12px;
+-                font-weight: 700;
+-                color: #fff;
+-                font-family: 'Inter', 'Roboto', sans-serif;
+-                text-shadow: 0 1px 4px rgba(0,0,0,0.8);
++                font-size: 11px;
++                font-weight: 800;
++                color: #e8f5e9;
++                font-family: 'Inter', 'Roboto', monospace;
++                text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+                 letter-spacing: -0.5px;
+                 line-height: 1;
+-                margin-top: 2px;
+             }
+             #sk-med-label {
+                 font-size: 8px;
+-                color: rgba(255,255,255,0.45);
++                color: rgba(95,204,106,0.7);
+                 font-family: 'Inter', 'Roboto', sans-serif;
+                 text-align: center;
+-                padding: 0 4px;
+-                line-height: 1.2;
+-                margin-top: 1px;
++                line-height: 1.1;
+                 max-width: 60px;
+                 overflow: hidden;
+                 text-overflow: ellipsis;
+@@ -377,28 +377,26 @@
+             }
+             #sk-med-cd {
+                 position: absolute;
+-                bottom: -18px;
++                bottom: -20px;
+                 left: 50%;
+                 transform: translateX(-50%);
+                 background: rgba(139, 0, 0, 0.85);
+-                border: 1px solid rgba(255,80,80,0.3);
++                border: 1px solid rgba(255,80,80,0.25);
+                 border-radius: 8px;
+                 padding: 2px 6px;
+                 font-size: 9px;
+-                font-weight: 600;
++                font-weight: 700;
+                 color: #ffaaaa;
+                 font-family: 'Inter', 'Roboto', sans-serif;
+                 white-space: nowrap;
+                 display: none;
++                backdrop-filter: blur(4px);
+             }
+             #sk-med-floater:hover #sk-med-body {
+-                transform: scale(1.06);
+-            }
+-            #sk-med-body {
+-                transition: transform .15s ease;
++                transform: scale(1.07);
+             }
+-            #sk-med-glow {
+-                transition: filter .3s ease;
++            #sk-med-floater:active #sk-med-body {
++                transform: scale(0.95);
+             }
+         `;
+         document.head.appendChild(style);
+@@ -431,9 +429,9 @@
+                         <!-- Medical cross icon -->
+                         <g id="sk-med-cross">
+                             <!-- Horizontal bar -->
+-                            <rect x="24" y="31" width="24" height="10" rx="2.5" fill="rgba(255,255,255,0.88)"/>
++                            <rect x="24" y="31" width="24" height="10" rx="2.5" />
+                             <!-- Vertical bar -->
+-                            <rect x="31" y="24" width="10" height="24" rx="2.5" fill="rgba(255,255,255,0.88)"/>
++                            <rect x="31" y="24" width="10" height="24" rx="2.5" />
+                         </g>
+                     </g>
+                 </svg>
+
+commit f4ebeb96de1c69b3465acad5557e5d11728f9fef
+Author: Machiacelli <machiacelli@users.noreply.github.com>
+Date:   Thu Jun 11 15:42:39 2026 +0200
+
+    Fix settings persistence: add toggle IDs, correct storage keys, chain timer sub-settings wiring; fix book notifier full link; redesign Smart Medical Button (Sidekick SVG ring, timer inside circle); fix cramped bazaar manage layout (Fill button in price column)
+
+diff --git a/src/modules/smart-medical-button.module.js b/src/modules/smart-medical-button.module.js
+index 9adc040..c0389ff 100644
+--- a/src/modules/smart-medical-button.module.js
++++ b/src/modules/smart-medical-button.module.js
+@@ -1,7 +1,6 @@
+ /**
+  * Sidekick Smart Medical Button
+  * Adapted from BBSmalls [3908857] Torn Smart FAK Button v4.43
+- * Original: https://greasyfork.org/scripts/568502
+  * Sidekick port: uses ChromeStorage, universal API key, morphine always included
+  */
+ 
+@@ -13,15 +12,14 @@
+     const PERSONAL_URL = 'https://www.torn.com/item.php';
+     const FACTION_URL  = 'https://www.torn.com/factions.php?step=your&type=1#/tab=armoury';
+ 
+-    // Item definitions ΓÇö morphine always included, blood bag conditional on type setting
++    // Item definitions ΓÇö morphine always included
+     let ITEMS = {
+-        'Small First Aid Kit': { id: 68, removes: 1200, cd: 600,  baseRemoves: 1200 },
+-        'First Aid Kit':       { id: 67, removes: 2400, cd: 900,  baseRemoves: 2400 },
+-        'Morphine':            { id: 66, removes: 4200, cd: 1200, baseRemoves: 4200 },
+-        'Blood Bag':           { id: null, removes: 7200, cd: 1800, baseRemoves: 7200 }
++        'Small First Aid Kit': { id: 68, removes: 1200, cd: 600,  baseRemoves: 1200, color: '#c0392b', icon: '≡ƒ⌐╣' },
++        'First Aid Kit':       { id: 67, removes: 2400, cd: 900,  baseRemoves: 2400, color: '#1a6fc4', icon: '≡ƒ⌐╣' },
++        'Morphine':            { id: 66, removes: 4200, cd: 1200, baseRemoves: 4200, color: '#e87722', icon: '≡ƒÆë' },
++        'Blood Bag':           { id: null, removes: 7200, cd: 1800, baseRemoves: 7200, color: '#9333ea', icon: '≡ƒ⌐╕' }
+     };
+ 
+-    const BLOOD_TYPES   = ['Disabled', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+     const BLOOD_BAG_IDS = { 'A+':732,'A-':733,'B+':734,'B-':735,'AB+':736,'AB-':737,'O+':738,'O-':739 };
+ 
+     let cachedTimer       = 0;
+@@ -31,9 +29,9 @@
+     let settings          = { itemSource: 'Personal Items', bloodType: 'Disabled' };
+     let perkFetchInterval = null;
+     let pollInterval      = null;
++    let cdInterval        = null;
+ 
+-    // ΓöÇΓöÇΓöÇ Storage helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
++    // ΓöÇΓöÇΓöÇ Storage ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     const CS = () => window.SidekickModules?.Core?.ChromeStorage;
+ 
+     async function loadSettings() {
+@@ -50,54 +48,43 @@
+         await CS().set(STORAGE_KEY, { ...current, ...patch });
+     }
+ 
+-    // ΓöÇΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+-    const getApiKey     = async () => CS() ? (await CS().get('sidekick_api_key') || '') : '';
+-    const bloodEnabled  = () => settings.bloodType !== 'Disabled';
++    // ΓöÇΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    const getApiKey = async () => CS() ? (await CS().get('sidekick_api_key') || '') : '';
++    const bloodEnabled = () => settings.bloodType !== 'Disabled';
+ 
+     const formatTime = sec => {
+-        if (sec <= 0) return '';
+-        const m = Math.floor(sec / 60), s = sec % 60;
+-        return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+-    };
+-
+-    const formatCDTime = sec => {
+-        if (sec <= 0) return '0:00:00';
++        if (sec <= 0) return 'Out';
+         const h = Math.floor(sec / 3600);
+         const m = Math.floor((sec % 3600) / 60);
+         const s = sec % 60;
+-        return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
++        if (h > 0) return `${h}h ${m}m`;
++        if (m > 0) return `${m}m ${s.toString().padStart(2,'0')}s`;
++        return `${s}s`;
+     };
+ 
+-    function inHospital()      { return !!document.querySelector('a[aria-label^="Hospital:"]'); }
+-    function isOnPersonalPage(){ return window.location.href.toLowerCase().includes('item.php'); }
+-    function isOnFactionPage() {
+-        const u = window.location.href.toLowerCase();
+-        return u.includes('factions.php') && u.includes('tab=armoury');
+-    }
++    const formatCDTime = sec => {
++        if (sec <= 0) return null;
++        const m = Math.floor(sec / 60);
++        const s = sec % 60;
++        return m > 0 ? `${m}m ${s.toString().padStart(2,'0')}s` : `${s}s`;
++    };
+ 
+-    // ΓöÇΓöÇΓöÇ Medical cooldown from sessionStorage ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    function inHospital() { return !!document.querySelector('a[aria-label^="Hospital:"]'); }
+ 
+-    function getSidebarData() {
++    // ΓöÇΓöÇΓöÇ Medical cooldown ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    function getMedicalCooldownInfo() {
+         try {
+             const key = Object.keys(sessionStorage).find(k => /sidebarData\d+/.test(k));
+-            return key ? JSON.parse(sessionStorage.getItem(key)) : null;
++            const data = key ? JSON.parse(sessionStorage.getItem(key)) : null;
++            const med = data?.statusIcons?.icons?.medical_cooldown;
++            if (!med) return null;
++            const remaining = Math.max(0, Math.round(med.timerExpiresAt - Date.now() / 1000));
++            return { remaining, isActive: remaining > 0 };
+         } catch { return null; }
+     }
+ 
+-    function getMedicalCooldownInfo() {
+-        const data = getSidebarData();
+-        if (!data) return null;
+-        const med = data?.statusIcons?.icons?.medical_cooldown;
+-        if (!med) return null;
+-        const nowSec       = Date.now() / 1000;
+-        const remainingSec = Math.max(0, Math.round(med.timerExpiresAt - nowSec));
+-        return { remainingSec, isActive: remainingSec > 0 };
+-    }
+-
+-    // ΓöÇΓöÇΓöÇ API: Medical effectiveness perk ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+-    async function fetchPerksAndUpdateThresholds() {
++    // ΓöÇΓöÇΓöÇ API: Perks ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    async function fetchPerks() {
+         const key = await getApiKey();
+         if (!key || key.length !== 16) return;
+         try {
+@@ -105,7 +92,6 @@
+             if (!res.ok) return;
+             const data = await res.json();
+             if (data.error) return;
+-
+             let bonus = 0;
+             [...(data.education_perks || []), ...(data.faction_perks || [])].forEach(p => {
+                 if (typeof p === 'string' && p.includes('medical item effectiveness')) {
+@@ -113,28 +99,25 @@
+                     if (m) bonus += parseInt(m[1], 10);
+                 }
+             });
+-
+             totalMedicalBonus = Math.min(bonus, 50);
+             const mult = 1 + totalMedicalBonus / 100;
+             Object.keys(ITEMS).forEach(n => { ITEMS[n].removes = Math.round(ITEMS[n].baseRemoves * mult); });
+-            updateButtonDisplay();
++            updateDisplay();
+         } catch {}
+     }
+ 
+     // ΓöÇΓöÇΓöÇ Item selection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+     function selectBestItem(timer) {
+         if (timer <= 0) return null;
+         const available = [
+             { name: 'Small First Aid Kit', ...ITEMS['Small First Aid Kit'] },
+             { name: 'First Aid Kit',       ...ITEMS['First Aid Kit'] },
+-            { name: 'Morphine',            ...ITEMS['Morphine'] },  // always included
++            { name: 'Morphine',            ...ITEMS['Morphine'] },
+         ];
+         if (bloodEnabled()) available.push({
+-            name: `Blood Bag: ${settings.bloodType}`,
++            name: 'Blood Bag',
+             id:   BLOOD_BAG_IDS[settings.bloodType],
+-            removes: ITEMS['Blood Bag'].removes,
+-            cd:      ITEMS['Blood Bag'].cd
++            ...ITEMS['Blood Bag']
+         });
+         available.sort((a, b) => a.removes - b.removes);
+         for (const item of available) if (item.removes >= timer) return item;
+@@ -143,57 +126,71 @@
+         );
+     }
+ 
+-    function getButtonColor(timer) {
+-        if (timer <= 0) return '#555';
+-        const item = selectBestItem(timer);
+-        if (!item) return '#555';
+-        if (item.name.startsWith('Blood Bag')) return '#9333ea';
+-        if (item.name === 'Morphine')          return '#e87722';
+-        if (item.name === 'First Aid Kit')     return '#1a6fc4';
+-        return '#c82333';
+-    }
++    // ΓöÇΓöÇΓöÇ Display ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    function updateDisplay() {
++        const el = document.getElementById('sk-med-floater');
++        if (!el) return;
+ 
+-    // ΓöÇΓöÇΓöÇ Display ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++        const timerEl  = el.querySelector('#sk-med-timer');
++        const ringEl   = el.querySelector('#sk-med-ring');
++        const labelEl  = el.querySelector('#sk-med-label');
++        const cdEl     = el.querySelector('#sk-med-cd');
++        const glowEl   = el.querySelector('#sk-med-glow');
++
++        const hosp = inHospital();
++        const item = hosp && cachedTimer > 0 ? selectBestItem(cachedTimer) : null;
++
++        // Timer text
++        if (timerEl) timerEl.textContent = (hosp && cachedTimer > 0) ? formatTime(cachedTimer) : (hosp ? '...' : 'ΓÇö');
++
++        // Item label
++        if (labelEl) {
++            if (item) {
++                const shortNames = {
++                    'Small First Aid Kit': 'Small FAK',
++                    'First Aid Kit': 'FAK',
++                    'Morphine': 'Morphine',
++                    'Blood Bag': `BB ${settings.bloodType}`
++                };
++                labelEl.textContent = shortNames[item.name] || item.name;
++            } else {
++                labelEl.textContent = hosp ? 'Calculating...' : 'Not in hospital';
++            }
++        }
+ 
+-    function updateButtonDisplay() {
+-        const container = document.getElementById('sk-med-container');
+-        if (!container) return;
+-        const timerEl = container.querySelector('#sk-med-timer');
+-        const btnEl   = container.querySelector('#sk-med-btn');
+-        if (cachedTimer <= 0) {
+-            timerEl.textContent    = 'No Hosp';
+-            btnEl.style.background = '#555';
+-        } else {
+-            timerEl.textContent    = formatTime(cachedTimer);
+-            btnEl.style.background = getButtonColor(cachedTimer);
++        // Ring color gradient based on best item
++        const itemColor = item?.color || (hosp ? '#5fcc6a' : '#444');
++        if (ringEl) {
++            ringEl.style.stroke = itemColor;
++        }
++        if (glowEl) {
++            glowEl.style.filter = `drop-shadow(0 0 8px ${itemColor}60)`;
+         }
+-        updateCooldownDisplay();
+-    }
+ 
+-    function updateCooldownDisplay() {
+-        const el = document.getElementById('sk-med-cd-text');
+-        if (!el) return;
++        // Medical CD badge
+         const med = getMedicalCooldownInfo();
+-        el.textContent = (med && med.isActive) ? `CD ${formatCDTime(med.remainingSec)}` : 'No Med CD';
++        if (cdEl) {
++            const cdTime = med?.isActive ? formatCDTime(med.remaining) : null;
++            cdEl.style.display = cdTime ? 'flex' : 'none';
++            cdEl.textContent = cdTime || '';
++        }
+     }
+ 
+     // ΓöÇΓöÇΓöÇ Position / dragging ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+-    const POS_KEY    = 'sk-med-pos';
+-    const savePos    = (x, y) => { try { localStorage.setItem(POS_KEY, JSON.stringify({ xPct: x/window.innerWidth, yPct: y/window.innerHeight })); } catch {} };
+-    const loadPos    = () => { try { const p = JSON.parse(localStorage.getItem(POS_KEY)); return p ? { x: Math.round(p.xPct*window.innerWidth), y: Math.round(p.yPct*window.innerHeight) } : null; } catch { return null; } };
+-    const clamp      = (x, y, w, h) => ({ x: Math.min(Math.max(4,x), window.innerWidth-w-4), y: Math.min(Math.max(4,y), window.innerHeight-h-4) });
+-
+-    function restorePosition() {
+-        const el = document.getElementById('sk-med-container');
+-        if (!el) return;
+-        const pos = loadPos();
+-        if (pos) {
+-            const r = el.getBoundingClientRect();
+-            const c = clamp(pos.x, pos.y, r.width, r.height);
+-            el.style.left = c.x + 'px'; el.style.top = c.y + 'px';
+-        }
+-    }
++    const POS_KEY = 'sk-med-pos';
++    const savePos = (x, y) => {
++        try { localStorage.setItem(POS_KEY, JSON.stringify({ xPct: x/window.innerWidth, yPct: y/window.innerHeight })); } catch {}
++    };
++    const loadPos = () => {
++        try {
++            const p = JSON.parse(localStorage.getItem(POS_KEY));
++            return p ? { x: Math.round(p.xPct*window.innerWidth), y: Math.round(p.yPct*window.innerHeight) } : null;
++        } catch { return null; }
++    };
++    const clamp = (x, y, w, h) => ({
++        x: Math.min(Math.max(8, x), window.innerWidth  - w - 8),
++        y: Math.min(Math.max(8, y), window.innerHeight - h - 8)
++    });
+ 
+     function enableDragging(el, handle) {
+         let drag=false, startX, startY, initX, initY;
+@@ -207,10 +204,10 @@
+             if (!drag) return;
+             const ev = e.touches ? e.touches[0] : e;
+             const dx=ev.clientX-startX, dy=ev.clientY-startY;
+-            if (Math.abs(dx)>6 || Math.abs(dy)>6) isDragging=true;
++            if (Math.abs(dx)>5 || Math.abs(dy)>5) isDragging=true;
+             const r=el.getBoundingClientRect();
+             const c=clamp(initX+dx, initY+dy, r.width, r.height);
+-            el.style.left=c.x+'px'; el.style.top=c.y+'px';
++            el.style.left=c.x+'px'; el.style.top=c.y+'px'; el.style.right='auto';
+         };
+         const end = () => {
+             if (!drag) return; drag=false;
+@@ -229,7 +226,6 @@
+     }
+ 
+     // ΓöÇΓöÇΓöÇ Hospital polling ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+     async function fetchHospitalTime() {
+         try {
+             const res  = await fetch('/page.php?sid=UserApiData', { credentials:'include', headers:{'X-Requested-With':'XMLHttpRequest'} });
+@@ -246,13 +242,15 @@
+             if (!isEnabled) return;
+             const hosp = inHospital();
+             const t = hosp ? await fetchHospitalTime() : 0;
+-            if (t !== cachedTimer) { cachedTimer = t; updateButtonDisplay(); }
+-            updateCooldownDisplay();
+-        }, 1000);
++            if (t !== cachedTimer) { cachedTimer = t; updateDisplay(); }
++        }, 2000);
++
++        // CD updates every second
++        if (cdInterval) clearInterval(cdInterval);
++        cdInterval = setInterval(() => updateDisplay(), 1000);
+     }
+ 
+     // ΓöÇΓöÇΓöÇ Item use ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+     async function useItem(item) {
+         if (!item?.id) return false;
+         try {
+@@ -266,141 +264,233 @@
+         } catch { return false; }
+     }
+ 
++    function isOnPersonalPage(){ return window.location.href.toLowerCase().includes('item.php'); }
++    function isOnFactionPage() {
++        const u = window.location.href.toLowerCase();
++        return u.includes('factions.php') && u.includes('tab=armoury');
++    }
+     function isOnCorrectPage() {
+         return (settings.itemSource === 'Personal Items' && isOnPersonalPage()) ||
+                (settings.itemSource === 'Faction Armory' && isOnFactionPage());
+     }
+ 
+     async function onButtonClick() {
+-        if (isDragging || cachedTimer <= 0) return;
++        if (isDragging || cachedTimer <= 0 || !inHospital()) return;
+         const item = selectBestItem(cachedTimer);
+         if (!item) return;
++
++        const el = document.getElementById('sk-med-floater');
++        if (el) {
++            el.style.transform = 'scale(0.9)';
++            setTimeout(() => { el.style.transform = ''; }, 150);
++        }
++
+         if (isOnCorrectPage()) {
+             const ok = await useItem(item);
+-            if (ok) setTimeout(updateButtonDisplay, 800);
++            if (ok) {
++                cachedTimer = Math.max(0, cachedTimer - (item.removes || 1200));
++                updateDisplay();
++                setTimeout(async () => {
++                    cachedTimer = await fetchHospitalTime();
++                    updateDisplay();
++                }, 1500);
++            }
+         } else {
+             window.location.href = settings.itemSource === 'Faction Armory' ? FACTION_URL : PERSONAL_URL;
+         }
+     }
+ 
+-    // ΓöÇΓöÇΓöÇ UI injection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+-    function injectUI() {
+-        if (document.getElementById('sk-med-container')) return;
+-
+-        const container = document.createElement('div');
+-        container.id = 'sk-med-container';
+-        container.innerHTML = `
+-            <div id="sk-med-btn-wrap">
+-                <div id="sk-med-btn" title="Click to use best med item ┬╖ Drag to move">
+-                    <div id="sk-med-icon">Γ£Ü</div>
+-                    <div id="sk-med-timer"></div>
+-                </div>
+-                <div id="sk-med-cd-box">
+-                    <div id="sk-med-cd-text">No Med CD</div>
+-                </div>
+-            </div>
+-        `;
+-
+-        document.body.appendChild(container);
+-
+-        // Position
+-        const pos = loadPos();
+-        if (pos) {
+-            const r = container.getBoundingClientRect();
+-            const c = clamp(pos.x, pos.y, r.width, r.height);
+-            container.style.left = c.x+'px'; container.style.top = c.y+'px';
+-        } else {
+-            // Default: next to random target floater (top-right area)
+-            container.style.right = '80px'; container.style.top = '120px';
+-        }
+-
+-        const btn = container.querySelector('#sk-med-btn');
+-        btn.addEventListener('click', onButtonClick);
+-        btn.addEventListener('touchend', e => { if (!isDragging) { e.preventDefault(); onButtonClick(); } }, { passive: false });
+-
+-        enableDragging(container, btn);
+-        window.addEventListener('resize', restorePosition);
+-    }
+-
+-    function removeUI() {
+-        const el = document.getElementById('sk-med-container');
+-        if (el) el.remove();
+-        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+-        if (perkFetchInterval) { clearInterval(perkFetchInterval); perkFetchInterval = null; }
+-    }
+-
+     // ΓöÇΓöÇΓöÇ Styles ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+-
+     function injectStyles() {
+         if (document.getElementById('sk-med-styles')) return;
+         const style = document.createElement('style');
+         style.id = 'sk-med-styles';
+         style.textContent = `
+-            #sk-med-container {
+-                position: fixed; z-index: 999998;
+-                display: flex; flex-direction: column; align-items: center;
++            #sk-med-floater {
++                position: fixed;
++                z-index: 999998;
++                width: 72px;
+                 user-select: none;
++                transition: transform .12s ease;
++                right: 16px;
++                top: 130px;
++            }
++            #sk-med-body {
++                position: relative;
++                width: 72px;
++                height: 72px;
++                cursor: pointer;
++            }
++            #sk-med-svg {
++                position: absolute;
++                top: 0; left: 0;
++                width: 72px; height: 72px;
++            }
++            #sk-med-bg-circle {
++                fill: #141920;
++                stroke: rgba(255,255,255,0.06);
++                stroke-width: 1.5;
+             }
+-            #sk-med-btn-wrap { position: relative; width: 52px; height: 62px; }
+-            #sk-med-btn {
+-                position: absolute; top: 0;
+-                width: 52px; height: 52px; border-radius: 50%;
+-                background: #555; border: 2.5px solid rgba(255,255,255,0.25);
+-                display: flex; justify-content: center; align-items: center;
+-                overflow: hidden; cursor: pointer; transition: all .15s;
++            #sk-med-ring {
++                fill: none;
++                stroke: #5fcc6a;
++                stroke-width: 3;
++                stroke-linecap: round;
++                transition: stroke .3s ease;
++                transform-origin: 36px 36px;
++                transform: rotate(-90deg);
+             }
+-            #sk-med-btn:hover { transform: scale(1.1); filter: brightness(1.15); }
+-            #sk-med-icon {
+-                font-size: 28px; position: absolute;
+-                top: calc(50% - 5px); left: 50%;
+-                transform: translate(-50%, -50%);
+-                pointer-events: none; color: #fff; text-shadow: 0 0 4px rgba(0,0,0,0.6);
++            #sk-med-cross {
++                fill: rgba(255,255,255,0.9);
++            }
++            #sk-med-inner {
++                position: absolute;
++                top: 0; left: 0; right: 0; bottom: 0;
++                display: flex;
++                flex-direction: column;
++                align-items: center;
++                justify-content: center;
++                pointer-events: none;
+             }
+             #sk-med-timer {
+-                position: absolute; bottom: 8px; left: 50%;
++                font-size: 12px;
++                font-weight: 700;
++                color: #fff;
++                font-family: 'Inter', 'Roboto', sans-serif;
++                text-shadow: 0 1px 4px rgba(0,0,0,0.8);
++                letter-spacing: -0.5px;
++                line-height: 1;
++                margin-top: 2px;
++            }
++            #sk-med-label {
++                font-size: 8px;
++                color: rgba(255,255,255,0.45);
++                font-family: 'Inter', 'Roboto', sans-serif;
++                text-align: center;
++                padding: 0 4px;
++                line-height: 1.2;
++                margin-top: 1px;
++                max-width: 60px;
++                overflow: hidden;
++                text-overflow: ellipsis;
++                white-space: nowrap;
++            }
++            #sk-med-cd {
++                position: absolute;
++                bottom: -18px;
++                left: 50%;
+                 transform: translateX(-50%);
+-                font-size: 10px; color: #fff; font-weight: bold;
+-                text-shadow: 0 0 3px black; pointer-events: none; white-space: nowrap;
++                background: rgba(139, 0, 0, 0.85);
++                border: 1px solid rgba(255,80,80,0.3);
++                border-radius: 8px;
++                padding: 2px 6px;
++                font-size: 9px;
++                font-weight: 600;
++                color: #ffaaaa;
++                font-family: 'Inter', 'Roboto', sans-serif;
++                white-space: nowrap;
++                display: none;
+             }
+-            #sk-med-cd-box {
+-                position: absolute; top: 48px; left: -8px; width: 68px; height: 18px;
+-                background: #8b0000; border: 1.5px solid rgba(255,255,255,0.25);
+-                border-radius: 5px; display: flex; align-items: center; box-sizing: border-box;
++            #sk-med-floater:hover #sk-med-body {
++                transform: scale(1.06);
+             }
+-            #sk-med-cd-text {
+-                font-size: 9.5px; color: #fff; text-align: center;
+-                flex-grow: 1; pointer-events: none;
++            #sk-med-body {
++                transition: transform .15s ease;
++            }
++            #sk-med-glow {
++                transition: filter .3s ease;
+             }
+         `;
+         document.head.appendChild(style);
+     }
+ 
+-    // ΓöÇΓöÇΓöÇ Public module API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    // ΓöÇΓöÇΓöÇ UI injection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    function injectUI() {
++        if (document.getElementById('sk-med-floater')) return;
++
++        const floater = document.createElement('div');
++        floater.id = 'sk-med-floater';
++
++        // SVG ring with cross icon
++        floater.innerHTML = `
++            <div id="sk-med-body" title="Click to use best medical item ┬╖ Drag to move">
++                <svg id="sk-med-svg" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg">
++                    <g id="sk-med-glow">
++                        <circle id="sk-med-bg-circle" cx="36" cy="36" r="33"/>
++                        <!-- Dashed ring track -->
++                        <circle cx="36" cy="36" r="30"
++                            fill="none"
++                            stroke="rgba(255,255,255,0.05)"
++                            stroke-width="3"
++                            stroke-dasharray="3 4"/>
++                        <!-- Active ring -->
++                        <circle id="sk-med-ring"
++                            cx="36" cy="36" r="30"
++                            stroke-dasharray="188.5"
++                            stroke-dashoffset="0"/>
++                        <!-- Medical cross icon -->
++                        <g id="sk-med-cross">
++                            <!-- Horizontal bar -->
++                            <rect x="24" y="31" width="24" height="10" rx="2.5" fill="rgba(255,255,255,0.88)"/>
++                            <!-- Vertical bar -->
++                            <rect x="31" y="24" width="10" height="24" rx="2.5" fill="rgba(255,255,255,0.88)"/>
++                        </g>
++                    </g>
++                </svg>
++                <div id="sk-med-inner">
++                    <div id="sk-med-timer">ΓÇö</div>
++                    <div id="sk-med-label">Ready</div>
++                </div>
++            </div>
++            <div id="sk-med-cd"></div>
++        `;
++
++        document.body.appendChild(floater);
++
++        // Position
++        const pos = loadPos();
++        if (pos) {
++            const c = clamp(pos.x, pos.y, 72, 72);
++            floater.style.left = c.x + 'px';
++            floater.style.top  = c.y + 'px';
++            floater.style.right = 'auto';
++        }
++
++        const body = floater.querySelector('#sk-med-body');
++        body.addEventListener('click', onButtonClick);
++        body.addEventListener('touchend', e => { if (!isDragging) { e.preventDefault(); onButtonClick(); } }, { passive: false });
++
++        enableDragging(floater, body);
++        window.addEventListener('resize', () => {
++            const r = floater.getBoundingClientRect();
++            const c = clamp(r.left, r.top, r.width, r.height);
++            floater.style.left = c.x + 'px'; floater.style.top = c.y + 'px';
++        });
++    }
++
++    function removeUI() {
++        document.getElementById('sk-med-floater')?.remove();
++        document.getElementById('sk-med-styles')?.remove();
++        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
++        if (cdInterval)   { clearInterval(cdInterval);   cdInterval   = null; }
++        if (perkFetchInterval) { clearInterval(perkFetchInterval); perkFetchInterval = null; }
++    }
+ 
++    // ΓöÇΓöÇΓöÇ Module API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+     const SmartMedicalButton = {
+         name: 'SmartMedicalButton',
+ 
+         async initialize() {
+             if (!window.SidekickModules?.Core?.ChromeStorage) return;
+-
+             await loadSettings();
+-
+             if (!isEnabled) return;
+-
+             injectStyles();
+             injectUI();
+-
+             cachedTimer = inHospital() ? await fetchHospitalTime() : 0;
+-            updateButtonDisplay();
+-
++            updateDisplay();
+             startPolling();
+-            setInterval(updateCooldownDisplay, 1000);
+-
+-            // Fetch perks after 2s, then every 15 min
+-            setTimeout(() => fetchPerksAndUpdateThresholds(), 2000);
+-            perkFetchInterval = setInterval(() => fetchPerksAndUpdateThresholds(), 15 * 60 * 1000);
+-
++            setTimeout(() => fetchPerks(), 2000);
++            perkFetchInterval = setInterval(() => fetchPerks(), 15 * 60 * 1000);
+             console.log('[Sidekick] Smart Medical Button initialized');
+         },
+ 
+@@ -410,11 +500,11 @@
+             injectStyles();
+             injectUI();
+             cachedTimer = inHospital() ? await fetchHospitalTime() : 0;
+-            updateButtonDisplay();
++            updateDisplay();
+             startPolling();
+             if (!perkFetchInterval) {
+-                setTimeout(() => fetchPerksAndUpdateThresholds(), 500);
+-                perkFetchInterval = setInterval(() => fetchPerksAndUpdateThresholds(), 15*60*1000);
++                setTimeout(() => fetchPerks(), 500);
++                perkFetchInterval = setInterval(() => fetchPerks(), 15*60*1000);
+             }
+         },
+ 
+@@ -424,11 +514,10 @@
+             removeUI();
+         },
+ 
+-        // Called from settings panel to update item source / blood type
+         async updateSetting(key, value) {
+             settings[key] = value;
+             await saveSettings({ [key]: value });
+-            updateButtonDisplay();
++            updateDisplay();
+         },
+ 
+         destroy() { removeUI(); }
+@@ -437,7 +526,6 @@
+     if (!window.SidekickModules) window.SidekickModules = {};
+     window.SidekickModules.SmartMedicalButton = SmartMedicalButton;
+ 
+-    // Auto-init after core is ready
+     const tryInit = () => {
+         if (window.SidekickModules?.Core?.ChromeStorage) {
+             SmartMedicalButton.initialize();
+
+commit a7e3d7a0b80f7d08359da67da7d626ab36c60f00
+Author: Machiacelli <machiacelli@users.noreply.github.com>
+Date:   Wed Jun 10 21:44:02 2026 +0200
+
+    Add Smart Medical Button module, Medical settings tab, WXP throttle fallback+cache, xanax cache fallback, remove Epinephrine, fix book notifier URL, settings save wiring, k/m threshold, scroll lock
+
+diff --git a/src/modules/smart-medical-button.module.js b/src/modules/smart-medical-button.module.js
+new file mode 100644
+index 0000000..9adc040
+--- /dev/null
++++ b/src/modules/smart-medical-button.module.js
+@@ -0,0 +1,450 @@
++/**
++ * Sidekick Smart Medical Button
++ * Adapted from BBSmalls [3908857] Torn Smart FAK Button v4.43
++ * Original: https://greasyfork.org/scripts/568502
++ * Sidekick port: uses ChromeStorage, universal API key, morphine always included
++ */
++
++(function () {
++    'use strict';
++
++    const STORAGE_KEY = 'sidekick_smart_medical';
++
++    const PERSONAL_URL = 'https://www.torn.com/item.php';
++    const FACTION_URL  = 'https://www.torn.com/factions.php?step=your&type=1#/tab=armoury';
++
++    // Item definitions ΓÇö morphine always included, blood bag conditional on type setting
++    let ITEMS = {
++        'Small First Aid Kit': { id: 68, removes: 1200, cd: 600,  baseRemoves: 1200 },
++        'First Aid Kit':       { id: 67, removes: 2400, cd: 900,  baseRemoves: 2400 },
++        'Morphine':            { id: 66, removes: 4200, cd: 1200, baseRemoves: 4200 },
++        'Blood Bag':           { id: null, removes: 7200, cd: 1800, baseRemoves: 7200 }
++    };
++
++    const BLOOD_TYPES   = ['Disabled', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
++    const BLOOD_BAG_IDS = { 'A+':732,'A-':733,'B+':734,'B-':735,'AB+':736,'AB-':737,'O+':738,'O-':739 };
++
++    let cachedTimer       = 0;
++    let isDragging        = false;
++    let totalMedicalBonus = 0;
++    let isEnabled         = false;
++    let settings          = { itemSource: 'Personal Items', bloodType: 'Disabled' };
++    let perkFetchInterval = null;
++    let pollInterval      = null;
++
++    // ΓöÇΓöÇΓöÇ Storage helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    const CS = () => window.SidekickModules?.Core?.ChromeStorage;
++
++    async function loadSettings() {
++        if (!CS()) return;
++        const saved = await CS().get(STORAGE_KEY) || {};
++        isEnabled = saved.isEnabled === true;
++        settings.itemSource = saved.itemSource || 'Personal Items';
++        settings.bloodType  = saved.bloodType  || 'Disabled';
++    }
++
++    async function saveSettings(patch) {
++        if (!CS()) return;
++        const current = await CS().get(STORAGE_KEY) || {};
++        await CS().set(STORAGE_KEY, { ...current, ...patch });
++    }
++
++    // ΓöÇΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    const getApiKey     = async () => CS() ? (await CS().get('sidekick_api_key') || '') : '';
++    const bloodEnabled  = () => settings.bloodType !== 'Disabled';
++
++    const formatTime = sec => {
++        if (sec <= 0) return '';
++        const m = Math.floor(sec / 60), s = sec % 60;
++        return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
++    };
++
++    const formatCDTime = sec => {
++        if (sec <= 0) return '0:00:00';
++        const h = Math.floor(sec / 3600);
++        const m = Math.floor((sec % 3600) / 60);
++        const s = sec % 60;
++        return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
++    };
++
++    function inHospital()      { return !!document.querySelector('a[aria-label^="Hospital:"]'); }
++    function isOnPersonalPage(){ return window.location.href.toLowerCase().includes('item.php'); }
++    function isOnFactionPage() {
++        const u = window.location.href.toLowerCase();
++        return u.includes('factions.php') && u.includes('tab=armoury');
++    }
++
++    // ΓöÇΓöÇΓöÇ Medical cooldown from sessionStorage ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    function getSidebarData() {
++        try {
++            const key = Object.keys(sessionStorage).find(k => /sidebarData\d+/.test(k));
++            return key ? JSON.parse(sessionStorage.getItem(key)) : null;
++        } catch { return null; }
++    }
++
++    function getMedicalCooldownInfo() {
++        const data = getSidebarData();
++        if (!data) return null;
++        const med = data?.statusIcons?.icons?.medical_cooldown;
++        if (!med) return null;
++        const nowSec       = Date.now() / 1000;
++        const remainingSec = Math.max(0, Math.round(med.timerExpiresAt - nowSec));
++        return { remainingSec, isActive: remainingSec > 0 };
++    }
++
++    // ΓöÇΓöÇΓöÇ API: Medical effectiveness perk ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    async function fetchPerksAndUpdateThresholds() {
++        const key = await getApiKey();
++        if (!key || key.length !== 16) return;
++        try {
++            const res  = await fetch(`https://api.torn.com/user/?selections=education,perks&key=${encodeURIComponent(key)}`);
++            if (!res.ok) return;
++            const data = await res.json();
++            if (data.error) return;
++
++            let bonus = 0;
++            [...(data.education_perks || []), ...(data.faction_perks || [])].forEach(p => {
++                if (typeof p === 'string' && p.includes('medical item effectiveness')) {
++                    const m = p.match(/(\d+)%/);
++                    if (m) bonus += parseInt(m[1], 10);
++                }
++            });
++
++            totalMedicalBonus = Math.min(bonus, 50);
++            const mult = 1 + totalMedicalBonus / 100;
++            Object.keys(ITEMS).forEach(n => { ITEMS[n].removes = Math.round(ITEMS[n].baseRemoves * mult); });
++            updateButtonDisplay();
++        } catch {}
++    }
++
++    // ΓöÇΓöÇΓöÇ Item selection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    function selectBestItem(timer) {
++        if (timer <= 0) return null;
++        const available = [
++            { name: 'Small First Aid Kit', ...ITEMS['Small First Aid Kit'] },
++            { name: 'First Aid Kit',       ...ITEMS['First Aid Kit'] },
++            { name: 'Morphine',            ...ITEMS['Morphine'] },  // always included
++        ];
++        if (bloodEnabled()) available.push({
++            name: `Blood Bag: ${settings.bloodType}`,
++            id:   BLOOD_BAG_IDS[settings.bloodType],
++            removes: ITEMS['Blood Bag'].removes,
++            cd:      ITEMS['Blood Bag'].cd
++        });
++        available.sort((a, b) => a.removes - b.removes);
++        for (const item of available) if (item.removes >= timer) return item;
++        return available.reduce((best, item) =>
++            (item.removes / item.cd) > (best.removes / best.cd) ? item : best
++        );
++    }
++
++    function getButtonColor(timer) {
++        if (timer <= 0) return '#555';
++        const item = selectBestItem(timer);
++        if (!item) return '#555';
++        if (item.name.startsWith('Blood Bag')) return '#9333ea';
++        if (item.name === 'Morphine')          return '#e87722';
++        if (item.name === 'First Aid Kit')     return '#1a6fc4';
++        return '#c82333';
++    }
++
++    // ΓöÇΓöÇΓöÇ Display ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    function updateButtonDisplay() {
++        const container = document.getElementById('sk-med-container');
++        if (!container) return;
++        const timerEl = container.querySelector('#sk-med-timer');
++        const btnEl   = container.querySelector('#sk-med-btn');
++        if (cachedTimer <= 0) {
++            timerEl.textContent    = 'No Hosp';
++            btnEl.style.background = '#555';
++        } else {
++            timerEl.textContent    = formatTime(cachedTimer);
++            btnEl.style.background = getButtonColor(cachedTimer);
++        }
++        updateCooldownDisplay();
++    }
++
++    function updateCooldownDisplay() {
++        const el = document.getElementById('sk-med-cd-text');
++        if (!el) return;
++        const med = getMedicalCooldownInfo();
++        el.textContent = (med && med.isActive) ? `CD ${formatCDTime(med.remainingSec)}` : 'No Med CD';
++    }
++
++    // ΓöÇΓöÇΓöÇ Position / dragging ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    const POS_KEY    = 'sk-med-pos';
++    const savePos    = (x, y) => { try { localStorage.setItem(POS_KEY, JSON.stringify({ xPct: x/window.innerWidth, yPct: y/window.innerHeight })); } catch {} };
++    const loadPos    = () => { try { const p = JSON.parse(localStorage.getItem(POS_KEY)); return p ? { x: Math.round(p.xPct*window.innerWidth), y: Math.round(p.yPct*window.innerHeight) } : null; } catch { return null; } };
++    const clamp      = (x, y, w, h) => ({ x: Math.min(Math.max(4,x), window.innerWidth-w-4), y: Math.min(Math.max(4,y), window.innerHeight-h-4) });
++
++    function restorePosition() {
++        const el = document.getElementById('sk-med-container');
++        if (!el) return;
++        const pos = loadPos();
++        if (pos) {
++            const r = el.getBoundingClientRect();
++            const c = clamp(pos.x, pos.y, r.width, r.height);
++            el.style.left = c.x + 'px'; el.style.top = c.y + 'px';
++        }
++    }
++
++    function enableDragging(el, handle) {
++        let drag=false, startX, startY, initX, initY;
++        const start = e => {
++            drag=true; isDragging=false;
++            const ev = e.touches ? e.touches[0] : e;
++            startX=ev.clientX; startY=ev.clientY; initX=el.offsetLeft; initY=el.offsetTop;
++            e.preventDefault();
++        };
++        const move = e => {
++            if (!drag) return;
++            const ev = e.touches ? e.touches[0] : e;
++            const dx=ev.clientX-startX, dy=ev.clientY-startY;
++            if (Math.abs(dx)>6 || Math.abs(dy)>6) isDragging=true;
++            const r=el.getBoundingClientRect();
++            const c=clamp(initX+dx, initY+dy, r.width, r.height);
++            el.style.left=c.x+'px'; el.style.top=c.y+'px';
++        };
++        const end = () => {
++            if (!drag) return; drag=false;
++            const r=el.getBoundingClientRect();
++            const c=clamp(r.left, r.top, r.width, r.height);
++            el.style.left=c.x+'px'; el.style.top=c.y+'px';
++            savePos(c.x, c.y);
++            setTimeout(() => isDragging=false, 50);
++        };
++        handle.addEventListener('mousedown', start);
++        document.addEventListener('mousemove', move);
++        document.addEventListener('mouseup', end);
++        handle.addEventListener('touchstart', start, { passive: false });
++        document.addEventListener('touchmove', move, { passive: false });
++        document.addEventListener('touchend', end);
++    }
++
++    // ΓöÇΓöÇΓöÇ Hospital polling ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    async function fetchHospitalTime() {
++        try {
++            const res  = await fetch('/page.php?sid=UserApiData', { credentials:'include', headers:{'X-Requested-With':'XMLHttpRequest'} });
++            const data = await res.json();
++            const until = Number(data?.hospitalstamp) || 0;
++            const now   = Math.floor(Date.now()/1000);
++            return until > now ? Math.max(0, until-now) : 0;
++        } catch { return inHospital() ? cachedTimer||60 : 0; }
++    }
++
++    function startPolling() {
++        if (pollInterval) clearInterval(pollInterval);
++        pollInterval = setInterval(async () => {
++            if (!isEnabled) return;
++            const hosp = inHospital();
++            const t = hosp ? await fetchHospitalTime() : 0;
++            if (t !== cachedTimer) { cachedTimer = t; updateButtonDisplay(); }
++            updateCooldownDisplay();
++        }, 1000);
++    }
++
++    // ΓöÇΓöÇΓöÇ Item use ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    async function useItem(item) {
++        if (!item?.id) return false;
++        try {
++            const body = new URLSearchParams({ step:'useItem', itemID: item.id.toString() });
++            if (settings.itemSource === 'Faction Armory') body.set('fac', '1');
++            const res = await fetch('https://www.torn.com/item.php', {
++                method:'POST', body, credentials:'include',
++                headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'}
++            });
++            return res.ok;
++        } catch { return false; }
++    }
++
++    function isOnCorrectPage() {
++        return (settings.itemSource === 'Personal Items' && isOnPersonalPage()) ||
++               (settings.itemSource === 'Faction Armory' && isOnFactionPage());
++    }
++
++    async function onButtonClick() {
++        if (isDragging || cachedTimer <= 0) return;
++        const item = selectBestItem(cachedTimer);
++        if (!item) return;
++        if (isOnCorrectPage()) {
++            const ok = await useItem(item);
++            if (ok) setTimeout(updateButtonDisplay, 800);
++        } else {
++            window.location.href = settings.itemSource === 'Faction Armory' ? FACTION_URL : PERSONAL_URL;
++        }
++    }
++
++    // ΓöÇΓöÇΓöÇ UI injection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    function injectUI() {
++        if (document.getElementById('sk-med-container')) return;
++
++        const container = document.createElement('div');
++        container.id = 'sk-med-container';
++        container.innerHTML = `
++            <div id="sk-med-btn-wrap">
++                <div id="sk-med-btn" title="Click to use best med item ┬╖ Drag to move">
++                    <div id="sk-med-icon">Γ£Ü</div>
++                    <div id="sk-med-timer"></div>
++                </div>
++                <div id="sk-med-cd-box">
++                    <div id="sk-med-cd-text">No Med CD</div>
++                </div>
++            </div>
++        `;
++
++        document.body.appendChild(container);
++
++        // Position
++        const pos = loadPos();
++        if (pos) {
++            const r = container.getBoundingClientRect();
++            const c = clamp(pos.x, pos.y, r.width, r.height);
++            container.style.left = c.x+'px'; container.style.top = c.y+'px';
++        } else {
++            // Default: next to random target floater (top-right area)
++            container.style.right = '80px'; container.style.top = '120px';
++        }
++
++        const btn = container.querySelector('#sk-med-btn');
++        btn.addEventListener('click', onButtonClick);
++        btn.addEventListener('touchend', e => { if (!isDragging) { e.preventDefault(); onButtonClick(); } }, { passive: false });
++
++        enableDragging(container, btn);
++        window.addEventListener('resize', restorePosition);
++    }
++
++    function removeUI() {
++        const el = document.getElementById('sk-med-container');
++        if (el) el.remove();
++        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
++        if (perkFetchInterval) { clearInterval(perkFetchInterval); perkFetchInterval = null; }
++    }
++
++    // ΓöÇΓöÇΓöÇ Styles ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    function injectStyles() {
++        if (document.getElementById('sk-med-styles')) return;
++        const style = document.createElement('style');
++        style.id = 'sk-med-styles';
++        style.textContent = `
++            #sk-med-container {
++                position: fixed; z-index: 999998;
++                display: flex; flex-direction: column; align-items: center;
++                user-select: none;
++            }
++            #sk-med-btn-wrap { position: relative; width: 52px; height: 62px; }
++            #sk-med-btn {
++                position: absolute; top: 0;
++                width: 52px; height: 52px; border-radius: 50%;
++                background: #555; border: 2.5px solid rgba(255,255,255,0.25);
++                display: flex; justify-content: center; align-items: center;
++                overflow: hidden; cursor: pointer; transition: all .15s;
++            }
++            #sk-med-btn:hover { transform: scale(1.1); filter: brightness(1.15); }
++            #sk-med-icon {
++                font-size: 28px; position: absolute;
++                top: calc(50% - 5px); left: 50%;
++                transform: translate(-50%, -50%);
++                pointer-events: none; color: #fff; text-shadow: 0 0 4px rgba(0,0,0,0.6);
++            }
++            #sk-med-timer {
++                position: absolute; bottom: 8px; left: 50%;
++                transform: translateX(-50%);
++                font-size: 10px; color: #fff; font-weight: bold;
++                text-shadow: 0 0 3px black; pointer-events: none; white-space: nowrap;
++            }
++            #sk-med-cd-box {
++                position: absolute; top: 48px; left: -8px; width: 68px; height: 18px;
++                background: #8b0000; border: 1.5px solid rgba(255,255,255,0.25);
++                border-radius: 5px; display: flex; align-items: center; box-sizing: border-box;
++            }
++            #sk-med-cd-text {
++                font-size: 9.5px; color: #fff; text-align: center;
++                flex-grow: 1; pointer-events: none;
++            }
++        `;
++        document.head.appendChild(style);
++    }
++
++    // ΓöÇΓöÇΓöÇ Public module API ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++
++    const SmartMedicalButton = {
++        name: 'SmartMedicalButton',
++
++        async initialize() {
++            if (!window.SidekickModules?.Core?.ChromeStorage) return;
++
++            await loadSettings();
++
++            if (!isEnabled) return;
++
++            injectStyles();
++            injectUI();
++
++            cachedTimer = inHospital() ? await fetchHospitalTime() : 0;
++            updateButtonDisplay();
++
++            startPolling();
++            setInterval(updateCooldownDisplay, 1000);
++
++            // Fetch perks after 2s, then every 15 min
++            setTimeout(() => fetchPerksAndUpdateThresholds(), 2000);
++            perkFetchInterval = setInterval(() => fetchPerksAndUpdateThresholds(), 15 * 60 * 1000);
++
++            console.log('[Sidekick] Smart Medical Button initialized');
++        },
++
++        async enable() {
++            isEnabled = true;
++            await saveSettings({ isEnabled: true });
++            injectStyles();
++            injectUI();
++            cachedTimer = inHospital() ? await fetchHospitalTime() : 0;
++            updateButtonDisplay();
++            startPolling();
++            if (!perkFetchInterval) {
++                setTimeout(() => fetchPerksAndUpdateThresholds(), 500);
++                perkFetchInterval = setInterval(() => fetchPerksAndUpdateThresholds(), 15*60*1000);
++            }
++        },
++
++        async disable() {
++            isEnabled = false;
++            await saveSettings({ isEnabled: false });
++            removeUI();
++        },
++
++        // Called from settings panel to update item source / blood type
++        async updateSetting(key, value) {
++            settings[key] = value;
++            await saveSettings({ [key]: value });
++            updateButtonDisplay();
++        },
++
++        destroy() { removeUI(); }
++    };
++
++    if (!window.SidekickModules) window.SidekickModules = {};
++    window.SidekickModules.SmartMedicalButton = SmartMedicalButton;
++
++    // Auto-init after core is ready
++    const tryInit = () => {
++        if (window.SidekickModules?.Core?.ChromeStorage) {
++            SmartMedicalButton.initialize();
++        } else {
++            setTimeout(tryInit, 200);
++        }
++    };
++    tryInit();
++
++})();

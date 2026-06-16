@@ -112,6 +112,15 @@
                 console.warn("⚠️ Attack Button Mover module not available");
             }
 
+            // Initialize Attack Options Module
+            console.log("⚔️ Sidekick: Initializing Attack Options...");
+            if (window.SidekickModules.AttackOptions?.init) {
+                await window.SidekickModules.AttackOptions.init();
+                console.log("✅ Sidekick: Attack Options initialized");
+            } else {
+                console.warn("⚠️ Attack Options module not available");
+            }
+
             // Initialize Xanax Viewer Module
             console.log("💊 Sidekick: Initializing Xanax Viewer...");
             if (window.SidekickModules.XanaxViewer?.init) {
@@ -297,14 +306,7 @@
                 console.warn("⚠️ Legible Names module not available");
             }
 
-            // Initialize TravelArc Module
-            console.log("🌍 Sidekick: Initializing TravelArc...");
-            if (window.SidekickModules.TravelArc?.init) {
-                await window.SidekickModules.TravelArc.init();
-                console.log("✅ Sidekick: TravelArc initialized");
-            } else {
-                console.warn("⚠️ TravelArc module not available");
-            }
+
 
             // Initialize Stats Tracker Module
             console.log("📊 Sidekick: Initializing Stats Tracker...");
@@ -355,6 +357,15 @@
                 console.log("✅ Sidekick: War Monitor initialized");
             } else {
                 console.warn("⚠️ War Monitor module not available");
+            }
+
+            // Initialize War Target Caller Module
+            console.log("🎯 Sidekick: Initializing War Target Caller...");
+            if (window.SidekickModules.WarTargetCaller?.init) {
+                await window.SidekickModules.WarTargetCaller.init();
+                console.log("✅ Sidekick: War Target Caller initialized");
+            } else {
+                console.warn("⚠️ War Target Caller module not available");
             }
 
             // Initialize Chat Alert Module
@@ -458,6 +469,15 @@
                 console.log('✅ Sidekick: Hide Crime Outcome initialized');
             } else {
                 console.warn('⚠️ Hide Crime Outcome module not available');
+            }
+
+            // Initialize Pickpocketing Module
+            console.log('🛑 Sidekick: Initializing Pickpocketing...');
+            if (window.SidekickModules.Pickpocketing?.init) {
+                await window.SidekickModules.Pickpocketing.init();
+                console.log('✅ Sidekick: Pickpocketing initialized');
+            } else {
+                console.warn('⚠️ Pickpocketing module not available');
             }
 
             // Initialize Burglary Module
@@ -786,6 +806,10 @@
                 case 'randomTarget':
                     module = window.SidekickModules?.RandomTarget;
                     displayName = 'Random Target';
+                    break;
+                case 'pickpocketing':
+                    module = window.SidekickModules?.Pickpocketing;
+                    displayName = 'Pickpocketing';
                     break;
                 case 'chainTimer':
                     module = window.SidekickModules?.ChainTimer;

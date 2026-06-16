@@ -1,167 +1,167 @@
 {
-    "manifest_version":  3,
-    "name":  "Sidekick",
-    "version":  "1.2.19",
-    "description":  "Enhanced sidebar and tools for Torn.com",
-    "permissions":  [
-                        "storage",
-                        "activeTab",
-                        "notifications"
-                    ],
-    "host_permissions":  [
-                             "https://www.torn.com/*",
-                             "https://*.torn.com/*",
-                             "https://api.torn.com/*",
-                             "https://yata.yt/*",
-                             "https://notion-bug-proxy.akaffebtd.workers.dev/*",
-                             "https://torn.synclayer.dev/*",
-                             "https://weav3r.dev/*",
-                             "https://gitlab.com/*",
-                             "https://*.workers.dev/*"
-                         ],
-    "icons":  {
-                  "16":  "assets/icons/swissknife-16.png",
-                  "32":  "assets/icons/swissknife-32.png",
-                  "48":  "assets/icons/swissknife-48.png",
-                  "128":  "assets/icons/swissknife-128.png"
-              },
-    "content_scripts":  [
-                            {
-                                "matches":  [
-                                                "https://www.torn.com/*",
-                                                "https://*.torn.com/*"
-                                            ],
-                                "js":  [
-                                           "src/core/notification-center.js",
-                                           "src/core/notification-preferences.js",
-                                           "src/core/test-notifications.js",
-                                           "src/modules/core.module.js",
-                                           "src/modules/settings.module.js",
-                                           "src/modules/notepad.module.js",
-                                           "src/modules/timer.module.js",
-                                           "src/modules/clock.module.js",
-                                           "src/modules/event-ticker.module.js",
-                                           "src/modules/linkgroup.module.js",
-                                           "src/modules/attacklist.module.js",
-                                           "src/modules/todolist.module.js",
-                                           "src/modules/attack-button-mover.module.js",
-                                           "src/modules/xanax-viewer.module.js",
-                                           "src/modules/blocktraining.module.js",
-                                           "src/modules/timeontab.module.js",
-                                           "src/modules/chaintimer.module.js",
-                                           "src/modules/npc-attack-timer.module.js",
-                                           "src/modules/randomtarget.module.js",
-                                           "src/modules/inventorysorter.module.js",
-                                           "src/modules/mugcalculator.module.js",
-                                           "src/modules/weaponexp.module.js",
-                                           "src/modules/racingalert.module.js",
-                                           "src/modules/refillblocker.module.js",
-                                           "src/modules/extendedchainview.module.js",
-                                           "src/data/travel-times.js",
-                                           "src/modules/flighttracker.module.js",
-                                           "src/modules/debt.module.js",
-                                           "src/modules/stockadvisor.module.js",
-                                           "src/modules/travelarc.module.js",
-                                           "src/modules/statstracker.module.js",
-                                           "src/modules/notionBugReporter.js",
-                                           "src/modules/oc-weights.module.js",
-                                           "src/modules/bunker-bucks.module.js",
-                                           "src/modules/blood-bag-reminder.module.js",
-
-                                           "src/modules/locked-items.module.js",
-                                           "src/modules/quick-deposit.module.js",
-                                           "src/modules/crime-notifier.module.js",
-                                           "src/modules/war-monitor.module.js",
-                                           "src/modules/chat-alert.module.js",
-                                           "src/modules/mug-warning.module.js",
-                                           "src/modules/auto-gym-switch.module.js",
-                                           "src/modules/travel-stocks.module.js",
-                                           "src/modules/price-filler.module.js",
-                                           "src/modules/bazaar-filler.module.js",
-                                           "src/modules/burglary.module.js",
-                                           "src/modules/search-for-cash.module.js",
-                                           "src/modules/cracking.module.js",
-                                           "src/modules/disposal.module.js",
-                                           "src/modules/auction-weapon-bonus.module.js",
-                                           "src/modules/item-market-max-quantity.module.js",
-                                           "src/modules/legible-names.module.js",
-                                           "src/modules/mission-tracker.module.js",
-                                           "src/modules/book-notifier.module.js",
-                                           "src/modules/hide-crime-outcome.module.js",
-                                           "src/modules/holiday.module.js",
-                                           "src/modules/special-gym-ratios.module.js",
-                                           "src/modules/player-id-linker.module.js",
-                                           "src/modules/loadout-switcher.module.js",
-                                           "src/modules/ui.module.js",
-                                           "src/modules/smart-medical-button.module.js",
-                                           "src/main.js"
-                                       ],
-                                "css":  [
-                                            "src/styles/main.css"
-                                        ],
-                                "run_at":  "document_end"
-                            },
-                            {
-                                "matches":  [
-                                                "https://www.torn.com/page.php?sid=crimes*",
-                                                "https://www.torn.com/loader.php?sid=crimes*"
-                                            ],
-                                "js":  [
-                                           "src/modules/scamming.module.js"
-                                       ],
-                                "world":  "MAIN",
-                                "run_at":  "document_start"
-                            },
-                            {
-                                "matches":  [
-                                                "https://www.torn.com/gym.php*"
-                                            ],
-                                "js":  [
-                                           "src/modules/auto-gym-switch-inject.js"
-                                       ],
-                                "world":  "MAIN",
-                                "run_at":  "document_start"
-                            },
-                            {
-                                "matches":  [
-                                                "https://www.torn.com/calendar.php*",
-                                                "https://*.torn.com/calendar.php*"
-                                            ],
-                                "js":  [
-                                           "src/calendarScraper.js"
-                                       ],
-                                "run_at":  "document_idle"
-                            }
-                        ],
-    "background":  {
-                       "service_worker":  "src/background.js"
-                   },
-    "action":  {
-                   "default_popup":  "popup/popup.html",
-                   "default_icon":  {
-                                        "16":  "assets/icons/swissknife-16.png",
-                                        "32":  "assets/icons/swissknife-32.png",
-                                        "48":  "assets/icons/swissknife-48.png",
-                                        "128":  "assets/icons/swissknife-128.png"
-                                    }
-               },
-    "web_accessible_resources":  [
-                                     {
-                                         "resources":  [
-                                                           "assets/icons/*.png",
-                                                           "assets/images/*.png",
-                                                           "assets/images/*.jpg",
-                                                           "assets/images/*.gif",
-                                                           "assets/images/*.svg",
-                                                           "assets/icons/sidekick-logo.png",
-                                                           "assets/sounds/NotificationSound1.mp3",
-                                                           "icons/*.png",
-                                                           "src/core/notification-bridge-page.js",
-                                                           "src/modules/auto-gym-switch-inject.js"
-                                                       ],
-                                         "matches":  [
-                                                         "\u003call_urls\u003e"
-                                                     ]
-                                     }
-                                 ]
+    "manifest_version": 3,
+    "name": "Sidekick",
+    "version": "1.2.20",
+    "description": "Enhanced sidebar and tools for Torn.com",
+    "permissions": [
+        "storage",
+        "activeTab",
+        "notifications"
+    ],
+    "host_permissions": [
+        "https://www.torn.com/*",
+        "https://*.torn.com/*",
+        "https://api.torn.com/*",
+        "https://yata.yt/*",
+        "https://notion-bug-proxy.akaffebtd.workers.dev/*",
+        "https://torn.synclayer.dev/*",
+        "https://weav3r.dev/*",
+        "https://gitlab.com/*",
+        "https://*.workers.dev/*"
+    ],
+    "icons": {
+        "16": "assets/icons/swissknife-16.png",
+        "32": "assets/icons/swissknife-32.png",
+        "48": "assets/icons/swissknife-48.png",
+        "128": "assets/icons/swissknife-128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.torn.com/*",
+                "https://*.torn.com/*"
+            ],
+            "js": [
+                "src/core/notification-center.js",
+                "src/core/notification-preferences.js",
+                "src/core/test-notifications.js",
+                "src/modules/core.module.js",
+                "src/modules/settings.module.js",
+                "src/modules/notepad.module.js",
+                "src/modules/timer.module.js",
+                "src/modules/clock.module.js",
+                "src/modules/event-ticker.module.js",
+                "src/modules/linkgroup.module.js",
+                "src/modules/attacklist.module.js",
+                "src/modules/todolist.module.js",
+                "src/modules/attack-button-mover.module.js",
+                "src/modules/xanax-viewer.module.js",
+                "src/modules/blocktraining.module.js",
+                "src/modules/timeontab.module.js",
+                "src/modules/chaintimer.module.js",
+                "src/modules/npc-attack-timer.module.js",
+                "src/modules/randomtarget.module.js",
+                "src/modules/inventorysorter.module.js",
+                "src/modules/mugcalculator.module.js",
+                "src/modules/weaponexp.module.js",
+                "src/modules/racingalert.module.js",
+                "src/modules/refillblocker.module.js",
+                "src/modules/extendedchainview.module.js",
+                "src/data/travel-times.js",
+                "src/modules/flighttracker.module.js",
+                "src/modules/debt.module.js",
+                "src/modules/stockadvisor.module.js",
+                "src/modules/statstracker.module.js",
+                "src/modules/notionBugReporter.js",
+                "src/modules/oc-weights.module.js",
+                "src/modules/bunker-bucks.module.js",
+                "src/modules/blood-bag-reminder.module.js",
+                "src/modules/locked-items.module.js",
+                "src/modules/quick-deposit.module.js",
+                "src/modules/crime-notifier.module.js",
+                "src/modules/war-monitor.module.js",
+                "src/modules/war-target-caller.module.js",
+                "src/modules/chat-alert.module.js",
+                "src/modules/mug-warning.module.js",
+                "src/modules/auto-gym-switch.module.js",
+                "src/modules/travel-stocks.module.js",
+                "src/modules/price-filler.module.js",
+                "src/modules/bazaar-filler.module.js",
+                "src/modules/pickpocketing.module.js",
+                "src/modules/burglary.module.js",
+                "src/modules/search-for-cash.module.js",
+                "src/modules/cracking.module.js",
+                "src/modules/disposal.module.js",
+                "src/modules/auction-weapon-bonus.module.js",
+                "src/modules/item-market-max-quantity.module.js",
+                "src/modules/legible-names.module.js",
+                "src/modules/mission-tracker.module.js",
+                "src/modules/book-notifier.module.js",
+                "src/modules/hide-crime-outcome.module.js",
+                "src/modules/holiday.module.js",
+                "src/modules/special-gym-ratios.module.js",
+                "src/modules/player-id-linker.module.js",
+                "src/modules/loadout-switcher.module.js",
+                "src/modules/ui.module.js",
+                "src/modules/smart-medical-button.module.js",
+                "src/main.js"
+            ],
+            "css": [
+                "src/styles/main.css"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/page.php?sid=crimes*",
+                "https://www.torn.com/loader.php?sid=crimes*"
+            ],
+            "js": [
+                "src/modules/scamming.module.js"
+            ],
+            "world": "MAIN",
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/gym.php*"
+            ],
+            "js": [
+                "src/modules/auto-gym-switch-inject.js"
+            ],
+            "world": "MAIN",
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/calendar.php*",
+                "https://*.torn.com/calendar.php*"
+            ],
+            "js": [
+                "src/calendarScraper.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "background": {
+        "service_worker": "src/background.js"
+    },
+    "action": {
+        "default_popup": "popup/popup.html",
+        "default_icon": {
+            "16": "assets/icons/swissknife-16.png",
+            "32": "assets/icons/swissknife-32.png",
+            "48": "assets/icons/swissknife-48.png",
+            "128": "assets/icons/swissknife-128.png"
+        }
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/icons/*.png",
+                "assets/images/*.png",
+                "assets/images/*.jpg",
+                "assets/images/*.gif",
+                "assets/images/*.svg",
+                "assets/icons/sidekick-logo.png",
+                "assets/sounds/NotificationSound1.mp3",
+                "icons/*.png",
+                "src/core/notification-bridge-page.js",
+                "src/modules/auto-gym-switch-inject.js"
+            ],
+            "matches": [
+                "\u003call_urls\u003e"
+            ]
+        }
+    ]
 }
