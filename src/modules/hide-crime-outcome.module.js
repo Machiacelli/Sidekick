@@ -281,7 +281,7 @@ const HideCrimeOutcomeModule = {
 
         const script = document.createElement('script');
         script.id = 'sk-crime-fetch-hook';
-        script.textContent = `
+        const code = `
             (function() {
                 if (window.__skCrimeFetchHooked) return;
                 window.__skCrimeFetchHooked = true;
@@ -289,10 +289,11 @@ const HideCrimeOutcomeModule = {
                 window.fetch = function(...args) {
                     return _orig.apply(this, args).then(function(r) {
                         try {
-                            const u = new URL(r.url);
+                            const u = new URL(r.url.startsWith('http') ? r.url : window.location.origin + '/' + r.url);
                             const isCrimeAttempt = (
                                 (u.pathname === '/page.php' && u.searchParams.get('sid') === 'crimesData' && u.searchParams.get('step') === 'attempt') ||
-                                (u.pathname === '/loader.php' && u.searchParams.get('sid') === 'crimes')
+                                (u.pathname === '/loader.php' && u.searchParams.get('sid') === 'crimes' && u.searchParams.get('step') === 'attempt') ||
+                                (u.pathname.includes('/loader.php') && u.searchParams.get('sid') === 'crimes')
                             );
                             if (isCrimeAttempt) {
                                 r.clone().json().then(function(data) {
@@ -316,9 +317,21 @@ const HideCrimeOutcomeModule = {
                 };
             })();
         `;
-        // Inject and immediately remove the tag (code is running)
-        document.head.appendChild(script);
-        script.remove();
+        
+        try {
+            const blob = new Blob([code], { type: 'application/javascript' });
+            script.src = URL.createObjectURL(blob);
+            document.head.appendChild(script);
+            setTimeout(() => {
+                script.remove();
+                URL.revokeObjectURL(script.src);
+            }, 1000);
+        } catch (err) {
+            // Fallback
+            script.textContent = code;
+            document.head.appendChild(script);
+            script.remove();
+        }
 
         // Listen for the dispatched event from the MAIN world
         if (!this._toastListenerAttached) {

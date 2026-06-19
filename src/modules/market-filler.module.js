@@ -43,10 +43,13 @@ const MarketFillerModule = (() => {
         s.id = 'sk-mf-styles';
         s.textContent = `
             .sk-mf-action-wrap {
+                position: absolute;
+                right: -60px;
+                top: 50%;
+                transform: translateY(-50%);
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
-                margin-left: 8px;
                 flex-shrink: 0;
                 vertical-align: middle;
             }
@@ -355,16 +358,8 @@ const MarketFillerModule = (() => {
 
         wrap.append(fillBtn, infoBtn);
 
-        // Inject to the right of the row — find best parent to append to
-        // For the React item market table: each row is [class*=itemRowWrapper]
-        // We place it after the price cell by appending to the row itself
-        const priceCell = row.querySelector('[class*="priceInputWrapper"]') || row.querySelector('[class*="price___"]') || row.querySelector('.price');
-        if (priceCell && priceCell.parentNode) {
-            priceCell.parentNode.insertBefore(wrap, priceCell.nextSibling);
-        } else {
-            row.style.position = 'relative';
-            row.appendChild(wrap);
-        }
+        row.style.position = 'relative';
+        row.appendChild(wrap);
 
         row.dataset.skMfDone = '1';
     }

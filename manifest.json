@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sidekick",
-    "version": "1.2.20",
+    "version": "1.2.23",
     "description": "Enhanced sidebar and tools for Torn.com",
     "permissions": [
         "storage",
@@ -14,7 +14,6 @@
         "https://api.torn.com/*",
         "https://yata.yt/*",
         "https://notion-bug-proxy.akaffebtd.workers.dev/*",
-        "https://torn.synclayer.dev/*",
         "https://weav3r.dev/*",
         "https://gitlab.com/*",
         "https://*.workers.dev/*"
@@ -45,11 +44,11 @@
                 "src/modules/attacklist.module.js",
                 "src/modules/todolist.module.js",
                 "src/modules/attack-button-mover.module.js",
+                "src/modules/attack-options.module.js",
                 "src/modules/xanax-viewer.module.js",
                 "src/modules/blocktraining.module.js",
                 "src/modules/timeontab.module.js",
                 "src/modules/chaintimer.module.js",
-                "src/modules/npc-attack-timer.module.js",
                 "src/modules/randomtarget.module.js",
                 "src/modules/inventorysorter.module.js",
                 "src/modules/mugcalculator.module.js",
@@ -94,6 +93,7 @@
                 "src/modules/loadout-switcher.module.js",
                 "src/modules/ui.module.js",
                 "src/modules/smart-medical-button.module.js",
+                "src/modules/rehab-warning.module.js",
                 "src/main.js"
             ],
             "css": [
@@ -111,6 +111,17 @@
             ],
             "world": "MAIN",
             "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/page.php?sid=travel*",
+                "https://www.torn.com/loader.php?sid=travel*"
+            ],
+            "js": [
+                "src/modules/travel-blocker.module.js"
+            ],
+            "world": "MAIN",
+            "run_at": "document_end"
         },
         {
             "matches": [

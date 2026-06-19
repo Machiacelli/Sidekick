@@ -2249,6 +2249,10 @@
                                     5000
                                 );
                             }
+                            // Auto-rearm: poll API so the timer restarts when user takes a drug
+                            if (timer.isApiTimer && this.apiKey) {
+                                this.scheduleAutoRearm(timer);
+                            }
                         }
                     } else {
                         // Single timer countdown
@@ -3099,6 +3103,78 @@
             // }
 
             console.log('ℹ️ Automatic API cooldown monitoring DISABLED - use dropdown to manually add cooldowns');
+        },
+
+        // Poll the API every 2 minutes after a drug timer expires;
+        // when a new cooldown is detected the timer restarts automatically.
+        scheduleAutoRearm(timer) {
+            if (!this.apiKey) return;
+
+            // Store the cooldown types we're watching
+            const watchTypes = timer.cooldowns ? Object.keys(timer.cooldowns) : ['drug'];
+            console.log(`⏰ Auto-rearm scheduled for "${timer.name}" – watching: ${watchTypes.join(', ')}`);
+
+            const pollInterval = setInterval(async () => {
+                if (!this.apiKey) { clearInterval(pollInterval); return; }
+
+                // If the timer is already running again, stop polling
+                if (timer.isRunning) { clearInterval(pollInterval); return; }
+
+                try {
+                    let cooldowns = null;
+
+                    // Prefer background proxy (avoids CORS)
+                    if (chrome?.runtime?.sendMessage) {
+                        try {
+                            const res = await this.makeCooldownApiCallViaBackground(this.apiKey);
+                            if (res.success && res.cooldowns) cooldowns = res.cooldowns;
+                        } catch (_) { /* fall through */ }
+                    }
+
+                    if (!cooldowns) {
+                        const res = await fetch(
+                            `https://api.torn.com/user/?selections=cooldowns&key=${this.apiKey}`
+                        );
+                        const data = await res.json();
+                        if (data.error) return;
+                        cooldowns = data.cooldowns || {};
+                    }
+
+                    // Check if any watched cooldown is now active
+                    const newCooldowns = {};
+                    for (const type of watchTypes) {
+                        const secs = cooldowns[type];
+                        if (secs && secs > 0) newCooldowns[type] = secs;
+                    }
+
+                    if (Object.keys(newCooldowns).length > 0) {
+                        clearInterval(pollInterval);
+                        console.log(`⏰ Auto-rearm triggered for "${timer.name}":`, newCooldowns);
+
+                        // Rehydrate and restart the timer
+                        timer.cooldowns = newCooldowns;
+                        timer.remainingTime = Math.max(...Object.values(newCooldowns));
+                        timer.duration = timer.remainingTime;
+                        timer.isRunning = false; // startTimer will set this
+                        this.startTimer(timer.id);
+                        this.saveTimers();
+
+                        if (window.SidekickModules?.Core?.NotificationSystem) {
+                            window.SidekickModules.Core.NotificationSystem.show(
+                                'Cooldown Detected',
+                                `${timer.name} restarted automatically!`,
+                                'info',
+                                5000
+                            );
+                        }
+                    }
+                } catch (err) {
+                    console.warn('⚠️ Auto-rearm poll failed:', err);
+                }
+            }, 120_000); // poll every 2 minutes
+
+            // Safety: cancel after 24 hours to avoid zombie intervals
+            setTimeout(() => clearInterval(pollInterval), 86_400_000);
         },
 
         // Check API for new/updated cooldowns

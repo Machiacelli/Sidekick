@@ -387,6 +387,50 @@ const WarMonitorModule = {
                 this.memberLis.delete(id);
             }
         }
+
+        // Aggregate enemy locations for Travel Blocker
+        this.aggregateAndSaveLocations();
+    },
+
+    aggregateAndSaveLocations() {
+        const locations = {};
+        const getCountry = (desc) => {
+            if (desc.includes('SA') || desc.includes('South Africa')) return 'South Africa';
+            if (desc.includes('CI') || desc.includes('Cayman')) return 'Cayman Islands';
+            if (desc.includes('UAE') || desc.includes('Emirati')) return 'UAE';
+            if (desc.includes('China') || desc.includes('Chinese')) return 'China';
+            if (desc.includes('Japan') || desc.includes('Japanese')) return 'Japan';
+            if (desc.includes('Hawaii') || desc.includes('Hawaiian')) return 'Hawaii';
+            if (desc.includes('Mexico') || desc.includes('Mexican')) return 'Mexico';
+            if (desc.includes('Canada') || desc.includes('Canadian')) return 'Canada';
+            if (desc.includes('Switz') || desc.includes('Swiss')) return 'Switzerland';
+            if (desc.includes('UK') || desc.includes('British') || desc.includes('United Kingdom')) return 'United Kingdom';
+            if (desc.includes('Arg') || desc.includes('Argentin')) return 'Argentina';
+            return null;
+        };
+
+        for (const status of this.memberStatus.values()) {
+            const country = getCountry(status.description);
+            if (!country) continue;
+
+            if (!locations[country]) locations[country] = { going: 0, there: 0, returning: 0 };
+
+            if (status.state === 'Traveling') {
+                if (status.description.includes('Returning')) {
+                    locations[country].returning++;
+                } else if (status.description.includes('Traveling to')) {
+                    locations[country].going++;
+                }
+            } else if (status.state === 'Abroad' || status.state === 'Hospital' || status.state === 'Jail') {
+                locations[country].there++;
+            }
+        }
+
+        try {
+            chrome.storage.local.set({ sidekick_enemy_locations: locations });
+        } catch (e) {
+            console.warn('[WarMonitor] Failed to save enemy locations:', e);
+        }
     },
 
     handleHospitalStatus(statusDiv, status, li, writes) {

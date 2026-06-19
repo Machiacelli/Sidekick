@@ -103,6 +103,15 @@
                 console.warn("⚠️ Attack List module not available");
             }
 
+            // Initialize Attack Options Module
+            console.log("⚔️ Sidekick: Initializing Attack Options...");
+            if (window.SidekickModules.AttackOptions?.init) {
+                await window.SidekickModules.AttackOptions.init();
+                console.log("✅ Sidekick: Attack Options initialized");
+            } else {
+                console.warn("⚠️ Attack Options module not available");
+            }
+
             // Initialize Attack Button Mover Module
             console.log("⚔️ Sidekick: Initializing Attack Button Mover...");
             if (window.SidekickModules.AttackButtonMover?.init) {
@@ -184,6 +193,15 @@
                 console.warn("⚠️ Blood Bag Reminder module not available");
             }
 
+            // Initialize Rehab Warning Module
+            console.log("💊 Sidekick: Initializing Rehab Warning...");
+            if (window.SidekickModules.RehabWarning?.init) {
+                await window.SidekickModules.RehabWarning.init();
+                console.log("✅ Sidekick: Rehab Warning initialized");
+            } else {
+                console.warn("⚠️ Rehab Warning module not available");
+            }
+
 
 
 
@@ -204,7 +222,7 @@
                 await window.SidekickModules.NPCAttackTimer.init();
                 console.log("✅ Sidekick: NPC Attack Timer initialized");
             } else {
-                console.warn("⚠️ NPC Attack Timer module not available");
+
             }
 
             // Initialize Random Target Module

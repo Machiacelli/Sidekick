@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Chrome Extension - Settings Module V2
  * Comprehensive settings panel with all module toggles and configurations
  * Version: 2.0.0
@@ -37,45 +37,6 @@
 
             console.log("⚙️ Initializing Settings Module...");
 
-            // Bulletproof global event delegation for the WTC buttons
-            document.body.addEventListener('click', async (e) => {
-                if (e.target && e.target.id === 'skp-wtc-test-save') {
-                    console.error("🎯 GLOBAL DELEGATION: Save button clicked!");
-                    try {
-                        const testUserInp = document.getElementById('skp-wtc-test-user');
-                        const val = testUserInp ? testUserInp.value.trim() : '';
-
-                        const CS = window.SidekickModules?.Core?.ChromeStorage;
-                        if (CS) await CS.set('sidekick_wtc_test_user', val);
-                        localStorage.setItem('sidekick_wtc_test_user_backup', val);
-
-                        if (window.SidekickModules.WarTargetCaller) {
-                            window.SidekickModules.WarTargetCaller.testChatUser = val;
-                        }
-
-                        alert("GLOBAL DELEGATION: Settings Saved ✓ (" + val + ")");
-                    } catch (err) {
-                        alert("GLOBAL DELEGATION Error saving: " + err.message);
-                    }
-                }
-                if (e.target && e.target.id === 'skp-wtc-test-send') {
-                    console.error("🎯 GLOBAL DELEGATION: Test Send button clicked!");
-                    try {
-                        const testUserInp = document.getElementById('skp-wtc-test-user');
-                        const val = testUserInp ? testUserInp.value.trim() : '';
-
-                        if (window.SidekickModules.WarTargetCaller) {
-                            if (val) window.SidekickModules.WarTargetCaller.testChatUser = val;
-                            window.SidekickModules.WarTargetCaller.sendChatMessage('Test: Hitting Target in 5 minutes');
-                        } else {
-                            alert("GLOBAL DELEGATION: War Target Caller module not loaded!");
-                        }
-                    } catch (err) {
-                        alert("GLOBAL DELEGATION Test Send Error: " + err.message);
-                    }
-                }
-            });
-
             try {
                 await waitForCore();
                 this.isInitialized = true;
@@ -91,566 +52,6 @@
             this.createPreviewPanel();
         },
 
-        // Create HTML for module toggles
-        createModuleTogglesHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">⚡ Feature Toggles</h4>
-                
-                ${this.createToggle('attack-button-mover', '⚔️ Fast Attack', 'Moves Start Fight button over weapon for faster attacks')}
-                ${this.createToggle('blocktraining', '🚫 Block Training', 'Prevents accidental gym training')}
-                ${this.createToggle('time-on-tab', '⏰ Time on Tab', 'Shows remaining time for activities in browser tab')}
-                ${''}
-                ${this.createToggle('random-target', '🎲 Random Target', 'Adds random target button to attack pages')}
-                ${''}
-                ${this.createToggle('racing-alert', '🏎️ Racing Alert', 'Shows flashing red icon when not in a race')}
-                ${this.createToggle('refill-blocker', '🛡️ Refill Blocker', 'Prevents accidental refills when bars aren\'t empty')}
-                ${this.createToggle('extended-chain-view', '⛓️ Extended Chain View', 'Shows more than 10 chain attacks on faction page')}
-                ${this.createToggle('mug-calculator', '🥊 Mug Calculator', 'Shows mug value calculations on Item Market and Bazaars')}
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Weapon XP Tracker</div><div class="sk-row-desc">Tracks weapon experience progress and shows XP gain rates</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-wxp"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-
-                ${this.createToggle('locked-items', '🔒 Locked Items Manager', 'Lock inventory items to prevent accidental trading, selling, or deleting')}
-                ${this.createToggle('price-filler', '🛒 Price Filler', 'Auto-fills prices on the Item Market and Bazaar pages')}
-                ${this.createToggle('bazaar-filler', '🏪 Bazaar Filler', 'Auto-fills bazaar prices using the Weav3r API — peek button shows 5 lowest listings without opening a popup automatically')}
-                ${this.createToggle('auction-weapon-bonus', '🗡️ Auction Weapon Bonus', 'Displays weapon bonus stats and rarity highlights on the auction house')}
-                ${this.createToggle('legible-names', '🔤 Legible Player Names', 'Replaces small honor-bar name sprites with a larger, cleaner font')}
-                ${this.createToggle('special-gym-ratios', '🏋️ Special Gym Ratios', 'Warns when battle stat ratios risk losing access to specialist / combo gyms (gym.php)')}
-                ${this.createToggle('loadout-switcher', '👕 Loadout Switcher', 'Adds quick loadout change buttons on the Items page')}
-                ${this.createWeaponXpToggle()}
-                <div id="sidekick-module-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                       background: rgba(255,255,255,0.1); color: #ccc; margin-top: 20px; font-size: 13px;">
-                    Module settings loaded
-                </div>
-            `;
-        },
-
-        // Create special weapon XP toggle with link
-        createWeaponXpToggle() {
-            return `
-                <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #fff; margin-bottom: 4px;">🎯 Weapon XP Tracker</div>
-                            <div style="font-size: 12px; color: #aaa;">
-                                Shows weapon experience percentage on Items page
-                                <br>
-                                <a href="#" id="weapon-overview-link" style="color: #66BB6A; text-decoration: underline; cursor: pointer; font-weight: 500;">
-                                    View All Weapons & Finishing Hits
-                                </a>
-                            </div>
-                        </div>
-                        <div class="toggle-switch" data-module="weapon-xp-tracker" style="
-                            position: relative;
-                            display: inline-block;
-                            width: 50px;
-                            height: 24px;
-                            margin-left: 15px;
-                            cursor: pointer;
-                            flex-shrink: 0;
-                        ">
-                            <div class="toggle-track" style="
-                                position: absolute;
-                                top: 0;
-                                left: 0;
-                                right: 0;
-                                bottom: 0;
-                                background-color: rgba(255, 255, 255, 0.2);
-                                border-radius: 24px;
-                                transition: background-color 0.3s ease;
-                            "></div>
-                            <div class="toggle-thumb" style="
-                                position: absolute;
-                                top: 2px;
-                                left: 2px;
-                                width: 20px;
-                                height: 20px;
-                                background-color: white;
-                                border-radius: 50%;
-                                transition: transform 0.3s ease;
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                            "></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        },
-
-        // Create toggle switch HTML
-        createToggle(id, label, description) {
-            return `
-                <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #fff; margin-bottom: 4px;">${label}</div>
-                            <div style="font-size: 12px; color: #aaa;">${description}</div>
-                        </div>
-                        <div class="toggle-switch" data-module="${id}" style="
-                            position: relative;
-                            display: inline-block;
-                            width: 50px;
-                            height: 24px;
-                            margin-left: 15px;
-                            cursor: pointer;
-                            flex-shrink: 0;
-                        ">
-                            <div class="toggle-track" style="
-                                position: absolute;
-                                top: 0;
-                                left: 0;
-                                right: 0;
-                                bottom: 0;
-                                background-color: rgba(255, 255, 255, 0.2);
-                                border-radius: 24px;
-                                transition: background-color 0.3s ease;
-                            "></div>
-                            <div class="toggle-thumb" style="
-                                position: absolute;
-                                top: 2px;
-                                left: 2px;
-                                width: 20px;
-                                height: 20px;
-                                background-color: white;
-                                border-radius: 50%;
-                                transition: transform 0.3s ease;
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                            "></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        },
-
-        // Create Xanax Viewer settings HTML
-        createXanaxSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">💊 Xanax Viewer Settings</h4>
-                
-                ${this.createToggle('xanax-viewer', '💊 Enable Xanax Viewer', 'Shows individual Xanax usage on Faction and Profile pages')}
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Auto Refresh Limit:</label>
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <input type="range" id="sidekick-xanax-autolimit" min="0" max="100" value="0" 
-                               style="flex: 1; accent-color: #4CAF50;">
-                        <span id="sidekick-xanax-autolimit-display" style="color: #fff; min-width: 40px; text-align: right; font-weight: bold;">0</span>
-                    </div>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Number of faction members to auto-refresh (closest level to you)
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-xanax-relative" style="accent-color: #4CAF50;">
-                        <span>Show Relative Values</span>
-                    </label>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px; margin-left: 25px;">
-                        Display Xanax usage relative to your own usage
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <button id="sidekick-clear-xanax-cache" style="width: 100%; padding: 10px; background: #FF5722; 
-                                                                   border: none; color: white; border-radius: 5px; 
-                                                                   font-weight: bold; cursor: pointer;">
-                        🗑️ Clear Cache
-                    </button>
-                </div>
-                
-                <div id="sidekick-xanax-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                     background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px;">
-                    Xanax Viewer settings loaded
-                </div>
-            `;
-        },
-
-        // Create Chain Timer settings HTML
-        createChainTimerSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">⏱️ Chain Timer Settings</h4>
-                
-                ${this.createToggle('chain-timer', '⏱️ Enable Chain Timer', 'Shows floating chain countdown timer')}
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Alert Threshold:</label>
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <input type="range" id="sidekick-chain-threshold" min="1" max="5" step="0.5" value="4" 
-                               style="flex: 1; accent-color: #FF9800;">
-                        <span id="sidekick-chain-threshold-display" style="color: #fff; min-width: 60px; text-align: right; font-weight: bold;">4 min</span>
-                    </div>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Alert when chain timer drops below this threshold
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-chain-alerts" style="accent-color: #FF9800;">
-                        <span>Enable Alerts</span>
-                    </label>
-                </div>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-chain-popup" style="accent-color: #FF9800;">
-                        <span>Show Popup Alerts</span>
-                    </label>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-chain-flash" style="accent-color: #FF9800;">
-                        <span>Screen Flash Effect</span>
-                    </label>
-                </div>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-chain-floating-display" style="accent-color: #FF9800;">
-                        <span>Show Floating Timer Display</span>
-                    </label>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px; margin-left: 25px;">
-                        Display floating timer on screen (alerts still work when disabled)
-                    </div>
-                </div>
-                
-                <div id="sidekick-chain-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                     background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Chain Timer settings loaded
-                </div>
-            `;
-        },
-
-        // Create Notifications settings HTML
-        createNotificationsSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🔔 Notification Settings</h4>
-                
-                ${this.createToggle('notif-sound', '🔊 Notification Sounds', 'Play a sound when notifications appear')}
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-notif-auto-dismiss" style="accent-color: #2196F3;" checked>
-                        <span>Auto-dismiss Notifications</span>
-                    </label>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px; margin-left: 25px;">
-                        Automatically hide notifications after 5 seconds
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="sidekick-notif-windows" style="accent-color: #2196F3;">
-                        <span>🖥️ Windows Notifications</span>
-                    </label>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px; margin-left: 25px;">
-                        Send OS-level notifications (e.g. for Crime Notifier alerts) even when Torn is in the background
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Notification Duration (seconds):</label>
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <input type="range" id="sidekick-notif-duration" min="2" max="10" value="5" 
-                               style="flex: 1; accent-color: #2196F3;">
-                        <span id="sidekick-notif-duration-display" style="color: #fff; min-width: 40px; text-align: right; font-weight: bold;">5s</span>
-                    </div>
-                </div>
-                
-                <div id="sidekick-notif-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                     background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Notification settings loaded
-                </div>
-            `;
-        },
-
-        // Create Mug Calculator settings HTML
-        createMugCalculatorSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">💰 Mug Calculator Settings</h4>
-                
-                <div style="background: rgba(76, 175, 80, 0.1); border-left: 3px solid #4CAF50; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                    <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                        ℹ️ Configure the mug calculator to show potential mug values when browsing the Item Market and Bazaars.
-                        The calculator uses your API key to fetch target information and calculate potential earnings.
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Mug Merits (0-10):</label>
-                    <input type="number" id="mugMeritsInput" min="0" max="10" placeholder="0 to 10"
-                           style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                  border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Enter your total mug merits from 0 to 10
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #ccc; font-weight: bold; cursor: pointer;">
-                        <input type="checkbox" id="noPlunderCheckbox" style="accent-color: #FFC107; width: 16px; height: 16px;">
-                        <span>No plunder weapon (disables plunder bonus)</span>
-                    </label>
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Plunder % (20% to 49%):</label>
-                    <input type="number" id="plunderInput" min="20" max="49" step="0.01" placeholder="Plunder %"
-                           style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                  border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Check the box if you don't use a plunder weapon — this sets plunder to 0. Otherwise enter your plunder % (20–49%).
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Minimum Threshold ($):</label>
-                    <input type="number" id="thresholdInput" min="0" placeholder="Minimum Threshold"
-                           style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                  border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Only show info icon when total listing value exceeds this amount
-                    </div>
-                </div>
-                
-                <div id="sidekick-mugcalc-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                        background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Mug calculator settings loaded
-                </div>
-            `;
-        },
-
-        // Create Blood Bag Reminder settings HTML
-        createBloodBagSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🩸 Blood Bag Reminder Settings</h4>
-                
-                <div style="background: rgba(220, 53, 69, 0.1); border-left: 3px solid #dc3545; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                    <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                        ℹ️ Shows a blood bag icon when you have enough life and medical cooldown room to fill blood bags.
-                        Each bag uses 30% life and adds 1 hour to medical cooldown.
-                    </div>
-                </div>
-                
-                ${this.createToggle('blood-bag-reminder', '🩸 Enable Blood Bag Reminder', 'Shows icon when ready to fill blood bags')}
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Bags to Fill:</label>
-                    <select id="bloodbag-count" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                                       border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                        <option value="1" style="background: #1a1a1a; color: white;">1 bag (requires >30% life)</option>
-                        <option value="2" selected style="background: #1a1a1a; color: white;">2 bags (requires >60% life) - Recommended</option>
-                        <option value="3" style="background: #1a1a1a; color: white;">3 bags (requires >90% life)</option>
-                    </select>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        How many blood bags do you want to fill at once? Each bag uses 30% life and adds 1hr medical cooldown.
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Destination Page:</label>
-                    <select id="bloodbag-destination" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                                             border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                        <option value="items" selected style="background: #1a1a1a; color: white;">Personal Inventory (Medical)</option>
-                        <option value="bazaar" style="background: #1a1a1a; color: white;">Bazaar (Add Item)</option>
-                    </select>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Where clicking the blood bag icon takes you.
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="bloodbag-newtab" style="accent-color: #dc3545;">
-                        <span>Open in new tab</span>
-                    </label>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px; margin-left: 28px;">
-                        When disabled, clicking the icon navigates in the same tab.
-                    </div>
-                </div>
-                
-                <div id="sidekick-bloodbag-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                            background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Blood Bag Reminder settings loaded
-                </div>
-            `;
-        },
-
-        // Create Quick Deposit settings HTML
-        createQuickDepositSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🏦 Quick Deposit Settings</h4>
-                
-                <div style="background: rgba(76, 175, 80, 0.1); border-left: 3px solid #4CAF50; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                    <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                        ℹ️ Click your money display in the sidebar for quick deposits to faction vault, property vault, company vault, or ghost trades.
-                    </div>
-                </div>
-                
-                ${this.createToggle('quick-deposit', '🏦 Enable Quick Deposit', 'Makes money display clickable for deposits')}
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Deposit Target:</label>
-                    <select id="quickdeposit-target" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                                           border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                        <option value="FACTION" selected style="background: #1a1a1a; color: white;">Faction Vault</option>
-                        <option value="PROPERTY" style="background: #1a1a1a; color: white;">Property Vault</option>
-                        <option value="COMPANY" style="background: #1a1a1a; color: white;">Company Vault</option>
-                        <option value="GHOST" style="background: #1a1a1a; color: white;">Ghost Trade</option>
-                    </select>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Choose where your deposits go when you click your money display.
-                    </div>
-                </div>
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Ghost Trade:</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="text" id="quickdeposit-ghostid" readonly placeholder="No ghost ID set" 
-                               style="flex: 1; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); 
-                                      border-radius: 5px; color: #666; font-size: 14px; box-sizing: border-box; cursor: not-allowed;">
-                        <button id="quickdeposit-clear-ghost" style="padding: 10px 20px; background: rgba(220, 53, 69, 0.2); border: 1px solid rgba(220, 53, 69, 0.4); 
-                                                                      color: #dc3545; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s;">
-                            Clear
-                        </button>
-                    </div>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Ghost trade ID is auto-detected when you visit a ghost trade page.
-                    </div>
-                </div>
-                
-                <div id="sidekick-quickdeposit-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                            background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Quick Deposit settings loaded
-                </div>
-            `;
-        },
-
-        // Create Crime Notifier settings HTML
-        createCrimeNotifierSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🚨 Crime Notifier Settings</h4>
-                
-                ${this.createToggle('crime-notifier', '🚨 Enable Crime Notifier', 'Monitor shoplifting security and search-for-cash percentages')}
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Check Interval:</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="number" id="crime-notifier-interval" min="10" max="300" value="30" 
-                               style="flex: 1; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); 
-                                      border-radius: 5px; color: white; font-size: 14px; box-sizing: border-box;">
-                        <span style="color: #aaa;">seconds</span>
-                    </div>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        How often to check the Torn API (minimum 10s, recommended 30s)
-                    </div>
-                </div>
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <h5 style="color: #fff; font-size: 14px; margin-bottom: 10px;">🏪 Shoplifting Monitoring</h5>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="crime-notifier-security" style="accent-color: #FF6B6B;" checked>
-                        <span>Enable shoplifting alerts</span>
-                    </label>
-                </div>
-                
-                <!-- Shop-Specific Security Selection -->
-                <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="color: #fff; font-weight: bold;">Select Shop Security:</span>
-                        <div style="display: flex; gap: 5px;">
-                            <button type="button" id="crime-shops-security-all" style="padding: 4px 8px; background: rgba(76, 175, 80, 0.2); border: 1px solid #4CAF50; color: #4CAF50; border-radius: 3px; cursor: pointer; font-size: 11px;">All</button>
-                            <button type="button" id="crime-shops-security-none" style="padding: 4px 8px; background: rgba(255, 107, 107, 0.2); border: 1px solid #FF6B6B; color: #FF6B6B; border-radius: 3px; cursor: pointer; font-size: 11px;">None</button>
-                        </div>
-                    </div>
-                    <div id="crime-shop-security-list" style="display: flex; flex-direction: column; gap: 10px;">
-                        <!-- Shop security checkboxes will be dynamically populated -->
-                        <div style="text-align: center; color: #aaa; font-size: 12px; padding: 20px;">
-                            Loading shop security data...
-                        </div>
-                    </div>
-                    <div style="font-size: 11px; color: #888; margin-top: 8px; font-style: italic;">
-                        Leave empty to monitor all shops and security measures
-                    </div>
-                </div>
-                
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-                
-                <h5 style="color: #fff; font-size: 14px; margin-bottom: 10px;">💰 Search For Cash Monitoring</h5>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="crime-notifier-searchcash" style="accent-color: #4CAF50;" checked>
-                        <span>Enable search for cash alerts</span>
-                    </label>
-                </div>
-                
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Threshold Percentage:</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="range" id="crime-notifier-threshold" min="50" max="100" value="80" 
-                               style="flex: 1; accent-color: #4CAF50;">
-                        <span id="crime-notifier-threshold-display" style="color: #fff; min-width: 50px; text-align: right; font-weight: bold;">80%</span>
-                    </div>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        Alert when search percentage reaches or exceeds this value
-                    </div>
-                </div>
-                
-                <!-- Search Location Selection -->
-                <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="color: #fff; font-weight: bold;">Select Locations:</span>
-                        <div style="display: flex; gap: 5px;">
-                            <button type="button" id="crime-search-all" style="padding: 4px 8px; background: rgba(76, 175, 80, 0.2); border: 1px solid #4CAF50; color: #4CAF50; border-radius: 3px; cursor: pointer; font-size: 11px;">All</button>
-                            <button type="button" id="crime-search-none" style="padding: 4px 8px; background: rgba(255, 107, 107, 0.2); border: 1px solid #FF6B6B; color: #FF6B6B; border-radius: 3px; cursor: pointer; font-size: 11px;">None</button>
-                        </div>
-                    </div>
-                    <div id="crime-search-checkboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
-                        <!-- Search location checkboxes will be dynamically populated -->
-                        <div style="grid-column: 1 / -1; text-align: center; color: #aaa; font-size: 12px; padding: 10px;">
-                            Loading search locations...
-                        </div>
-                    </div>
-                    <div style="font-size: 11px; color: #888; margin-top: 8px; font-style: italic;">
-                        Leave empty to monitor all locations
-                    </div>
-                </div>
-                
-                <div id="sidekick-crime-notifier-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                              background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Crime Notifier settings loaded
-                </div>
-            `;
-        },
-
-        createCrimesSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🧾 Crimes</h4>
-                ${this.createToggle('crime-disposal', '🧹 Disposal Helper', 'Highlights disposal options and shows max nerve for the Disposal crime')}
-                ${this.createToggle('crime-scamming', '🎭 Scamming Helper', 'Displays scam helper hints for the Scamming crime only')}
-                ${this.createToggle('crime-burglary', '🏠 Burglary Confidence', 'Displays burglary confidence percentage permanently next to the graphic')}
-                ${this.createToggle('crime-cracking', '💻 Cracking Helper', 'Shows word suggestions for the Cracking crime')}
-                ${this.createToggle('crime-sfc', '🔍 Search for Cash', 'Highlights the best Search for Cash location based on current density and time-based scoring')}
-                <div id="sidekick-crimes-status" style="text-align: center; padding: 10px; border-radius: 5px; 
-                                                        background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Crime module settings loaded
-                </div>
-            `;
-        },
-
-
         attachCrimesTabListeners(panel) {
             // Placeholder for future crime module tab event listeners if required
         },
@@ -665,7 +66,7 @@
             overlay.className = 'sidekick-preview-panel';
             overlay.style.cssText = `
                 position: fixed; inset: 0; z-index: 9999999;
-                background: rgba(0,0,0,0.7);
+                background: transparent;
                 display: flex; align-items: center; justify-content: center;
                 font-family: 'Segoe UI', Arial, sans-serif;
             `;
@@ -899,10 +300,29 @@
         <div class="sk-subtab-panel active" id="skp-tab-api">
           <div class="sk-sh">Torn API Key</div>
           <label class="sk-field-label">API Key</label>
-          <input type="password" class="sk-input" id="sidekick-api-key" placeholder="Enter your Torn API key...">
-          <div class="sk-hint">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a></div>
-          <div class="sk-btn-row"><button class="sk-btn sk-btn-primary" id="sidekick-test-api">Test Connection</button><button class="sk-btn sk-btn-ghost" id="sidekick-show-key">Show Key</button></div>
-          <div class="sk-status" id="sidekick-api-status">Enter your API key and click Test Connection</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <div id="skp-clear-api-key" style="cursor:pointer;color:#000;background:#ccc;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:bold;font-size:12px;" title="Clear API Key">✕</div>
+            <input type="password" class="sk-input" id="sidekick-api-key" placeholder="Enter your Torn API key..." style="flex:1;">
+          </div>
+          
+          <div id="skp-secondary-api-container" style="display:none; margin-bottom:10px;">
+            <label class="sk-field-label">Secondary API Key <span style="font-size:10px;color:#aaa;font-weight:normal;">(For rate limit load balancing)</span></label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div id="skp-clear-sec-api-key" style="cursor:pointer;color:#000;background:#ccc;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:bold;font-size:12px;" title="Clear Secondary API Key">✕</div>
+              <input type="password" class="sk-input" id="sidekick-secondary-api-key" placeholder="Enter secondary API key..." style="flex:1;">
+            </div>
+          </div>
+
+          <div class="sk-hint" style="margin-bottom:8px;">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a>
+            <div style="margin-top:4px;">
+              <a href="#" id="skp-add-secondary-api-btn" style="color:#5fcc6a;text-decoration:none;font-size:11px;font-weight:600;">+ Add Secondary API Key</a>
+            </div>
+          </div>
+          
+          <div class="sk-btn-row">
+            <button class="sk-btn sk-btn-primary" id="sidekick-test-api">Test Connection</button>
+            <button class="sk-btn sk-btn-ghost" id="sidekick-show-key">Show Key</button>
+          </div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-backup">
           <div class="sk-sh">Data Export &amp; Import</div>
@@ -919,8 +339,7 @@
           <div class="sk-slider-row"><input type="range" min="2" max="10" value="5" class="skp-slider" data-out="skp-notif-val" data-suffix="s"><span class="sk-slider-val" id="skp-notif-val">5s</span></div>
           <div class="sk-hint">How long notifications stay visible before auto-dismissing</div>
           <div class="sk-sh" style="margin-top:14px;">System Notifications</div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Windows Notifications</div><div class="sk-row-desc">OS-level toasts even when Torn is in the background</div></div><label class="sk-tog"><input type="checkbox"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-info" style="margin-top:6px;">Used by Crime Notifier and Chain Timer alerts when the Torn tab is not focused.</div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Browser Desktop Notifications</div><div class="sk-row-desc">Allow Sidekick to send system-level notifications</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-browser-notif" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -940,41 +359,93 @@
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Legible Player Names</div><div class="sk-row-desc">Improves readability of player names by formatting them with better spacing and styling</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-legible-names" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Random Target</div><div class="sk-row-desc">Adds a floater that opens a random level 1 profile</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-random-target" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Refill Blocker</div><div class="sk-row-desc">Prevents accidental nerve and energy refills by showing a confirmation before using refill items</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-refill-blocker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-row" style="align-items:flex-start;gap:12px;"><div class="sk-row-info"><div class="sk-row-title">Xanax Viewer</div><div class="sk-row-desc">View individual Xanax usage</div><div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-xanax" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div></div><label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-xanax-viewer" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-shelf" id="skp-shelf-xanax" style="display:none;">
-            <div class="sk-sh" style="margin-top:0;font-size:10px;">Xanax Viewer Settings</div>
-            <label class="sk-field-label">Auto-fetch limit on faction page</label>
-            <div class="sk-slider-row"><input type="range" min="0" max="100" value="0" class="skp-slider" data-out="skp-xanax-autolimit-val" data-suffix=" members"><span class="sk-slider-val" id="skp-xanax-autolimit-val">0 members</span></div>
-            <div class="sk-hint">Automatically fetch Xanax data for this many members (closest level to yours) when visiting a faction page. 0 = disabled.</div>
-            <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Show Relative Value</div><div class="sk-row-desc">Show Xanax count relative to your own count instead of absolute</div></div><label class="sk-tog"><input type="checkbox"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-            <div class="sk-sh" style="margin-top:10px;font-size:10px;">Cache</div>
-            <div class="sk-hint">Stores fetched Xanax data locally to avoid repeated API calls.</div>
-            <button class="sk-btn sk-btn-danger" style="width:100%;margin-top:6px;">Clear Cached Profiles</button>
-          </div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Xanax Viewer</div><div class="sk-row-desc">View individual Xanax usage</div></div><label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-xanax-viewer" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Auction Weapon Bonus</div><div class="sk-row-desc">Displays weapon bonuses & stats next to weapon name in auction house</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-auction-bonus" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-feat-reminders">
           <div class="sk-sh">Alerts</div>
+          
+          <!-- Travel Blocker -->
+          <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Travel Blocker</div>
+              <div class="sk-row-desc">Modular travel blocker for OC timing, bazaars, and drug cooldowns</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-travelblocker" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-travel-blocker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-travelblocker" style="display:none;">
+            <div class="sk-sh" style="margin-top:0;font-size:10px;margin-bottom:10px;">Module Toggles</div>
+            
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;"><div class="sk-row-info"><div class="sk-row-title" style="font-size:11px;">OC Timing</div></div><label class="sk-tog"><input type="checkbox" id="skp-travelblocker-oc-watcher" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+                <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;"><div class="sk-row-info"><div class="sk-row-title" style="font-size:11px;">Drug Cooldown</div></div><label class="sk-tog"><input type="checkbox" id="skp-travelblocker-drug-cooldown" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+                <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;"><div class="sk-row-info"><div class="sk-row-title" style="font-size:11px;">War Watch</div></div><label class="sk-tog"><input type="checkbox" id="skp-travelblocker-war-watch" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+            </div>
+          </div>
+
+          <!-- Rehab Warning -->
+          <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Rehab Warning</div>
+              <div class="sk-row-desc">Alerts you when your addiction nears threshold or company penalty</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-rehabwarning" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-rehab-warning" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-rehabwarning" style="display:none; margin-bottom:10px;">
+            <label class="sk-field-label" style="margin-top:10px;">Addiction Limit (%)</label>
+            <select class="sk-select" id="skp-rehab-edu-threshold">
+              <option value="1">1%</option>
+              <option value="2">2%</option>
+              <option value="3">3%</option>
+              <option value="4" selected>4%</option>
+              <option value="5">5%</option>
+              <option value="6">6%</option>
+              <option value="7">7%</option>
+              <option value="8">8%</option>
+              <option value="9">9%</option>
+              <option value="10">10%</option>
+            </select>
+
+            <div class="sk-row" style="margin-top:10px;">
+              <div class="sk-row-info"><div class="sk-row-title">Company Penalty Alert</div><div class="sk-row-desc">Alert when company addiction penalty is reached</div></div>
+              <label class="sk-tog"><input type="checkbox" id="skp-rehab-company-enable"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+            </div>
+
+            <div id="skp-rehab-company-wrap" style="display:none;">
+              <label class="sk-field-label" style="margin-top:10px;">Company Addiction Limit</label>
+              <input type="number" class="sk-input" id="skp-rehab-company-penalty" min="1" max="100" value="5" style="width:100%;margin-top:4px;">
+            </div>
+          </div>
+
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Racing Alert</div><div class="sk-row-desc">Flashes the extension icon when you are not currently in a race</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-racing-alert" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-sh" style="margin-top:18px;">Blood Bag Reminder</div>
-          <div class="sk-info">Shows a blood bag icon in the status bar when your life and medical cooldown conditions are met, reminding you to fill blood bags.</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Blood Bag Reminder</div><div class="sk-row-desc">Show icon when conditions to fill blood bags are met</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-blood-bag" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <label class="sk-field-label" style="margin-top:10px;">Bags to Fill</label>
-          <select class="sk-select">
-            <option value="1">1 bag (life &gt; 30%)</option>
-            <option value="2" selected>2 bags (life &gt; 60%)</option>
-            <option value="3">3 bags (life &gt; 90%)</option>
-          </select>
-          <label class="sk-field-label" style="margin-top:8px;">Click Destination</label>
-          <select class="sk-select">
-            <option value="items" selected>Items page (medical)</option>
-            <option value="bazaar">Bazaar (add items)</option>
-          </select>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Open in New Tab</div><div class="sk-row-desc">Opens the destination page in a new browser tab when clicking the blood bag icon</div></div><label class="sk-tog"><input type="checkbox"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+
+          <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Blood Bag Reminder</div>
+              <div class="sk-row-desc">Shows a blood bag icon in the status bar</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-bloodbag" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-blood-bag" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-bloodbag" style="display:none; margin-bottom:10px;">
+            <label class="sk-field-label" style="margin-top:10px;">Bags to Fill</label>
+            <select class="sk-select" id="skp-bb-bags">
+              <option value="1">1 bag (life &gt; 30%)</option>
+              <option value="2" selected>2 bags (life &gt; 60%)</option>
+              <option value="3">3 bags (life &gt; 90%)</option>
+            </select>
+            <label class="sk-field-label" style="margin-top:8px;">Click Destination</label>
+            <select class="sk-select" id="skp-bb-dest">
+              <option value="items" selected>Items page (medical)</option>
+              <option value="armory">Faction Armory (medical)</option>
+            </select>
+            <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Open in New Tab</div><div class="sk-row-desc">Opens the destination page in a new browser tab when clicking the blood bag icon</div></div><label class="sk-tog"><input type="checkbox" id="skp-bb-newtab"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          </div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-feat-medical">
           <div class="sk-sh">Smart Medical Button</div>
-          <div class="sk-info">A draggable floater button that auto-selects and uses the best available medical item to reduce your hospital time. Adapted from BBSmalls' Torn Smart FAK Button. Morphine is always included when available.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Smart Medical Button</div><div class="sk-row-desc">Show the smart medical floater on all Torn pages</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-smart-medical"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <label class="sk-field-label" style="margin-top:12px;">Item Source</label>
           <select class="sk-select" id="skp-med-item-source">
@@ -1257,16 +728,13 @@
         </div>
         <div class="sk-subtab-panel" id="skp-tab-outcome">
           <div class="sk-sh">Crime Outcome Display</div>
-          <div class="sk-info">Controls how the crime result panel is shown after committing a crime. The outcome stays until another crime is committed or the user dismisses it.</div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Crime Outcome Customization</div><div class="sk-row-desc">Modify how the crime result panel is displayed</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-outcome-enable"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <label class="sk-field-label" style="margin-top:12px;">Display Mode</label>
           <select class="sk-select" id="skp-outcome-mode">
             <option value="0">Disabled — show outcome normally</option>
             <option value="1">Hidden — remove the outcome panel entirely</option>
             <option value="2">Minimal — hide story text, keep rewards</option>
-            <option value="3">Toast — replace panel with a small dismissible card</option>
           </select>
-          <div class="sk-hint" style="margin-top:6px;">Minimal keeps rewards but hides narrative text. Toast shows a compact dismissible card.</div>
-          <div class="sk-row" style="margin-top:12px;"><div class="sk-row-info"><div class="sk-row-title">Color by Result</div><div class="sk-row-desc">Toast border color changes based on success, failure, or jail</div></div><label class="sk-tog"><input type="checkbox" id="skp-outcome-color" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -1280,39 +748,22 @@
       <div class="sk-scroll">
         <div class="sk-subtab-panel active" id="skp-tab-mugcalc">
           <div class="sk-sh">Mug Calculator</div>
-          <div class="sk-info">Shows potential mug values when browsing Item Market and Bazaars.</div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Mug Calculator</div><div class="sk-row-desc">Shows mug value info on Market &amp; Bazaar</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Mug Calculator</div><div class="sk-row-desc">Shows mug value info on Market &amp; Bazaar</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-mug-calc"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <label class="sk-field-label" style="margin-top:10px;">Mug Merits (0-10)</label>
-          <input type="number" class="sk-input" min="0" max="10" placeholder="0">
+          <input type="number" id="mugMeritsInput" class="sk-input" min="0" max="10" placeholder="0">
           <label class="sk-field-label">Plunder % (20-49%)</label>
-          <input type="number" class="sk-input" min="20" max="49" step="0.01" placeholder="e.g. 35.5">
-          <div style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;"><input type="checkbox" id="skp-no-plunder" style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;flex-shrink:0;"><label for="skp-no-plunder" style="font-size:11px;color:rgba(255,255,255,0.65);cursor:pointer;white-space:nowrap;">No Plunder Weapon <span style="color:rgba(255,255,255,0.35);font-size:10px;">— disables plunder bonus</span></label></div>
+          <input type="number" id="plunderInput" class="sk-input" min="20" max="49" step="0.01" placeholder="e.g. 35.5">
+          <div style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;"><input type="checkbox" id="noPlunderCheckbox" style="width:13px;height:13px;accent-color:#5fcc6a;cursor:pointer;flex-shrink:0;"><label for="noPlunderCheckbox" style="font-size:11px;color:rgba(255,255,255,0.65);cursor:pointer;white-space:nowrap;">No Plunder Weapon <span style="color:rgba(255,255,255,0.35);font-size:10px;">— disables plunder bonus</span></label></div>
           <label class="sk-field-label" style="margin-top:10px;">Minimum Threshold ($)</label>
-          <input type="number" class="sk-input" min="0" placeholder="Only alert above this value">
+          <input type="number" id="thresholdInput" class="sk-input" min="0" placeholder="Only alert above this value">
+          <div id="sidekick-mugcalc-status" style="margin-top:10px;padding:6px 10px;border-radius:4px;background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.5);font-size:11px;text-align:center;">Settings loaded</div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-mugwarn">
           <div class="sk-sh">Mug Warning</div>
-          <div class="sk-info">Prevent Double-Mugging: Alerts appear when you view a profile or attack page for someone you mugged recently.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Mug Warning</div><div class="sk-row-desc">Show warning modal when viewing a recently mugged player</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <label class="sk-field-label" style="margin-top:10px;">Warning Window (hours)</label>
           <input type="number" class="sk-input" min="1" max="72" value="24" placeholder="24">
           <div class="sk-hint">Alert if you mugged the target within this many hours</div>
-          <div class="sk-sh" style="margin-top:16px;">Warning Appearance</div>
-          <label class="sk-field-label">Modal Background Color</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="color" value="#ff4d4d" style="width:36px;height:28px;border:none;border-radius:4px;cursor:pointer;background:none;padding:0;">
-            <span style="font-size:11px;color:rgba(255,255,255,0.45);">#ff4d4d</span>
-          </div>
-          <label class="sk-field-label" style="margin-top:8px;">Modal Text Color</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="color" value="#ffffff" style="width:36px;height:28px;border:none;border-radius:4px;cursor:pointer;background:none;padding:0;">
-            <span style="font-size:11px;color:rgba(255,255,255,0.45);">#ffffff</span>
-          </div>
-          <label class="sk-field-label" style="margin-top:8px;">Button Text Color</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="color" value="#ffffff" style="width:36px;height:28px;border:none;border-radius:4px;cursor:pointer;background:none;padding:0;">
-            <span style="font-size:11px;color:rgba(255,255,255,0.45);">#ffffff</span>
-          </div>
         </div>
       </div>
     </div>
@@ -1333,7 +784,6 @@
         </div>
         <div class="sk-subtab-panel" id="skp-tab-war-chain">
           <div class="sk-sh">Chain Timer</div>
-          <div class="sk-info">Floating countdown timer for your faction chain. Alerts you before the chain expires.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Chain Timer</div><div class="sk-row-desc">Show floating chain countdown timer on all Torn pages</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chain-timer" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-sh" style="margin-top:16px;">Alert Settings</div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Alerts</div><div class="sk-row-desc">Trigger alerts when chain timer reaches the threshold</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-ct-alerts" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -1347,22 +797,12 @@
         </div>
         <div class="sk-subtab-panel" id="skp-tab-war-monitor">
           <div class="sk-sh">War Monitor</div>
-          <div class="sk-info">Monitors active faction wars and notifies you of incoming attacks and score changes.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable War Monitor</div><div class="sk-row-desc">Show travel status and hospital time and sort by hospital time on war page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-monitor"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-war-target-caller">
           <div class="sk-sh">War Target Caller</div>
-          <div class="sk-info">Tracks claims in chat and visually tags claimed targets in the war panel. Allows you to claim targets directly from the war page.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable War Target Caller</div><div class="sk-row-desc">Tag claimed players and add claim buttons</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-target-caller"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-sh" style="margin-top:16px;">Test Settings</div>
-          <label class="sk-field-label">Test Chat User</label>
-          <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-              <input type="text" class="sk-input" id="skp-wtc-test-user" placeholder="Enter name of chat user for testing...">
-              <button id="skp-wtc-test-save" class="sk-btn" style="padding: 0 12px; border-radius: 4px; cursor: pointer; background: #4CAF50; color: white; border: none; font-weight: bold;">Save</button>
-              <button id="skp-wtc-test-send" class="sk-btn" style="padding: 0 12px; border-radius: 4px; cursor: pointer; background: #2196F3; color: white; border: none; font-weight: bold;">Test Send</button>
-          </div>
-          <div id="skp-wtc-test-status" style="color: #4CAF50; font-size: 12px; margin-bottom: 8px; display: none; font-weight: bold;">Successfully saved user! ✓</div>
-          <div class="sk-hint">If set, claim messages will be sent to the chat with this specific user instead of the faction chat. Leave empty to use faction chat.</div>
+
         </div>
       </div>
     </div>
@@ -1381,7 +821,6 @@
 
         <div class="sk-subtab-panel" id="skp-tab-book-notifier">
           <div class="sk-sh">Book Notifier</div>
-          <div class="sk-info">Detects available book rewards from missions.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Book Notifier</div><div class="sk-row-desc">Displays an icon when you have unclaimed book rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-book-notifier" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
@@ -1396,12 +835,10 @@
       <div class="sk-scroll">
         <div class="sk-subtab-panel active" id="skp-tab-ev-calendar">
           <div class="sk-sh">Event Calendar</div>
-          <div class="sk-info">Displays upcoming Torn City events in a calendar view so you never miss a special event.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Event Calendar</div><div class="sk-row-desc">Show upcoming events in a calendar widget</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-event-calendar" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-ev-egg">
           <div class="sk-sh">Easter</div>
-          <div class="sk-info">Assists with seasonal egg hunt events by tracking found eggs and showing hints.</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Egg Helper</div><div class="sk-row-desc">Assists with seasonal easter egg hunt events by tracking found eggs and showing hints</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-easter" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
@@ -1547,6 +984,9 @@
             // subKey=null means the top-level object has {isEnabled: bool}
             // subKey='X' means object at sidekick_settings['X'].isEnabled
             const TOGGLE_MAP = [
+                // API
+                ['#sidekick-api-key', 'sidekick_api_key', null, ''],
+                ['#sidekick-secondary-api-key', 'sidekick_secondary_api_key', null, ''],
                 // Personal
                 ['#skp-tog-fast-attack', 'sidekick_attack_button_mover', null, true],
                 ['#skp-tog-loadout', 'sidekick_settings', 'loadout-switcher', false],
@@ -1571,7 +1011,12 @@
                 ['#skp-tog-auction-bonus', 'sidekick_settings', 'auction-weapon-bonus', false],
 
                 // Reminders
+                ['#skp-tog-travel-blocker', 'sidekick_travel_blocker', null, true],
+                ['#skp-travelblocker-oc-watcher', 'sidekick_travel_blocker', 'oc_watcher', true],
+                ['#skp-travelblocker-drug-cooldown', 'sidekick_travel_blocker', 'drug_cooldown', true],
+                ['#skp-travelblocker-war-watch', 'sidekick_travel_blocker', 'war_watch', true],
                 ['#skp-tog-racing-alert', 'sidekick_racing_alert', null, false],
+                ['#skp-tog-rehab-warning', 'sidekick_rehab_warning', null, false],
                 ['#skp-tog-blood-bag', 'sidekick_settings', 'blood-bag-reminder', false],
                 // Crimes
                 ['#skp-tog-sfc', 'sidekick_settings', 'crime-sfc', false],
@@ -1587,6 +1032,7 @@
                 ['#skp-tog-chain-view', 'sidekick_extended_chain_view', null, false],
                 ['#skp-tog-termed-war', 'sidekick_settings', 'termed-war-mode', false],
                 ['#skp-tog-war-target-caller', 'sidekick_war_target_caller', null, false],
+
                 // Missions
 
                 ['#skp-tog-mission-tracker', 'sidekick_settings', 'mission-tracker', false],
@@ -1595,6 +1041,8 @@
                 ['#skp-tog-easter', 'sidekick_holiday', null, false],
                 // Medical
                 ['#skp-tog-smart-medical', 'sidekick_smart_medical', null, false],
+                // Mugging
+                ['#skp-tog-mug-calc', 'sidekick_mug_calculator', null, false],
             ];
 
             // Helper: read isEnabled from storage
@@ -1622,12 +1070,23 @@
                 }
             }
 
+
+
             // Load all toggles from storage
             (async () => {
-                // Load API key into input
+                // Load API keys into inputs
                 const apiKey = CS() ? await CS().get('sidekick_api_key') : null;
+                const secApiKey = CS() ? await CS().get('sidekick_secondary_api_key') : null;
                 const apiInput = overlay.querySelector('#sidekick-api-key');
+                const secApiInput = overlay.querySelector('#sidekick-secondary-api-key');
                 if (apiInput && apiKey) apiInput.value = apiKey;
+                if (secApiInput && secApiKey) {
+                    secApiInput.value = secApiKey;
+                    const secApiBtn = overlay.querySelector('#skp-add-secondary-api-btn');
+                    const secApiCont = overlay.querySelector('#skp-secondary-api-container');
+                    if (secApiBtn) secApiBtn.style.display = 'none';
+                    if (secApiCont) secApiCont.style.display = 'block';
+                }
 
                 // Load all module toggles
                 for (const [sel, storKey, subKey] of TOGGLE_MAP) {
@@ -1744,10 +1203,10 @@
             if (btInp) {
                 btInp.addEventListener('change', async () => {
                     if (!CS()) return;
-                    const d = await CS().get('sidekick_block_training') || {};
+                    const d = await CS().get('sidekick_blocktraining') || {};
                     d.isEnabled = btInp.checked;
                     d.isBlocked = btInp.checked;
-                    await CS().set('sidekick_block_training', d);
+                    await CS().set('sidekick_blocktraining', d);
                     if (window.SidekickModules?.BlockTraining) {
                         window.SidekickModules.BlockTraining.isBlocked = btInp.checked;
                         if (btInp.checked) window.SidekickModules.BlockTraining.startBlocking?.();
@@ -1756,21 +1215,95 @@
                 });
                 (async () => {
                     if (!CS()) return;
-                    const d = await CS().get('sidekick_block_training') || {};
+                    const d = await CS().get('sidekick_blocktraining') || {};
                     btInp.checked = d.isBlocked === true || d.isEnabled === true;
                 })();
             }
 
+            // === Blood Bag Reminder: special fields ===
+            const bbBags = overlay.querySelector('#skp-bb-bags');
+            const bbDest = overlay.querySelector('#skp-bb-dest');
+            const bbNewTab = overlay.querySelector('#skp-bb-newtab');
+
+            const saveBloodBagSettings = async () => {
+                if (!CS()) return;
+                const d = await CS().get('sidekick_settings') || {};
+                const bbSet = d['blood-bag-reminder'] || {};
+                bbSet.bagsToFill = parseInt(bbBags.value, 10);
+                bbSet.destination = bbDest.value;
+                bbSet.openInNewTab = bbNewTab.checked;
+                d['blood-bag-reminder'] = bbSet;
+                await CS().set('sidekick_settings', d);
+                if (window.SidekickModules?.BloodBagReminder) {
+                    window.SidekickModules.BloodBagReminder.updateSettings(bbSet);
+                }
+            };
+
+            if (bbBags) bbBags.addEventListener('change', saveBloodBagSettings);
+            if (bbDest) bbDest.addEventListener('change', saveBloodBagSettings);
+            if (bbNewTab) bbNewTab.addEventListener('change', saveBloodBagSettings);
+
+            (async () => {
+                if (!CS()) return;
+                const d = await CS().get('sidekick_settings');
+                if (d && d['blood-bag-reminder']) {
+                    const bbSet = d['blood-bag-reminder'];
+                    if (bbBags && bbSet.bagsToFill !== undefined) bbBags.value = bbSet.bagsToFill;
+                    if (bbDest && bbSet.destination !== undefined) bbDest.value = bbSet.destination;
+                    if (bbNewTab && bbSet.openInNewTab !== undefined) bbNewTab.checked = bbSet.openInNewTab;
+                }
+            })();
+
+            // === Rehab Warning: special fields ===
+            const rwEduThreshold = overlay.querySelector('#skp-rehab-edu-threshold');
+            const rwCompanyEnable = overlay.querySelector('#skp-rehab-company-enable');
+            const rwCompanyPenalty = overlay.querySelector('#skp-rehab-company-penalty');
+            const rwCompanyWrap = overlay.querySelector('#skp-rehab-company-wrap');
+
+            const saveRehabSettings = async () => {
+                if (!CS()) return;
+                const d = await CS().get('sidekick_rehab_warning') || {};
+                d.eduThreshold = parseInt(rwEduThreshold.value, 10);
+                d.companyEnable = rwCompanyEnable.checked;
+                d.companyPenalty = parseInt(rwCompanyPenalty.value, 10);
+                await CS().set('sidekick_rehab_warning', d);
+                if (window.SidekickModules?.RehabWarning) {
+                    window.SidekickModules.RehabWarning.updateSettings(d);
+                }
+                
+                if (rwCompanyWrap) {
+                    rwCompanyWrap.style.display = rwCompanyEnable.checked ? 'block' : 'none';
+                }
+            };
+
+            if (rwEduThreshold) rwEduThreshold.addEventListener('change', saveRehabSettings);
+            if (rwCompanyEnable) rwCompanyEnable.addEventListener('change', saveRehabSettings);
+            if (rwCompanyPenalty) rwCompanyPenalty.addEventListener('change', saveRehabSettings);
+
+            (async () => {
+                if (!CS()) return;
+                const d = await CS().get('sidekick_rehab_warning');
+                if (d) {
+                    if (rwEduThreshold && d.eduThreshold !== undefined) rwEduThreshold.value = d.eduThreshold;
+                    if (rwCompanyEnable && d.companyEnable !== undefined) rwCompanyEnable.checked = d.companyEnable;
+                    if (rwCompanyPenalty && d.companyPenalty !== undefined) rwCompanyPenalty.value = d.companyPenalty;
+                    
+                    if (rwCompanyWrap) {
+                        rwCompanyWrap.style.display = rwCompanyEnable.checked ? 'block' : 'none';
+                    }
+                }
+            })();
+
             // === Crime Outcome: load mode + wire selector ===
             const outcomeMode = overlay.querySelector('#skp-outcome-mode');
-            const outcomeColor = overlay.querySelector('#skp-outcome-color');
+            const outcomeEnable = overlay.querySelector('#skp-tog-outcome-enable');
             if (outcomeMode) {
                 (async () => {
                     if (!CS()) return;
                     const sett = await CS().get('sidekick_settings') || {};
                     const s = sett['hide-crime-outcome'] || {};
                     if (s.mode != null) outcomeMode.value = String(s.mode);
-                    if (outcomeColor) outcomeColor.checked = s.colorByResult !== false;
+                    if (outcomeEnable) outcomeEnable.checked = s.isEnabled === true || (s.mode && s.mode > 0);
                 })();
                 const saveOutcome = async () => {
                     if (!CS()) return;
@@ -1779,7 +1312,7 @@
                     const mode = parseInt(outcomeMode.value, 10);
                     sett['hide-crime-outcome'].mode = mode;
                     sett['hide-crime-outcome'].isEnabled = mode > 0;
-                    sett['hide-crime-outcome'].colorByResult = outcomeColor ? outcomeColor.checked : true;
+                    if (outcomeEnable) outcomeEnable.checked = mode > 0;
                     await CS().set('sidekick_settings', sett);
                     if (window.SidekickModules?.HideCrimeOutcome) {
                         window.SidekickModules.HideCrimeOutcome.mode = mode;
@@ -1788,7 +1321,16 @@
                     }
                 };
                 outcomeMode.addEventListener('change', saveOutcome);
-                if (outcomeColor) outcomeColor.addEventListener('change', saveOutcome);
+                if (outcomeEnable) {
+                    outcomeEnable.addEventListener('change', () => {
+                        if (outcomeEnable.checked) {
+                            outcomeMode.value = "1"; // Default to hidden when enabled
+                        } else {
+                            outcomeMode.value = "0"; // Disabled
+                        }
+                        saveOutcome();
+                    });
+                }
             }
 
             // === Shoplifting alert sub-settings ===
@@ -1831,13 +1373,71 @@
             if (slSelAll) slSelAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = true); saveShoplift(); });
             if (slDeselAll) slDeselAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = false); saveShoplift(); });
 
+            // === Mug Calculator: save/load merits, plunder, noPlunder, threshold ===
+            const mugMeritsEl   = overlay.querySelector('#mugMeritsInput');
+            const mugPlunderEl  = overlay.querySelector('#plunderInput');
+            const mugNoPlunderEl = overlay.querySelector('#noPlunderCheckbox');
+            const mugThreshEl   = overlay.querySelector('#thresholdInput');
+
+            // Load stored values into the inputs
+            (async () => {
+                if (!CS()) return;
+                const merits    = await CS().get('mugMerits');
+                const plunder   = await CS().get('mugPlunder');
+                const noPlunder = await CS().get('mugNoPlunder');
+                const thresh    = await CS().get('mugThreshold');
+                if (mugMeritsEl   && merits    != null && merits    > 0) mugMeritsEl.value   = merits;
+                if (mugPlunderEl  && plunder   != null && plunder   > 0) mugPlunderEl.value  = plunder;
+                if (mugNoPlunderEl && noPlunder != null)                  mugNoPlunderEl.checked = noPlunder === true;
+                if (mugThreshEl   && thresh    != null && thresh    > 0) mugThreshEl.value   = thresh;
+                // Reflect noPlunder state on plunder input
+                if (mugPlunderEl && mugNoPlunderEl) {
+                    mugPlunderEl.disabled = mugNoPlunderEl.checked;
+                    mugPlunderEl.style.opacity = mugNoPlunderEl.checked ? '0.4' : '1';
+                }
+            })();
+
+            // Debounced save helper
+            let mugSaveTimer;
+            const saveMugSettings = () => {
+                clearTimeout(mugSaveTimer);
+                mugSaveTimer = setTimeout(async () => {
+                    if (!CS()) return;
+                    const meritsVal  = parseInt(mugMeritsEl?.value  ?? '', 10);
+                    const threshVal  = parseInt(mugThreshEl?.value  ?? '', 10);
+                    const noPlunder  = mugNoPlunderEl?.checked ?? false;
+                    const plunderVal = noPlunder ? 0 : parseFloat(mugPlunderEl?.value ?? 0);
+                    await CS().set('mugMerits',    isNaN(meritsVal)  ? 0 : Math.min(Math.max(meritsVal, 0), 10));
+                    await CS().set('mugPlunder',   isNaN(plunderVal) ? 0 : plunderVal);
+                    await CS().set('mugNoPlunder', noPlunder);
+                    await CS().set('mugThreshold', isNaN(threshVal)  ? 0 : threshVal);
+                    // Invalidate the mug data cache so the next popup reflects new settings
+                    if (window.SidekickModules?.MugCalculator?.clearCache) {
+                        window.SidekickModules.MugCalculator.clearCache();
+                    }
+                }, 400);
+            };
+
+            if (mugMeritsEl)    mugMeritsEl.addEventListener('input',  saveMugSettings);
+            if (mugPlunderEl)   mugPlunderEl.addEventListener('input',  saveMugSettings);
+            if (mugThreshEl)    mugThreshEl.addEventListener('input',  saveMugSettings);
+            if (mugNoPlunderEl) {
+                mugNoPlunderEl.addEventListener('change', () => {
+                    if (mugPlunderEl) {
+                        mugPlunderEl.disabled     = mugNoPlunderEl.checked;
+                        mugPlunderEl.style.opacity = mugNoPlunderEl.checked ? '0.4' : '1';
+                    }
+                    saveMugSettings();
+                });
+            }
+
             // Attach specific tab listeners to the new preview overlay
             this.attachGeneralTabListeners(overlay);
             this.attachModulesTabListeners(overlay);
             this.attachXanaxTabListeners(overlay);
             this.attachChainTimerTabListeners(overlay);
             this.attachNotificationsTabListeners(overlay);
-            this.attachMugCalculatorTabListeners(overlay);
+
             this.attachBloodBagTabListeners(overlay);
             this.attachQuickDepositTabListeners(overlay);
             this.attachCrimeNotifierTabListeners(overlay);
@@ -1849,229 +1449,119 @@
             this.attachWarTargetCallerTabListeners(overlay);
 
         },
-
-        // Attach all event listeners
-        attachEventListeners(panel) {
-            // Tab switching for sidebar
-            const tabButtons = panel.querySelectorAll('.settings-sidebar-tab');
-            tabButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const targetTab = btn.dataset.tab;
-                    this.switchTab(targetTab, panel);
-                });
-            });
-
-            // Close button
-            const closeBtn = panel.querySelector('#sidekick-close-settings');
-            closeBtn.addEventListener('click', () => {
-                panel.remove();
-                this.settingsPanel = null;
-            });
-
-            closeBtn.addEventListener('mouseenter', () => {
-                closeBtn.style.background = 'rgba(255,255,255,0.2)';
-                closeBtn.style.transform = 'scale(1.1)';
-            });
-
-            closeBtn.addEventListener('mouseleave', () => {
-                closeBtn.style.background = 'rgba(255,255,255,0.1)';
-                closeBtn.style.transform = 'scale(1)';
-            });
-
-            // (legacy preview button removed — new UI is now primary)
-            if (false) {
-                previewBtn.addEventListener('click', () => {
-                    this.createPreviewPanel();
-                });
-                previewBtn.addEventListener('mouseenter', () => {
-                    previewBtn.style.background = 'linear-gradient(135deg, rgba(95,204,106,0.28), rgba(255,173,90,0.28))';
-                    previewBtn.style.borderColor = 'rgba(95,204,106,0.7)';
-                });
-                previewBtn.addEventListener('mouseleave', () => {
-                    previewBtn.style.background = 'linear-gradient(135deg, rgba(95,204,106,0.15), rgba(255,173,90,0.15))';
-                    previewBtn.style.borderColor = 'rgba(95,204,106,0.4)';
-                });
-            }
-
-
-
-            // General Tab listeners
-            this.attachGeneralTabListeners(overlay);
-
-            // Modules Tab listeners
-            this.attachModulesTabListeners(overlay);
-
-            // Xanax Viewer Tab listeners
-            this.attachXanaxTabListeners(overlay);
-
-            // Chain Timer Tab listeners
-            this.attachChainTimerTabListeners(overlay);
-
-            // Notifications Tab listeners
-            this.attachNotificationsTabListeners(overlay);
-
-            // Mug Calculator Tab listeners
-            this.attachMugCalculatorTabListeners(overlay);
-
-            // Blood Bag Reminder Tab listeners
-            this.attachBloodBagTabListeners(overlay);
-
-            // Quick Deposit Tab listeners
-            this.attachQuickDepositTabListeners(overlay);
-
-            // Crime Notifier Tab listeners
-            this.attachCrimeNotifierTabListeners(overlay);
-            this.attachCrimesTabListeners(overlay);
-
-            // Mug Warning Tab listeners
-            this.attachMugWarningTabListeners(overlay);
-
-            // Mission Tracker Tab listeners
-            this.attachMissionTrackerTabListeners(overlay);
-
-            // Hide Crime Outcome Tab listeners
-            this.attachHideCrimeTabListeners(overlay);
-
-            // Holiday Tab listeners
-            this.attachHolidayTabListeners(overlay);
-        },
-
-        // Switch between tabs
-        switchTab(tabName, panel) {
-            // Update button states for sidebar tabs
-            const tabButtons = panel.querySelectorAll('.settings-sidebar-tab');
-            tabButtons.forEach(btn => {
-                const icon = btn.querySelector('img');
-                if (btn.dataset.tab === tabName) {
-                    btn.style.background = 'transparent';
-                    btn.style.boxShadow = 'none';
-                    btn.style.color = 'white';
-                    btn.classList.add('active');
-                    if (icon) {
-                        icon.style.opacity = '1';
-                        icon.style.filter = 'drop-shadow(0 0 12px rgba(102, 187, 106, 0.8)) drop-shadow(0 0 24px rgba(255, 173, 90, 0.6))';
-                    }
-                } else {
-                    btn.style.background = 'transparent';
-                    btn.style.boxShadow = 'none';
-                    btn.style.color = 'rgba(255,255,255,0.7)';
-                    btn.classList.remove('active');
-                    if (icon) {
-                        icon.style.opacity = '0.7';
-                        icon.style.filter = 'none';
-                    }
-                }
-            });
-
-            // Update content visibility with smooth opacity transition
-            const tabContents = panel.querySelectorAll('.settings-tab-content');
-            tabContents.forEach(content => {
-                const isActive = content.id === `settings-tab-${tabName}`;
-                if (isActive) {
-                    content.style.position = 'relative';
-                    content.style.opacity = '0';
-                    content.style.pointerEvents = 'auto';
-                    // Small rAF so the browser renders position change before fading in
-                    requestAnimationFrame(() => {
-                        content.style.transition = 'opacity 0.15s ease';
-                        content.style.opacity = '1';
-                    });
-                } else {
-                    content.style.transition = 'none';
-                    content.style.opacity = '0';
-                    content.style.position = 'absolute';
-                    content.style.pointerEvents = 'none';
-                    content.style.top = '0';
-                    content.style.left = '0';
-                    content.style.width = '100%';
-                }
-            });
-
-
-            this.currentTab = tabName;
-        },
-
         // General Tab listeners
         attachGeneralTabListeners(panel) {
             const apiInput = panel.querySelector('#sidekick-api-key');
+            const secApiInput = panel.querySelector('#sidekick-secondary-api-key');
             const testBtn = panel.querySelector('#sidekick-test-api');
             const statusDiv = panel.querySelector('#sidekick-api-status');
 
-            // Auto-save API key with debouncing
-            let apiKeySaveTimeout;
-            if (apiInput) {
-                apiInput.addEventListener('input', () => {
-                    clearTimeout(apiKeySaveTimeout);
-                    apiKeySaveTimeout = setTimeout(async () => {
-                        const apiKey = apiInput.value.trim();
-                        if (!apiKey) {
-                            return; // Don't save empty values
-                        }
-
-                        try {
-                            await window.SidekickModules.Core.ChromeStorage.set('sidekick_api_key', apiKey);
-                            this.showAutoSaveStatus(statusDiv, 'API key saved ✓');
-
-                            // Toast notification
-                            if (window.SidekickModules.Core.NotificationSystem) {
-                                window.SidekickModules.Core.NotificationSystem.show(
-                                    'Settings Saved',
-                                    'API key has been saved automatically',
-                                    'success',
-                                    2000
-                                );
+            // Auto-save API keys with debouncing
+            const setupAutoSave = (inputEl, storageKey) => {
+                let apiKeySaveTimeout;
+                if (inputEl) {
+                    inputEl.addEventListener('input', () => {
+                        clearTimeout(apiKeySaveTimeout);
+                        apiKeySaveTimeout = setTimeout(async () => {
+                            const val = inputEl.value.trim();
+                            if (!val) return;
+                            try {
+                                await window.SidekickModules.Core.ChromeStorage.set(storageKey, val);
+                                this.showAutoSaveStatus(statusDiv, 'API key saved ✓');
+                            } catch (error) {
+                                console.error('Failed to save API key:', error);
                             }
-                        } catch (error) {
-                            console.error('Failed to save API key:', error);
-                            this.showStatus(statusDiv, 'Failed to save settings', 'error');
-                        }
-                    }, 500); // 500ms debounce
-                });
-            }
+                        }, 500);
+                    });
+                }
+            };
+            
+            setupAutoSave(apiInput, 'sidekick_api_key');
+            setupAutoSave(secApiInput, 'sidekick_secondary_api_key');
 
             testBtn.addEventListener('click', async () => {
-                const apiKey = apiInput.value.trim();
-                if (!apiKey) {
-                    this.showStatus(statusDiv, 'Please enter an API key first', 'error');
+                const key1 = apiInput?.value.trim();
+                const key2 = secApiInput?.value.trim();
+                
+                if (!key1 && !key2) {
+                    if (window.SidekickModules.Core.NotificationSystem) {
+                        window.SidekickModules.Core.NotificationSystem.show('API Test', 'Please enter an API key first', 'error', 3000);
+                    }
                     return;
                 }
 
-                this.showStatus(statusDiv, 'Testing API connection...', 'info');
+                if (window.SidekickModules.Core.NotificationSystem) {
+                    window.SidekickModules.Core.NotificationSystem.show('API Test', 'Testing API connection...', 'info', 2000);
+                }
 
                 try {
-                    const response = await fetch(`https://api.torn.com/user/?selections=basic&key=${apiKey}`);
-                    const data = await response.json();
+                    let results = [];
+                    if (key1) {
+                        const r = await fetch(`https://api.torn.com/user/?selections=basic&key=${key1}`);
+                        const d = await r.json();
+                        results.push(d.error ? `Primary Error: ${d.error.error}` : `Primary Working (${d.name})`);
+                    }
+                    if (key2) {
+                        const r = await fetch(`https://api.torn.com/user/?selections=basic&key=${key2}`);
+                        const d = await r.json();
+                        results.push(d.error ? `Secondary Error: ${d.error.error}` : `Secondary Working (${d.name})`);
+                    }
+                    
+                    const isError = results.some(msg => msg.includes('Error'));
+                    const finalMsg = results.join(' | ');
 
-                    if (data.error) {
-                        this.showStatus(statusDiv, `API Error: ${data.error.error}`, 'error');
-                    } else {
-                        this.showStatus(statusDiv, `API Working! Welcome ${data.name} [${data.player_id}]`, 'success');
-
-                        if (window.SidekickModules.Core.NotificationSystem) {
-                            window.SidekickModules.Core.NotificationSystem.show(
-                                'API Test Success',
-                                `Connected as ${data.name}`,
-                                'success',
-                                3000
-                            );
-                        }
+                    if (window.SidekickModules.Core.NotificationSystem) {
+                        window.SidekickModules.Core.NotificationSystem.show('API Test', finalMsg, isError ? 'error' : 'success', 5000);
                     }
                 } catch (error) {
-                    console.error('API test failed:', error);
-                    this.showStatus(statusDiv, 'API test failed - check your connection', 'error');
+                    if (window.SidekickModules.Core.NotificationSystem) {
+                        window.SidekickModules.Core.NotificationSystem.show('API Test', 'API test failed - check your connection', 'error', 3000);
+                    }
                 }
             });
 
             const showKeyBtn = panel.querySelector('#sidekick-show-key');
-            if (showKeyBtn && apiInput) {
+            if (showKeyBtn) {
                 showKeyBtn.addEventListener('click', () => {
-                    if (apiInput.type === 'password') {
-                        apiInput.type = 'text';
-                        showKeyBtn.textContent = 'Hide Key';
-                    } else {
-                        apiInput.type = 'password';
-                        showKeyBtn.textContent = 'Show Key';
-                    }
+                    const toggleInput = (el) => {
+                        if (!el) return;
+                        el.type = el.type === 'password' ? 'text' : 'password';
+                    };
+                    toggleInput(apiInput);
+                    toggleInput(secApiInput);
+                    showKeyBtn.textContent = apiInput.type === 'password' ? 'Show Key' : 'Hide Key';
+                });
+            }
+
+            const secApiBtn = document.getElementById('skp-add-secondary-api-btn');
+            const secApiCont = document.getElementById('skp-secondary-api-container');
+            if (secApiBtn && secApiCont) {
+                secApiBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    secApiBtn.style.display = 'none';
+                    secApiCont.style.display = 'block';
+                });
+                
+                // If there's already a value in it, spawn it immediately
+                if (document.getElementById('sidekick-secondary-api-key')?.value) {
+                    secApiBtn.style.display = 'none';
+                    secApiCont.style.display = 'block';
+                }
+            }
+
+            const clearApiBtn = document.getElementById('skp-clear-api-key');
+            if (clearApiBtn && apiInput) {
+                clearApiBtn.addEventListener('click', () => {
+                    apiInput.value = '';
+                    apiInput.dispatchEvent(new Event('input')); // trigger save
+                });
+            }
+
+            const clearSecApiBtn = document.getElementById('skp-clear-sec-api-key');
+            if (clearSecApiBtn && secApiInput) {
+                clearSecApiBtn.addEventListener('click', () => {
+                    secApiInput.value = '';
+                    secApiInput.dispatchEvent(new Event('input')); // trigger save
                 });
             }
 
@@ -2429,22 +1919,13 @@
                 }
             });
 
-            // Weapon overview link - enhanced with better debugging
+            // Weapon overview link
             const weaponOverviewLink = panel.querySelector('#weapon-overview-link');
-            console.log('[Sidekick] Weapon overview link element:', weaponOverviewLink);
-
             if (weaponOverviewLink) {
-                console.log('[Sidekick] Attaching click listener to weapon overview link');
-
                 weaponOverviewLink.addEventListener('click', async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('[Sidekick] Weapon overview link clicked!');
-                    console.log('[Sidekick] WeaponExpTracker module:', window.SidekickModules?.WeaponExpTracker);
-
-                    // Access the WeaponExpTracker module
                     if (window.SidekickModules?.WeaponExpTracker?.openWeaponsOverview) {
-                        console.log('[Sidekick] Calling openWeaponsOverview...');
                         try {
                             await window.SidekickModules.WeaponExpTracker.openWeaponsOverview();
                         } catch (error) {
@@ -2456,10 +1937,6 @@
                         alert('Weapon XP Tracker module not available. Please enable it in settings and reload the page.');
                     }
                 });
-
-                console.log('[Sidekick] Click listener attached successfully');
-            } else {
-                console.error('[Sidekick] Weapon overview link element not found!');
             }
         },
 
@@ -2553,15 +2030,20 @@
             };
 
             // Auto-save on slider change
-            xanaxAutoLimitSlider.addEventListener('input', () => {
-                xanaxAutoLimitDisplay.textContent = xanaxAutoLimitSlider.value;
-            });
-            xanaxAutoLimitSlider.addEventListener('change', autoSaveXanaxSettings);
+            if (xanaxAutoLimitSlider) {
+                xanaxAutoLimitSlider.addEventListener('input', () => {
+                    if (xanaxAutoLimitDisplay) xanaxAutoLimitDisplay.textContent = xanaxAutoLimitSlider.value;
+                });
+                xanaxAutoLimitSlider.addEventListener('change', autoSaveXanaxSettings);
+            }
 
             // Auto-save on checkbox change
-            xanaxRelativeCheckbox.addEventListener('change', autoSaveXanaxSettings);
+            if (xanaxRelativeCheckbox) {
+                xanaxRelativeCheckbox.addEventListener('change', autoSaveXanaxSettings);
+            }
 
-            clearCacheBtn.addEventListener('click', async () => {
+            if (clearCacheBtn) {
+                clearCacheBtn.addEventListener('click', async () => {
                 try {
                     await window.SidekickModules.Core.ChromeStorage.set('xanaxviewer_cache', {});
                     this.showStatus(xanaxStatusDiv, 'Cache cleared successfully!', 'success');
@@ -2579,6 +2061,7 @@
                     this.showStatus(xanaxStatusDiv, 'Failed to clear cache', 'error');
                 }
             });
+            }
         },
 
         // Chain Timer Tab listeners
@@ -2754,266 +2237,6 @@
         },
 
         // Mug Calculator Tab listeners
-        attachMugCalculatorTabListeners(panel) {
-            const mugMeritsInput = panel.querySelector('#mugMeritsInput');
-            const plunderInput = panel.querySelector('#plunderInput');
-            const noPlunderCheckbox = panel.querySelector('#noPlunderCheckbox');
-            const thresholdInput = panel.querySelector('#thresholdInput');
-            const mugCalcStatusDiv = panel.querySelector('#sidekick-mugcalc-status');
-
-            // Helper to apply disabled state to plunder input
-            const applyPlunderDisabledState = (disabled) => {
-                if (!plunderInput) return;
-                plunderInput.disabled = disabled;
-                plunderInput.style.opacity = disabled ? '0.35' : '1';
-                plunderInput.style.cursor = disabled ? 'not-allowed' : '';
-            };
-
-            // Load stored noPlunder flag and sync checkbox + input
-            window.SidekickModules.Core.ChromeStorage.get('mugNoPlunder').then(stored => {
-                const noPlunder = stored === true;
-                if (noPlunderCheckbox) noPlunderCheckbox.checked = noPlunder;
-                applyPlunderDisabledState(noPlunder);
-            });
-
-            // Auto-save helper function
-            const autoSaveMugCalcSettings = async () => {
-                try {
-                    // Save mug merits
-                    if (mugMeritsInput) {
-                        const mugMeritsVal = parseInt(mugMeritsInput.value.trim(), 10);
-                        await window.SidekickModules.Core.ChromeStorage.set('mugMerits', isNaN(mugMeritsVal) ? 0 : Math.min(Math.max(mugMeritsVal, 0), 10));
-                    }
-
-                    // Save noPlunder flag
-                    const noPlunder = noPlunderCheckbox ? noPlunderCheckbox.checked : false;
-                    await window.SidekickModules.Core.ChromeStorage.set('mugNoPlunder', noPlunder);
-
-                    // Save plunder percentage (always 0 when noPlunder is checked)
-                    if (noPlunder) {
-                        await window.SidekickModules.Core.ChromeStorage.set('mugPlunder', 0);
-                    } else if (plunderInput) {
-                        const raw = plunderInput.value.trim();
-                        const plunderInputVal = parseFloat(raw);
-                        if (raw === '' || isNaN(plunderInputVal) || plunderInputVal === 0) {
-                            await window.SidekickModules.Core.ChromeStorage.set('mugPlunder', 0);
-                        } else if (plunderInputVal < 20 || plunderInputVal > 49) {
-                            this.showStatus(mugCalcStatusDiv, 'Plunder % must be between 20 and 49', 'error');
-                            return;
-                        } else {
-                            await window.SidekickModules.Core.ChromeStorage.set('mugPlunder', plunderInputVal);
-                        }
-                    }
-
-                    // Save threshold
-                    if (thresholdInput) {
-                        const thresholdVal = parseInt(thresholdInput.value.trim(), 10);
-                        await window.SidekickModules.Core.ChromeStorage.set('mugThreshold', isNaN(thresholdVal) ? 0 : thresholdVal);
-                    }
-
-                    this.showAutoSaveStatus(mugCalcStatusDiv, 'Settings saved ✓');
-
-                    if (window.SidekickModules.Core.NotificationSystem) {
-                        window.SidekickModules.Core.NotificationSystem.show(
-                            'Mug Calculator',
-                            'Settings saved automatically',
-                            'success',
-                            2000
-                        );
-                    }
-                } catch (error) {
-                    console.error('Failed to save mug calculator settings:', error);
-                    this.showStatus(mugCalcStatusDiv, 'Failed to save settings', 'error');
-                }
-            };
-
-            // Auto-save on input changes with debouncing
-            let mugCalcSaveTimeout;
-            const debouncedAutoSave = () => {
-                clearTimeout(mugCalcSaveTimeout);
-                mugCalcSaveTimeout = setTimeout(autoSaveMugCalcSettings, 500);
-            };
-
-            // Checkbox instantly toggles disabled state and saves
-            if (noPlunderCheckbox) {
-                noPlunderCheckbox.addEventListener('change', () => {
-                    applyPlunderDisabledState(noPlunderCheckbox.checked);
-                    debouncedAutoSave();
-                });
-            }
-            if (mugMeritsInput) {
-                mugMeritsInput.addEventListener('input', debouncedAutoSave);
-            }
-            if (plunderInput) {
-                plunderInput.addEventListener('input', debouncedAutoSave);
-            }
-            if (thresholdInput) {
-                thresholdInput.addEventListener('input', debouncedAutoSave);
-            }
-        },
-
-        // Load all settings from storage
-        async loadAllSettings() {
-            try {
-                // Load API key
-                const apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key');
-                const apiInput = document.querySelector('#sidekick-api-key');
-                if (apiInput && apiKey) {
-                    apiInput.value = apiKey;
-                }
-
-                // Load module toggles
-                await this.loadModuleToggles();
-
-                // Load Xanax Viewer settings
-                const xanaxSettings = await window.SidekickModules.Core.ChromeStorage.get('sidekick_xanax_viewer') || {};
-                const xanaxAutoLimitSlider = document.querySelector('#sidekick-xanax-autolimit');
-                const xanaxAutoLimitDisplay = document.querySelector('#sidekick-xanax-autolimit-display');
-                const xanaxRelativeCheckbox = document.querySelector('#sidekick-xanax-relative');
-
-                if (xanaxAutoLimitSlider) {
-                    xanaxAutoLimitSlider.value = xanaxSettings.autoLimit || 0;
-                    xanaxAutoLimitDisplay.textContent = xanaxSettings.autoLimit || 0;
-                }
-                if (xanaxRelativeCheckbox) {
-                    xanaxRelativeCheckbox.checked = xanaxSettings.showRelative || false;
-                }
-
-                // Load Chain Timer settings
-                const chainSettings = await window.SidekickModules.Core.ChromeStorage.get('sidekick_chain_timer') || {};
-                const chainThresholdSlider = document.querySelector('#sidekick-chain-threshold');
-                const chainThresholdDisplay = document.querySelector('#sidekick-chain-threshold-display');
-                const chainAlertsCheckbox = document.querySelector('#sidekick-chain-alerts');
-                const chainPopupCheckbox = document.querySelector('#sidekick-chain-popup');
-                const chainFlashCheckbox = document.querySelector('#sidekick-chain-flash');
-
-                if (chainThresholdSlider) {
-                    const thresholdMinutes = (chainSettings.alertThresholdSeconds || 240) / 60;
-                    chainThresholdSlider.value = thresholdMinutes;
-                    chainThresholdDisplay.textContent = `${thresholdMinutes} min`;
-                }
-                if (chainAlertsCheckbox) {
-                    chainAlertsCheckbox.checked = chainSettings.alertsEnabled !== false;
-                }
-                if (chainPopupCheckbox) {
-                    chainPopupCheckbox.checked = chainSettings.popupEnabled !== false;
-                }
-                if (chainFlashCheckbox) {
-                    chainFlashCheckbox.checked = chainSettings.screenFlashEnabled !== false;
-                }
-
-                const chainFloatingDisplayCheckbox = document.querySelector('#sidekick-chain-floating-display');
-                if (chainFloatingDisplayCheckbox) {
-                    chainFloatingDisplayCheckbox.checked = chainSettings.floatingDisplayEnabled !== false;
-                }
-
-                // NOTE: Notification settings are now loaded in attachNotificationsTabListeners()
-                // to ensure proper initialization before click handler is attached
-
-                // Load Mug Calculator settings into UI
-                const [storedMerits, storedPlunder, storedThreshold, storedNoPlunder] = await Promise.all([
-                    window.SidekickModules.Core.ChromeStorage.get('mugMerits'),
-                    window.SidekickModules.Core.ChromeStorage.get('mugPlunder'),
-                    window.SidekickModules.Core.ChromeStorage.get('mugThreshold'),
-                    window.SidekickModules.Core.ChromeStorage.get('mugNoPlunder')
-                ]);
-                const mugMeritsInputEl = document.querySelector('#mugMeritsInput');
-                const plunderInputEl = document.querySelector('#plunderInput');
-                const noPlunderCheckboxEl = document.querySelector('#noPlunderCheckbox');
-                const thresholdInputEl = document.querySelector('#thresholdInput');
-                if (mugMeritsInputEl != null) mugMeritsInputEl.value = storedMerits ?? '';
-                if (plunderInputEl != null) plunderInputEl.value = storedPlunder != null && storedPlunder > 0 ? storedPlunder : '';
-                if (noPlunderCheckboxEl != null) {
-                    noPlunderCheckboxEl.checked = storedNoPlunder === true;
-                    if (plunderInputEl) {
-                        plunderInputEl.disabled = storedNoPlunder === true;
-                        plunderInputEl.style.opacity = storedNoPlunder === true ? '0.35' : '1';
-                    }
-                }
-                if (thresholdInputEl != null) thresholdInputEl.value = storedThreshold ?? '';
-
-            } catch (error) {
-                console.error('Failed to load settings:', error);
-            }
-        },
-
-        // Load module toggle states
-        async loadModuleToggles() {
-            const modules = [
-                'attack-button-mover',
-                'blocktraining',
-                'time-on-tab',
-                'npc-attack-timer',
-                'random-target',
-                'stats-tracker',
-                'xanax-viewer',
-                'chain-timer',
-                'racing-alert',
-                'refill-blocker',
-                'extended-chain-view',
-                'weapon-xp-tracker',
-                'mug-calculator'
-            ];
-
-            for (const moduleId of modules) {
-                const storageKey = `sidekick_${moduleId.replace(/-/g, '_')}`;
-                const settings = await window.SidekickModules.Core.ChromeStorage.get(storageKey) || {};
-                const isEnabled = settings.isEnabled === true; // Default to false
-
-                const toggle = document.querySelector(`.toggle-switch[data-module="${moduleId}"]`);
-                if (toggle) {
-                    toggle.dataset.active = isEnabled;
-                    const track = toggle.querySelector('.toggle-track');
-                    const thumb = toggle.querySelector('.toggle-thumb');
-                    this.updateToggleVisual(track, thumb, isEnabled);
-                }
-            }
-
-            // Load mug calculator settings
-            const mugMerits = await window.SidekickModules.Core.ChromeStorage.get('mugMerits') || 0;
-            const mugPlunder = await window.SidekickModules.Core.ChromeStorage.get('mugPlunder') || 0;
-            const mugThreshold = await window.SidekickModules.Core.ChromeStorage.get('mugThreshold') || 0;
-
-            const mugMeritsInput = document.querySelector('#mugMeritsInput');
-            const plunderInput = document.querySelector('#plunderInput');
-            const thresholdInput = document.querySelector('#thresholdInput');
-
-            if (mugMeritsInput) mugMeritsInput.value = mugMerits;
-            if (plunderInput) plunderInput.value = parseFloat(mugPlunder).toFixed(2);
-            if (thresholdInput) thresholdInput.value = mugThreshold;
-        },
-
-        // Update toggle visual state
-        updateToggleVisual(track, thumb, isActive) {
-            if (isActive) {
-                // Use setAttribute to set style with !important
-                track.setAttribute('style', track.getAttribute('style').replace(/background-color:[^;]+;?/g, '') + 'background-color: #4CAF50 !important;');
-                thumb.style.transform = 'translateX(26px)';
-            } else {
-                // Use setAttribute to set style with !important
-                track.setAttribute('style', track.getAttribute('style').replace(/background-color:[^;]+;?/g, '') + 'background-color: rgba(255, 255, 255, 0.2) !important;');
-                thumb.style.transform = 'translateX(0px)';
-            }
-        },
-
-        // Show status message
-        showStatus(element, message, type) {
-            element.textContent = message;
-
-            if (type === 'success') {
-                element.style.background = 'rgba(76, 175, 80, 0.3)';
-            } else if (type === 'error') {
-                element.style.background = 'rgba(244, 67, 54, 0.3)';
-            } else if (type === 'info') {
-                element.style.background = 'rgba(33, 150, 243, 0.3)';
-            }
-
-            setTimeout(() => {
-                element.style.background = 'rgba(255,255,255,0.1)';
-                element.textContent = type === 'success' ? 'Settings saved' : 'Ready';
-            }, 3000);
-        },
-
         // Show auto-save status with brief visual feedback
         showAutoSaveStatus(element, message) {
             element.textContent = message;
@@ -3598,56 +2821,6 @@
             }
         },
 
-        //Create Mug Warning Settings HTML
-        createMugWarningSettingsHTML() {
-            return `
-            <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">⚠️ Mug Warning Settings</h4>
-            
-            <div style="background: rgba(255, 77, 77, 0.1); border-left: 3px solid #ff4d4d; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                    ⚠️ <strong>Prevent Double-Mugging:</strong> Alerts appear when you view a profile or attack page for someone you mugged recently.
-                </div>
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; color: #fff; font-weight: 600;">⏰ Hours Threshold:</label>
-                <input type="number" id="mug-warning-hours" min="1" max="168" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; color: #fff; font-size: 14px;">
-                <div style="font-size: 12px; color: #aaa; margin-top: 4px;">Warn if mugged within this many hours (default: 24)</div>
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 12px; color: #fff; font-weight: 600;">🎨 Warning Modal Colors:</label>
-                <div style="display: flex; gap: 15px; align-items: flex-start;">
-                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
-                        <input type="color" id="mug-warning-modal-bg" style="width: 80px; height: 80px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.3); cursor: pointer;">
-                        <div style="font-size: 11px; color: #aaa; margin-top: 6px; text-align: center;">Background</div>
-                    </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
-                        <input type="color" id="mug-warning-modal-text" style="width: 80px; height: 80px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.3); cursor: pointer;">
-                        <div style="font-size: 11px; color: #aaa; margin-top: 6px; text-align: center;">Text</div>
-                    </div>
-                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
-                        <input type="color" id="mug-warning-button-color" style="width: 80px; height: 80px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.3); cursor: pointer;">
-                        <div style="font-size: 11px; color: #aaa; margin-top: 6px; text-align: center;">Buttons Border</div>
-                    </div>
-                </div>
-                <div style="font-size: 12px; color: #aaa; margin-top: 8px;">Customize the warning modal that appears on profile/attack pages</div>
-            </div>
-            
-            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 25px 0;">
-            
-            <h5 style="margin: 0 0 10px 0; color: #fff; font-size: 14px;">🎯 Exclusions</h5>
-            <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">Players on this list will never trigger the mug warning, even if you mugged them recently.</div>
-            <div id="mug-targets-list" style="max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-bottom: 10px; min-height: 50px;">
-                <!-- Populated dynamically -->
-            </div>
-            
-            <button id="manage-mug-targets" style="width: 100%; padding: 10px; background: #2196F3; border: none; color: white; border-radius: 5px; font-weight: bold; cursor: pointer;">
-                🗂️ Manage Exclusions
-            </button>
-        `;
-        },
-
         // Attach Mug Warning Tab Listeners
         attachMugWarningTabListeners(panel) {
             const hoursInput = panel.querySelector('#mug-warning-hours');
@@ -3744,51 +2917,6 @@
             }
         },
 
-        // ─── Mission Tracker Settings ─────────────────────────────────────────
-
-        createMissionTrackerSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🎯 Mission Tracker Settings</h4>
-
-                <div style="background: rgba(102,187,106,0.08); border-left: 3px solid #66BB6A; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                    <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                        ℹ️ Polls the Torn API for active missions and shows a <strong>🎯</strong> icon in your status bar when one is running.
-                    </div>
-                </div>
-
-                ${this.createToggle('mission-tracker', '🎯 Enable Mission Tracker', 'Shows a tray icon when you have an active mission')}
-
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: #ccc; font-weight: bold;">Check Interval:</label>
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <input type="range" id="mission-tracker-interval" min="30" max="360" step="30" value="30"
-                               style="flex: 1; accent-color: #66BB6A;">
-                        <span id="mission-tracker-interval-display" style="color: #fff; min-width: 55px; text-align: right; font-weight: bold;">30 min</span>
-                    </div>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px;">
-                        How often Sidekick checks the API for active missions
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer;">
-                        <input type="checkbox" id="mission-tracker-newtab" style="accent-color: #66BB6A;">
-                        <span>Open in new tab</span>
-                    </label>
-                    <div style="font-size: 12px; color: #aaa; margin-top: 5px; margin-left: 28px;">
-                        When disabled, clicking the icon navigates in the same tab.
-                    </div>
-                </div>
-
-                <div id="sidekick-missiontracker-status" style="text-align: center; padding: 10px; border-radius: 5px;
-                                                              background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 20px;">
-                    Mission Tracker settings loaded
-                </div>
-            `;
-        },
-
         attachMissionTrackerTabListeners(panel) {
             const intervalSlider = panel.querySelector('#mission-tracker-interval');
             const intervalDisplay = panel.querySelector('#mission-tracker-interval-display');
@@ -3840,62 +2968,6 @@
             } catch (e) {
                 console.error('Failed to load Mission Tracker settings:', e);
             }
-        },
-
-        // ─── Hide Crime Outcome Settings ──────────────────────────────────────
-
-        createHideCrimeOutcomeSettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🦹 Hide Crime Outcome</h4>
-
-                <div style="background: rgba(239,83,80,0.08); border-left: 3px solid #ef5350; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                    <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                        ℹ️ Controls how the crime outcome panel is shown on the crimes page — great for rapid clicking.
-                        Only active on <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px;">/page.php?sid=crimes</code>.
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #fff; margin-bottom: 4px;">🦹 Enable Hide Crime Outcome</div>
-                            <div style="font-size: 12px; color: #aaa;">Activates the selected mode on the crimes page</div>
-                        </div>
-                        <div id="hide-crime-outcome-toggle" style="position: relative; display: inline-block; width: 50px; height: 24px; margin-left: 15px; cursor: pointer; flex-shrink: 0;">
-                            <div class="hco-toggle-track" style="position: absolute; inset: 0; background: rgba(255,255,255,0.2); border-radius: 24px; transition: background 0.3s ease;"></div>
-                            <div class="hco-toggle-thumb" style="position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 20px 0;">
-
-                <label style="display: block; margin-bottom: 12px; color: #ccc; font-weight: bold;">Display Mode:</label>
-
-                <div id="hco-mode-cards" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
-                    ${['0:Disabled:🔓:Shows the full outcome as normal.',
-                    '1:Hidden:🚫:Hides the outcome panel entirely. Fastest for bulk crimes.',
-                    '2:Minimal:📋:Removes story text. Keeps result & rewards.',
-                    '3:Toast:🔔:Shows a small pop-up instead of the panel.']
-                    .map(s => {
-                        const [id, name, icon, desc] = s.split(':');
-                        return `<div class="hco-mode-card" data-mode="${id}" style="
-                                padding: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;
-                                background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1);
-                            ">
-                                <div style="font-size: 22px; margin-bottom: 6px;">${icon}</div>
-                                <div style="font-weight: 700; color: #fff; font-size: 13px; margin-bottom: 4px;">${name}</div>
-                                <div style="font-size: 11px; color: #aaa; line-height: 1.4;">${desc}</div>
-                            </div>`;
-                    }).join('')
-                }
-                </div>
-
-                <div id="sidekick-hidecrime-status" style="text-align: center; padding: 10px; border-radius: 5px;
-                                                          background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 10px;">
-                    Hide Crime Outcome settings loaded
-                </div>
-            `;
         },
 
         attachHideCrimeTabListeners(panel) {
@@ -3972,56 +3044,6 @@
             }
         },
 
-        // ─── Holiday Settings ─────────────────────────────────────────────────
-
-        createHolidaySettingsHTML() {
-            return `
-                <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px;">🥚 Egg Helper Tools</h4>
-
-                <div style="background: rgba(102,187,106,0.08); border-left: 3px solid #66BB6A; padding: 12px; border-radius: 5px; margin-bottom: 20px;">
-                    <div style="font-size: 13px; color: #ccc; line-height: 1.5;">
-                        ℹ️ Seasonal tools that appear on Torn pages during special events. Toggle each tool on or off here.
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #fff; margin-bottom: 4px;">🥚 Easter Egg Hunt Helper</div>
-                            <div style="font-size: 12px; color: #aaa; line-height: 1.5;">
-                                Shows a floating panel that tracks which Torn pages you've visited to hunt Easter eggs.
-                                Detects eggs automatically and lets you navigate to the next page in one click.
-                            </div>
-                        </div>
-                        <div class="toggle-switch" id="holiday-egghunt-toggle" style="
-                            position: relative; display: inline-block; width: 50px; height: 24px;
-                            margin-left: 15px; cursor: pointer; flex-shrink: 0;
-                        ">
-                            <div class="toggle-track" style="
-                                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-                                background-color: rgba(255,255,255,0.2); border-radius: 24px;
-                                transition: background-color 0.3s ease;
-                            "></div>
-                            <div class="toggle-thumb" style="
-                                position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
-                                background-color: white; border-radius: 50%;
-                                transition: transform 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                            "></div>
-                        </div>
-                    </div>
-                    <button id="holiday-egghunt-reset" style="margin-top: 10px; padding: 6px 14px; background: rgba(239,83,80,0.15); border: 1px solid rgba(239,83,80,0.3);
-                                                              color: #ef5350; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
-                        🗑️ Reset Hunt Progress
-                    </button>
-                </div>
-
-                <div id="sidekick-holiday-status" style="text-align: center; padding: 10px; border-radius: 5px;
-                                                        background: rgba(255,255,255,0.1); color: #ccc; font-size: 13px; margin-top: 10px;">
-                    Holiday settings loaded
-                </div>
-            `;
-        },
-
         attachHolidayTabListeners(panel) {
             const toggle = panel.querySelector('#holiday-egghunt-toggle');
             const resetBtn = panel.querySelector('#holiday-egghunt-reset');
@@ -4075,94 +3097,7 @@
         },
 
         attachWarTargetCallerTabListeners(panel) {
-            const testUserInp = panel.querySelector('#skp-wtc-test-user');
-            const saveBtn = panel.querySelector('#skp-wtc-test-save');
-            const statusIndicator = panel.querySelector('#skp-wtc-test-status');
-
-            if (testUserInp) {
-                // Initialize from storage synchronously first to prevent UI hanging
-                const backupUser = localStorage.getItem('sidekick_wtc_test_user_backup');
-                if (backupUser && typeof backupUser === 'string') {
-                    testUserInp.value = backupUser;
-                }
-
-                (async () => {
-                    const CS = window.SidekickModules?.Core?.ChromeStorage;
-                    if (!CS) return;
-                    try {
-                        // We race the CS.get against a 1-second timeout just in case it hangs
-                        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 1000));
-                        let testChatUser = await Promise.race([CS.get('sidekick_wtc_test_user'), timeoutPromise]);
-
-                        if (testChatUser && typeof testChatUser === 'string') {
-                            testUserInp.value = testChatUser;
-                        }
-                    } catch (e) {
-                        console.error('Failed to load test user:', e);
-                    }
-                })();
-
-                const saveHandler = async () => {
-                    try {
-                        const CS = window.SidekickModules?.Core?.ChromeStorage;
-                        if (!CS) return;
-                        const val = testUserInp.value.trim();
-                        await CS.set('sidekick_wtc_test_user', val);
-                        localStorage.setItem('sidekick_wtc_test_user_backup', val);
-                        panel.dataset.settingsChanged = 'true';
-
-                        if (window.SidekickModules.WarTargetCaller) {
-                            window.SidekickModules.WarTargetCaller.testChatUser = val;
-                        }
-
-                        // Show visual feedback
-                        if (statusIndicator) {
-                            statusIndicator.style.display = 'block';
-                            setTimeout(() => {
-                                statusIndicator.style.display = 'none';
-                            }, 2000);
-                        }
-
-                        // Force an alert to prove it finished
-                        alert("Settings Saved: " + val);
-
-                    } catch (e) {
-                        console.error('Failed to save test user:', e);
-                        alert("Error saving: " + e.message);
-                    }
-                };
-
-                if (saveBtn) {
-                    saveBtn.addEventListener('click', saveHandler);
-                }
-
-                // Allow pressing Enter in the input to save
-                testUserInp.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') saveHandler();
-                });
-
-                const testBtn = panel.querySelector('#skp-wtc-test-send');
-                if (testBtn) {
-                    testBtn.addEventListener('click', () => {
-                        try {
-                            if (!window.SidekickModules.WarTargetCaller) {
-                                alert("War Target Caller module is not loaded!");
-                                return;
-                            }
-
-                            const val = testUserInp.value.trim();
-                            if (val) {
-                                window.SidekickModules.WarTargetCaller.testChatUser = val;
-                            }
-
-                            console.log("Sending test chat message via Test Send button...");
-                            window.SidekickModules.WarTargetCaller.sendChatMessage('Test: Hitting Target in 5 minutes');
-                        } catch (err) {
-                            alert("Test Send Error: " + err.message);
-                        }
-                    });
-                }
-            }
+            // Handled dynamically by general toggles
         }
     };
 

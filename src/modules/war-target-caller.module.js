@@ -35,11 +35,46 @@ const WarTargetCallerModule = {
         try {
             const settings = await window.SidekickModules.Core.ChromeStorage.get(this.STORAGE_KEY) || {};
             this.isEnabled = settings.isEnabled === true;
-            let testUser = await window.SidekickModules.Core.ChromeStorage.get('sidekick_wtc_test_user');
-            if (!testUser) testUser = localStorage.getItem('sidekick_wtc_test_user_backup');
-            this.testChatUser = testUser || '';
+            
+            const savedData = await window.SidekickModules.Core.ChromeStorage.get('sidekick_wtc_data') || {};
+            if (savedData.claims && Array.isArray(savedData.claims)) {
+                const now = Date.now();
+                this.claimedTargets = new Map();
+                savedData.claims.forEach(([name, data]) => {
+                    // Filter out claims older than 2 hours
+                    if (data && data.timestamp && (now - data.timestamp < 3600000 * 2)) {
+                        this.claimedTargets.set(name, {
+                            claimer: data.claimer,
+                            lastUntil: data.lastUntil || 0
+                        });
+                    }
+                });
+            }
+            if (savedData.myCurrentClaim) {
+                if (this.claimedTargets.has(savedData.myCurrentClaim.toLowerCase())) {
+                    this.myCurrentClaim = savedData.myCurrentClaim;
+                } else {
+                    this.myCurrentClaim = null;
+                }
+            }
         } catch (error) {
             console.error('🎯 Failed to load settings:', error);
+        }
+    },
+
+    async saveClaims() {
+        try {
+            const claimsArr = Array.from(this.claimedTargets.entries()).map(([name, val]) => [name, {
+                claimer: val.claimer, 
+                lastUntil: val.lastUntil, 
+                timestamp: Date.now()
+            }]);
+            await window.SidekickModules.Core.ChromeStorage.set('sidekick_wtc_data', {
+                claims: claimsArr,
+                myCurrentClaim: this.myCurrentClaim
+            });
+        } catch (err) {
+            console.error('Failed to save WTC claims', err);
         }
     },
 
@@ -75,34 +110,27 @@ const WarTargetCallerModule = {
         style.id = 'war-target-caller-styles';
         style.textContent = `
             .sk-wtc-btn {
-                background: linear-gradient(180deg, #444, #222);
-                border: 1px solid #555;
-                color: #ddd;
-                border-radius: 3px;
-                padding: 1px 6px;
-                font-size: 10px;
+                background: transparent;
+                border: none;
+                padding: 0;
+                font-size: 12px;
                 cursor: pointer;
-                margin-left: 6px;
-                line-height: 14px;
+                margin-right: 3px;
                 vertical-align: middle;
+                line-height: 1;
             }
             .sk-wtc-btn:hover {
-                background: linear-gradient(180deg, #555, #333);
-                color: #fff;
+                transform: scale(1.1);
             }
             .sk-wtc-btn:active {
-                background: #111;
+                transform: scale(0.9);
             }
             .sk-wtc-badge {
-                font-size: 10px;
-                font-weight: bold;
-                color: #ff5e5e;
-                margin-left: 6px;
+                font-size: 12px;
+                margin-right: 3px;
                 vertical-align: middle;
-                background: rgba(255, 0, 0, 0.1);
-                padding: 1px 4px;
-                border-radius: 2px;
-                border: 1px solid rgba(255, 0, 0, 0.3);
+                line-height: 1;
+                cursor: help;
             }
         `;
         document.head.appendChild(style);
@@ -135,18 +163,35 @@ const WarTargetCallerModule = {
     },
 
     parseChatMessage(msgNode) {
+        let validChat = false;
+        let curr = msgNode;
+        while (curr && curr !== document && curr.classList) {
+            if (curr.className && typeof curr.className === 'string' && (curr.className.includes('chat-box') || curr.className.includes('chatWindow'))) {
+                const header = curr.querySelector('div[class*="header"], div[class*="title"], span[class*="name"]');
+                if (header) {
+                    const headerText = header.textContent.toLowerCase();
+                    if (headerText.includes('faction')) {
+                        validChat = true;
+                    }
+                }
+                break;
+            }
+            curr = curr.parentNode;
+        }
+
+        if (!validChat) return;
+
         // Find the sender (usually in previous sibling or parent context)
-        // In Torn, a message wrapper usually contains sender info, but we can just regex the text for testing.
         const text = msgNode.textContent || '';
         const match = text.match(/(?:\bcall\b|\bhitting\b)\s+(.+?)(?:\s+in\s+|\s*$)/i);
         if (match) {
             let targetName = match[1].trim();
-            // Remove trailing words if they match "in xxx minutes"
-            targetName = targetName.replace(/\s+in\s+\d+\s+minutes?$/i, '').trim();
+            targetName = targetName.replace(/\s+in\s+.*$/i, '').trim();
             
             // For now, we don't know who said it unless we traverse up, 
             // but we can just mark it as claimed
-            this.claimedTargets.set(targetName.toLowerCase(), 'Claimed');
+            this.claimedTargets.set(targetName.toLowerCase(), { claimer: 'Claimed', lastUntil: 0 });
+            this.saveClaims();
             this.updateWarPanelVisuals();
         }
     },
@@ -155,8 +200,12 @@ const WarTargetCallerModule = {
         if (this.membersObserver) return;
         
         const updateUI = () => {
-            const enemies = document.querySelectorAll('ul.members-list li.enemy');
-            enemies.forEach(li => this.injectToMemberRow(li));
+            const enemies = document.querySelectorAll('.enemy-faction ul.members-list li, ul.members-list li.enemy');
+            enemies.forEach(li => {
+                if (!li.classList.contains('clear') && !li.classList.contains('title')) {
+                    this.injectToMemberRow(li);
+                }
+            });
         };
 
         this.membersObserver = new MutationObserver(() => updateUI());
@@ -166,67 +215,126 @@ const WarTargetCallerModule = {
         setTimeout(updateUI, 500);
     },
 
+    extractNameFromRow(li) {
+        const nameEl = li.querySelector('.name a') || li.querySelector('.user.name');
+        if (nameEl) return nameEl.textContent.trim();
+
+        const profileLink = li.querySelector(`a[href^='/profiles.php']`);
+        if (profileLink) {
+            const honorText = profileLink.querySelector('.honor-text:not(.honor-text-svg)');
+            if (honorText) return honorText.textContent.trim();
+            
+            const aria = profileLink.getAttribute('aria-label');
+            if (aria) return aria.replace('View profile of ', '').trim();
+        }
+        return null;
+    },
+
     injectToMemberRow(li) {
         if (li.querySelector('.sk-wtc-btn') || li.querySelector('.sk-wtc-badge')) return;
+        const targetName = this.extractNameFromRow(li);
+        if (!targetName) return;
+        this.updateMemberRow(li, targetName);
+    },
 
-        const nameEl = li.querySelector('.name a') || li.querySelector('.user.name');
-        if (!nameEl) return;
-
-        const targetName = nameEl.textContent.trim();
+    updateMemberRow(li, targetName) {
         const targetNameLow = targetName.toLowerCase();
-
-        // Container to inject badge or button
-        const container = li.querySelector('.name') || li.querySelector('.user');
+        const container = li.querySelector('.level') || li.querySelector('.name') || li.querySelector('.user');
         if (!container) return;
 
         if (this.claimedTargets.has(targetNameLow)) {
-            // It's claimed
-            const claimer = this.claimedTargets.get(targetNameLow);
-            const badge = document.createElement('span');
-            badge.className = 'sk-wtc-badge';
-            badge.textContent = `CLAIMED`;
-            container.appendChild(badge);
+            const claimObj = this.claimedTargets.get(targetNameLow);
+            
+            // Check if timer jumped up
+            let currentUntil = 0;
+            const profileLink = li.querySelector('.name a') || li.querySelector(`a[href^='/profiles.php']`);
+            if (profileLink) {
+                const idMatch = profileLink.href.match(/[IX]D=(\d+)/i);
+                if (idMatch && window.SidekickModules?.WarMonitor?.memberStatus) {
+                    const status = window.SidekickModules.WarMonitor.memberStatus.get(idMatch[1]);
+                    if (status) currentUntil = status.until || 0;
+                }
+            }
+            
+            if (currentUntil > claimObj.lastUntil + 60) {
+                // Timer jumped! Auto unclaim
+                this.claimedTargets.delete(targetNameLow);
+                if (this.myCurrentClaim && this.myCurrentClaim.toLowerCase() === targetNameLow) {
+                    this.myCurrentClaim = null;
+                }
+                this.saveClaims();
+                return this.updateMemberRow(li, targetName);
+            } else if (currentUntil < claimObj.lastUntil - 60) {
+                // Timer dropped (e.g. revives)
+                claimObj.lastUntil = currentUntil;
+                this.saveClaims();
+            }
+
+            const btn = li.querySelector('.sk-wtc-btn:not(.sk-wtc-badge)');
+            if (btn) btn.remove();
+            
+            let badge = li.querySelector('.sk-wtc-badge');
+            if (!badge) {
+                badge = document.createElement('button');
+                badge.className = 'sk-wtc-badge sk-wtc-btn';
+                badge.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const co = this.claimedTargets.get(targetNameLow);
+                    if (co && co.claimer === 'Me') {
+                        this.claimedTargets.delete(targetNameLow);
+                        if (this.myCurrentClaim && this.myCurrentClaim.toLowerCase() === targetNameLow) {
+                            this.myCurrentClaim = null;
+                        }
+                        this.saveClaims();
+                        this.updateWarPanelVisuals();
+                    }
+                });
+                container.insertBefore(badge, container.firstChild);
+            }
+            const claimer = claimObj.claimer;
+            if (badge.textContent !== '❌') badge.textContent = '❌';
+            const newColor = claimer === 'Me' ? '#ff4d4d' : '#4d79ff';
+            if (badge.style.color !== newColor) badge.style.color = newColor;
+            const newTitle = `Claimed by ${claimer}` + (claimer === 'Me' ? ' (Click to unclaim)' : '');
+            if (badge.title !== newTitle) badge.title = newTitle;
+            const newCursor = claimer === 'Me' ? 'pointer' : 'help';
+            if (badge.style.cursor !== newCursor) badge.style.cursor = newCursor;
         } else {
-            // Not claimed, add Claim button
-            const btn = document.createElement('button');
-            btn.className = 'sk-wtc-btn';
-            btn.textContent = 'Claim';
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.claimTarget(targetName, li);
-            });
-            container.appendChild(btn);
+            const badge = li.querySelector('.sk-wtc-badge');
+            if (badge && badge.textContent !== 'Copied!') badge.remove();
+            
+            let btn = li.querySelector('.sk-wtc-btn:not(.sk-wtc-badge)');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.className = 'sk-wtc-btn';
+                btn.textContent = '✔️';
+                btn.title = 'Claim Target';
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.claimTarget(targetName, li);
+                });
+                container.insertBefore(btn, container.firstChild);
+            }
         }
     },
 
     updateWarPanelVisuals() {
         if (!window.location.href.includes('factions.php')) return;
-        const enemies = document.querySelectorAll('ul.members-list li.enemy');
+        const enemies = document.querySelectorAll('.enemy-faction ul.members-list li, ul.members-list li.enemy');
         enemies.forEach(li => {
-            const nameEl = li.querySelector('.name a') || li.querySelector('.user.name');
-            if (!nameEl) return;
-            const targetNameLow = nameEl.textContent.trim().toLowerCase();
-            
-            if (this.claimedTargets.has(targetNameLow)) {
-                // If it has a button, remove it and add badge
-                const btn = li.querySelector('.sk-wtc-btn');
-                if (btn) btn.remove();
-                
-                if (!li.querySelector('.sk-wtc-badge')) {
-                    const badge = document.createElement('span');
-                    badge.className = 'sk-wtc-badge';
-                    badge.textContent = `CLAIMED`;
-                    const container = li.querySelector('.name') || li.querySelector('.user');
-                    if (container) container.appendChild(badge);
-                }
-            }
+            if (li.classList.contains('clear') || li.classList.contains('title')) return;
+            const targetName = this.extractNameFromRow(li);
+            if (!targetName) return;
+            this.updateMemberRow(li, targetName);
         });
     },
 
     claimTarget(targetName, li) {
         if (this.myCurrentClaim) {
             if (confirm(`You already claimed ${this.myCurrentClaim}. Release it and claim ${targetName} instead?`)) {
+                this.claimedTargets.delete(this.myCurrentClaim.toLowerCase());
                 this.myCurrentClaim = targetName;
             } else {
                 return;
@@ -235,116 +343,60 @@ const WarTargetCallerModule = {
             this.myCurrentClaim = targetName;
         }
 
-        this.claimedTargets.set(targetName.toLowerCase(), 'Me');
+        let targetId = '';
+        const profileLink = li.querySelector('.name a') || li.querySelector(`a[href^='/profiles.php']`);
+        if (profileLink) {
+            const idMatch = profileLink.href.match(/[IX]D=(\d+)/i);
+            if (idMatch) {
+                targetId = idMatch[1];
+            }
+        }
+
+        let targetUntil = 0;
+        let timeString = '';
+        if (targetId && window.SidekickModules?.WarMonitor?.memberStatus) {
+            const status = window.SidekickModules.WarMonitor.memberStatus.get(targetId);
+            if (status && (status.state === 'Hospital' || status.state === 'Jail' || status.state === 'Traveling' || status.state === 'Abroad')) {
+                const now = Date.now() / 1000;
+                if (status.until > now) {
+                    targetUntil = status.until;
+                    const diff = status.until - now;
+                    const mins = Math.floor(diff / 60);
+                    const secs = Math.floor(diff % 60);
+                    if (mins > 0) {
+                        timeString = ` in ${mins}m ${secs}s`;
+                    } else {
+                        timeString = ` in ${secs}s`;
+                    }
+                }
+            }
+        }
+
+        this.claimedTargets.set(targetName.toLowerCase(), { claimer: 'Me', lastUntil: targetUntil });
+        this.saveClaims();
         this.updateWarPanelVisuals();
 
-        // Format message
-        let timeString = '';
+        const idString = targetId ? ` [${targetId}]` : '';
+        const message = `Hitting ${targetName}${idString}${timeString}`;
         
-        // Try to get data from WarMonitor if enabled
-        const profileLink = li.querySelector('.name a');
-        if (profileLink && window.SidekickModules?.WarMonitor?.memberStatus) {
-            const idMatch = profileLink.href.match(/ID=(\d+)/);
-            if (idMatch) {
-                const id = idMatch[1];
-                const status = window.SidekickModules.WarMonitor.memberStatus.get(id);
-                if (status && (status.state === 'Hospital' || status.state === 'Jail' || status.state === 'Traveling' || status.state === 'Abroad')) {
-                    const now = Date.now() / 1000;
-                    if (status.until > now) {
-                        const mins = Math.ceil((status.until - now) / 60);
-                        timeString = ` in ${mins} minutes`;
-                    }
-                }
+        navigator.clipboard.writeText(message).then(() => {
+            const badge = li.querySelector('.sk-wtc-badge');
+            if (badge) {
+                const oldText = badge.textContent;
+                const oldColor = badge.style.color;
+                badge.textContent = 'Copied!';
+                badge.style.color = '#4CAF50';
+                badge.style.fontSize = '10px';
+                setTimeout(() => { 
+                    badge.textContent = oldText; 
+                    badge.style.color = oldColor;
+                    badge.style.fontSize = '';
+                }, 1500);
             }
-        }
-
-        const message = `Hitting ${targetName}${timeString}`;
-        this.sendChatMessage(message);
-    },
-
-    sendChatMessage(message) {
-        const chatRoot = document.getElementById('chatRoot');
-        if (!chatRoot) {
-            alert("Test Send Failed: Could not find Torn's main chat container (chatRoot). Make sure chat is loaded on this page!");
-            return;
-        }
-
-        // Find the right chat box robustly
-        let targetBox = null;
-        const targetNameLower = this.testChatUser ? this.testChatUser.toLowerCase() : 'faction';
-
-        // 1. Try finding by chat box containers
-        const boxes = chatRoot.querySelectorAll('div[class*="chat-box"], div[class*="chatWindow"]');
-        boxes.forEach(box => {
-            const header = box.querySelector('div[class*="header"], div[class*="title"], span[class*="name"]');
-            if (header && header.textContent.toLowerCase().includes(targetNameLower)) {
-                targetBox = box;
-            }
+        }).catch(err => {
+            console.error("Clipboard copy failed:", err);
+            alert(`Copy to clipboard blocked by browser.\n\nMessage: ${message}`);
         });
-
-        // 2. If not found, try finding from the textareas upwards
-        if (!targetBox) {
-            const inputs = chatRoot.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]');
-            for (const input of inputs) {
-                let curr = input;
-                let found = false;
-                for (let i = 0; i < 8; i++) {
-                    if (!curr || curr === chatRoot) break;
-                    
-                    // Look for anything that might be a header in this container
-                    const possibleHeaders = curr.querySelectorAll('div, span, button, a');
-                    for (const el of possibleHeaders) {
-                        const className = (el.className || '').toLowerCase();
-                        if ((className.includes('head') || className.includes('title') || className.includes('name')) && 
-                            el.textContent.toLowerCase().includes(targetNameLower)) {
-                            targetBox = curr;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (found) break;
-                    curr = curr.parentElement;
-                }
-                if (found) break;
-            }
-        }
-
-        if (!targetBox) {
-            console.warn(`🎯 Chat box matching "${targetNameLower}" not found!`);
-            alert(`Could not find chat box for ${this.testChatUser || 'Faction'}. Please open the chat first.`);
-            return;
-        }
-
-        const input = targetBox.querySelector('textarea, [contenteditable="true"]');
-        if (!input) {
-            console.warn('🎯 Chat input field not found inside the chat box!');
-            return;
-        }
-
-        // Focus and type
-        input.focus();
-        
-        if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-            nativeInputValueSetter.call(input, message);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        } else {
-            // ContentEditable
-            input.textContent = message;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-
-        // Simulate Enter key to send
-        const enterEvent = new KeyboardEvent('keydown', {
-            bubbles: true,
-            cancelable: true,
-            key: 'Enter',
-            code: 'Enter',
-            keyCode: 13
-        });
-        input.dispatchEvent(enterEvent);
-        
-        console.log(`🎯 Sent claim message: ${message}`);
     }
 };
 

@@ -155,9 +155,18 @@
                     if (isMug || isHosp) {
                         // Mark it so our CSS hides it
                         btn.dataset.skHiddenOpt = 'true';
+                        
+                        // Directly force hide via styles as fallback
+                        btn.style.setProperty('display', 'none', 'important');
+                        btn.style.setProperty('visibility', 'hidden', 'important');
+                        btn.style.setProperty('width', '0', 'important');
+                        btn.style.setProperty('height', '0', 'important');
+                        
                         // Also try to hide the parent if it's an only child wrapper
                         if (btn.parentElement && btn.parentElement.children.length === 1 && !btn.parentElement.className.includes('dialog')) {
                             btn.parentElement.dataset.skHiddenOpt = 'true';
+                            btn.parentElement.style.setProperty('display', 'none', 'important');
+                            btn.parentElement.style.setProperty('visibility', 'hidden', 'important');
                         }
                     }
                 }

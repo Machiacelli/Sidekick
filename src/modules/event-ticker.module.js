@@ -1017,7 +1017,6 @@
                         };
                     }
 
-                    console.warn('⚠️ Event Ticker: Calendar refresh requires opening Torn calendar page once (Cloudflare blocks direct background fetches).');
                     return {
                         success: false,
                         requiresCalendarPage: true,

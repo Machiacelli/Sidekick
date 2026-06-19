@@ -420,7 +420,78 @@ const LockedItemsManagerModule = {
                 console.log('🔒 Item Market add listing detected, will process in 100ms');
                 setTimeout(() => this.processBazaarPage(), 100);
             }
+        } else if (this.isStorePage(url)) {
+            // New Torn store pages — show lock icons and block sell of locked items
+            setTimeout(() => this.processStorePage(), 200);
         }
+    },
+
+    // Returns true for known Torn store / shop page URLs
+    isStorePage(url) {
+        const storePatterns = [
+            'bigalgunshop.php', 'superstore.php', 'pharmacy.php',
+            'bitsnbobs.php', 'flowershop.php', 'jewelry-store.php',
+            'nervecenter.php', 'cyber-force.php', 'sallys-sweet-shop.php',
+            'toy-shop.php', 'clothes-shop.php', 'sweetshop.php',
+            'drugstore.php', 'computerstore.php',
+        ];
+        return storePatterns.some(p => url.includes(p));
+    },
+
+    // Process new React-based store pages (bigalgunshop.php etc.)
+    processStorePage() {
+        // Priority 1: traditional inventory selectors
+        let items = Array.from(
+            document.querySelectorAll('li[data-id], li[data-item]')
+        ).filter(el => el.getAttribute('data-group') !== 'parent');
+
+        // Priority 2: image-based detection for new React store UI
+        if (items.length === 0) {
+            const allImages = document.querySelectorAll('img[src*="/items/"]');
+            const parentSet = new Set();
+            allImages.forEach(img => {
+                // Skip dropdown / option images
+                if (img.closest('[role="option"], .menu-item-link')) return;
+                const parent =
+                    img.closest('li, [class*="item"], [class*="row"]') ||
+                    img.parentElement?.parentElement?.parentElement;
+                if (parent) parentSet.add(parent);
+            });
+            items = Array.from(parentSet);
+        }
+
+        if (items.length === 0) return;
+        console.log(`🔒 Store page: processing ${items.length} items`);
+
+        items.forEach(el => {
+            const itemId = this.getItemID(el);
+            if (!itemId) return;
+
+            const isLocked = !!this.lockedItems[itemId];
+
+            // Add padlock icon once per element
+            if (!el.hasAttribute('data-sidekick-store-processed')) {
+                el.setAttribute('data-sidekick-store-processed', 'true');
+                const padlock = document.createElement('span');
+                padlock.className = 'sidekick-padlock';
+                padlock.onclick = e => { e.stopPropagation(); this.toggleLock(itemId, el); };
+                const nameEl = el.querySelector('.name-wrap, .name, [class*="name"]');
+                if (nameEl) nameEl.insertBefore(padlock, nameEl.firstChild);
+                else el.prepend(padlock);
+            }
+
+            const padlock = el.querySelector('.sidekick-padlock');
+            if (padlock) {
+                padlock.textContent = isLocked ? '🔒' : '🔓';
+                padlock.classList.toggle('is-locked', isLocked);
+            }
+
+            el.classList.toggle('sidekick-item-locked', isLocked);
+
+            // Block sell / trade actions on locked items
+            el.querySelectorAll('li.sell, li.send, li.dump, button[class*="sell"], button[class*="trade"]')
+              .forEach(btn => { btn.style.display = isLocked ? 'none' : ''; });
+        });
     },
 
     // Process bazaar and Item Market add/manage pages

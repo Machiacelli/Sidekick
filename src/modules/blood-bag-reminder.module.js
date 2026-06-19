@@ -17,7 +17,7 @@ const BloodBagReminderModule = {
 
         destinations: {
             items: 'https://www.torn.com/item.php#medical-items',
-            bazaar: 'https://www.torn.com/bazaar.php#/add'
+            armory: 'https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0&sub=medical'
         },
 
         lifePerBag: 30,
