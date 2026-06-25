@@ -423,6 +423,9 @@ const LockedItemsManagerModule = {
         } else if (this.isStorePage(url)) {
             // New Torn store pages — show lock icons and block sell of locked items
             setTimeout(() => this.processStorePage(), 200);
+        } else if (url.includes('factions.php') && window.location.hash.includes('tab=armoury')) {
+            // Faction armory — hide locked items from the sell list
+            setTimeout(() => this.processStorePage(), 200);
         }
     },
 

@@ -23,6 +23,8 @@
         });
     }
 
+    const LS_KEY = 'sidekick_chain_timer_fast';
+
     // Chain Timer Module Implementation
     const ChainTimerModule = {
         isInitialized: false,
@@ -41,6 +43,25 @@
         flashIntervalId: null,
         flashDiv: null,
 
+        // Read persisted state from localStorage (synchronous — no Core needed)
+        readLocalState() {
+            try {
+                const raw = localStorage.getItem(LS_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch { return null; }
+        },
+
+        // Write enabled + position to localStorage so next page load is instant
+        writeLocalState() {
+            try {
+                localStorage.setItem(LS_KEY, JSON.stringify({
+                    isEnabled: this.isEnabled,
+                    floatingDisplayEnabled: this.floatingDisplayEnabled,
+                    floatingPosition: this.floatingPosition
+                }));
+            } catch { }
+        },
+
         // Initialize the module
         async init() {
             if (this.isInitialized) {
@@ -49,6 +70,16 @@
             }
 
             console.log("⏱️ Initializing Chain Timer Module...");
+
+            // ── Fast path: show floater immediately from localStorage ─────────
+            // This fires BEFORE waitForCore() so there is zero perceived delay.
+            const ls = this.readLocalState();
+            if (ls?.isEnabled && ls?.floatingDisplayEnabled !== false) {
+                if (ls.floatingPosition) this.floatingPosition = ls.floatingPosition;
+                this.floatingDisplayEnabled = true;
+                this.createFloatingDisplay(); // shown instantly
+                console.log('⚡ Chain Timer: fast floater created from localStorage');
+            }
 
             try {
                 await waitForCore();
@@ -59,6 +90,8 @@
                     console.log('✅ Chain Timer: Enabled - starting monitoring');
                     this.startMonitoring();
                 } else {
+                    // Not actually enabled — remove the fast floater if we created one
+                    this.removeFloatingDisplay();
                     console.log('⏸️ Chain Timer: Disabled');
                 }
 
@@ -113,6 +146,8 @@
                     floatingPosition: this.floatingPosition,
                     alertThresholdSeconds: this.alertThresholdSeconds
                 });
+                // Mirror to localStorage so next page load is instant
+                this.writeLocalState();
                 console.log('💾 Chain Timer settings saved');
             } catch (error) {
                 console.error('Failed to save chain timer settings:', error);
@@ -147,8 +182,8 @@
 
             this.stopMonitoring(); // Clean up any existing monitoring
 
-            // Only create floating display if enabled
-            if (this.floatingDisplayEnabled) {
+            // Only create floating display if enabled AND not already created by the fast path
+            if (this.floatingDisplayEnabled && !this.floatingDisplay) {
                 this.createFloatingDisplay();
             }
 

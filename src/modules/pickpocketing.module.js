@@ -136,6 +136,41 @@
             this.updateDivColors();
             this._intervalId = setInterval(() => this.updateDivColors(), 50);
             this._startNavWatcher();
+            this.injectHeaderBadge();
+        },
+
+        // Inject a small ✓ badge next to the page heading when on the pickpocketing page
+        injectHeaderBadge() {
+            if (!window.location.hash.includes('pickpocketing')) {
+                document.getElementById('sidekick-pickpocketing-badge')?.remove();
+                return;
+            }
+            if (document.getElementById('sidekick-pickpocketing-badge')) return;
+
+            const header = document.querySelector('div.appHeader___tG_Ot h4.heading___BtymB');
+            if (!header) return;
+
+            const badge = document.createElement('span');
+            badge.id = 'sidekick-pickpocketing-badge';
+            badge.title = 'Sidekick Pickpocketing active';
+            badge.style.cssText = [
+                'display:inline-flex',
+                'align-items:center',
+                'justify-content:center',
+                'width:16px',
+                'height:16px',
+                'border-radius:50%',
+                'background:linear-gradient(135deg,#66BB6A,#4CAF50)',
+                'color:#fff',
+                'font-size:10px',
+                'font-weight:bold',
+                'margin-left:6px',
+                'vertical-align:middle',
+                'flex-shrink:0',
+                'box-shadow:0 0 4px rgba(102,187,106,0.6)',
+            ].join(';');
+            badge.textContent = '✓';
+            header.appendChild(badge);
         },
 
         // Watch URL changes so we can clean up if necessary, though interval check covers it
@@ -146,10 +181,12 @@
                 const cur = window.location.hash;
                 if (cur !== lastHash) {
                     lastHash = cur;
+                    // Remove stale badge when leaving the pickpocketing page
                     if (!cur.includes('pickpocketing')) {
-                        // Optionally cleanup UI, though Torn SPA usually rewrites the DOM
+                        document.getElementById('sidekick-pickpocketing-badge')?.remove();
                     }
                 }
+                this.injectHeaderBadge();
             }, 300);
         },
 
