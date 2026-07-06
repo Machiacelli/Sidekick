@@ -819,7 +819,8 @@ const MugCalculatorModule = (() => {
     // ── Process all ───────────────────────────────────────────────────────────
 
     function processAllMarketRows() {
-        if (window.location.href.includes('trade.php')) return; // no mug icons on trade pages
+        if (window.location.href.includes('trade.php'))   return; // no mug icons on trade pages
+        if (window.location.href.includes('amarket.php')) return; // no mug icons on auction house
         const links = document.querySelectorAll("a[href*='profiles.php?XID=']");
         links.forEach(link => {
             const row = link.closest('li, tr, [class*="row___" i], [class*="seller___" i], [class*="item___" i], .item-row');

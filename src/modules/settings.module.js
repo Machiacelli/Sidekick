@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sidekick Chrome Extension - Settings Module V2
  * Comprehensive settings panel with all module toggles and configurations
  * Version: 2.0.0
@@ -476,6 +476,7 @@
         <button class="sk-subtab-btn active" data-tab="personal">Personal</button>
         <button class="sk-subtab-btn" data-tab="gym">Gym</button>
         <button class="sk-subtab-btn" data-tab="money">Economy</button>
+        <button class="sk-subtab-btn" data-tab="merits">Merits</button>
       </div>
       <div class="sk-scroll">
         <div class="sk-subtab-panel active" id="skp-tab-personal">
@@ -495,6 +496,22 @@
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Special Gym Ratios</div><div class="sk-row-desc">Warns when your stat ratios risk losing access to specialist gyms</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-gym-ratios" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Auto Gym</div><div class="sk-row-desc">Automatically switches to the best available gym before training</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-auto-gym"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Block Training</div><div class="sk-row-desc">Prevents accidental gym training clicks</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-block-training"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        </div>
+
+        <!-- MERITS -->
+        <div class="sk-subtab-panel" id="skp-tab-merits">
+          <div class="sk-sh">Nice Helper</div>
+          <div class="sk-row" style="align-items:flex-start;gap:12px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Enable Nice Helper</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-nice-helper" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Details &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-merit-calc"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <!-- Status shelf — populated automatically by nice-helper module -->
+          <div class="sk-shelf" id="skp-shelf-nice-helper" style="display:none;">
+            <div id="skp-nice-status"></div>
+          </div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-money">
           <div class="sk-sh">Market &amp; Pricing</div>
@@ -1043,6 +1060,8 @@
                 ['#skp-tog-smart-medical', 'sidekick_smart_medical', null, false],
                 // Mugging
                 ['#skp-tog-mug-calc', 'sidekick_mug_calculator', null, false],
+                // Merits
+                ['#skp-tog-merit-calc', 'sidekick_merit_calculator', null, false],
             ];
 
             // Helper: read isEnabled from storage

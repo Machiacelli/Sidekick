@@ -629,6 +629,24 @@
                     ">
                         <span style="font-size: 13px; filter: grayscale(0.2);">✈️</span> Travel Stocks
                    </button>
+                    <button class="module-option" data-module="auctiontracker" style="
+                        background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+                        border: 1px solid rgba(255,255,255,0.06);
+                        color: rgba(255,255,255,0.92);
+                        padding: 10px 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        text-align: left;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        font-size: 11px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        font-weight: 500;
+                        letter-spacing: 0.3px;
+                    ">
+                        <span style="font-size: 13px; filter: grayscale(0.2);">🏷️</span> Auction Tracker
+                    </button>
                 </div>
             `;
 
@@ -707,6 +725,9 @@
                     break;
                 case 'travelstocks':
                     this.createTravelStocks();
+                    break;
+                case 'auctiontracker':
+                    this.createAuctionTracker();
                     break;
                 default:
                     this.showNotification('Unknown Module', 'Module type not recognized', 'error');
@@ -911,7 +932,22 @@
             }
         },
 
+        // Create / focus the Auction Tracker window
+        async createAuctionTracker() {
+            try {
+                if (!window.SidekickModules?.AuctionTracker) {
+                    this.showNotification('Auction Tracker', 'Module not loaded yet — reload the page and try again', 'error');
+                    return;
+                }
+                await window.SidekickModules.AuctionTracker.open();
+            } catch (error) {
+                console.error('Failed to open auction tracker:', error);
+                this.showNotification('Auction Tracker Error', 'Failed to open tracker window', 'error');
+            }
+        },
+
         // Show advanced settings panel
+
         showAdvancedSettings() {
             console.log("⚙️ Showing advanced settings panel");
             console.log("⚙️ Available modules:", Object.keys(window.SidekickModules || {}));

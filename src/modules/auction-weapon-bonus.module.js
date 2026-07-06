@@ -58,6 +58,12 @@ const AuctionWeaponBonusModule = (() => {
                 color: #fff;
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.12);
+                cursor: default;
+                transition: filter 0.15s ease;
+            }
+
+            .sidekick-auction-bonus-text:hover {
+                filter: brightness(1.2);
             }
 
             .sidekick-auction-bonus--red .sidekick-auction-bonus-text {
@@ -76,44 +82,178 @@ const AuctionWeaponBonusModule = (() => {
                 color: #1c1c1c;
             }
 
-            .sidekick-auction-bonus-icon-enhanced,
-            .sidekick-auction-bonus-icon-enhanced i {
-                transform: scale(1.18);
+            .sidekick-auction-bonus-icon-enhanced {
                 display: inline-flex;
-                transition: transform 0.2s ease;
+                align-items: center;
+                justify-content: center;
+                transition: transform 0.2s ease, filter 0.2s ease;
+                vertical-align: middle;
+                position: relative;
+                z-index: 1;
+            }
+
+            /* On item market / bazaar: much larger icons */
+            .ska-market-page .sidekick-auction-bonus-icon-enhanced,
+            .ska-market-page .sidekick-auction-bonus-icon-enhanced i {
+                transform: scale(2.1);
+                transform-origin: center center;
+                filter: drop-shadow(0 0 3px rgba(255,255,255,0.25));
+            }
+
+            .ska-market-page .sidekick-auction-bonus-icon-enhanced:hover,
+            .ska-market-page .sidekick-auction-bonus-icon-enhanced:hover i {
+                transform: scale(2.4);
+                filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));
+            }
+
+            /* On auction house: modest size (existing behaviour) */
+            .ska-auction-page .sidekick-auction-bonus-icon-enhanced,
+            .ska-auction-page .sidekick-auction-bonus-icon-enhanced i {
+                transform: scale(1.22);
+            }
+
+            /* Spacing so enlarged icons don't overlap adjacent text */
+            .ska-market-page .item-bonuses .iconsbonuses {
+                display: inline-flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: center;
+                padding: 4px 0;
             }
 
             .sidekick-auction-bonus-container + .item-bonuses {
                 margin-top: 4px;
+            }
+
+            /* ── Custom bonus tooltip ──────────────────────────────── */
+            #ska-bonus-tip {
+                position: fixed;
+                z-index: 9999999;
+                background: #1a1d27;
+                border: 1px solid rgba(255,255,255,.14);
+                border-radius: 8px;
+                padding: 9px 13px;
+                font-size: 12px;
+                color: #e4e4e7;
+                max-width: 240px;
+                line-height: 1.55;
+                pointer-events: none;
+                display: none;
+                box-shadow: 0 8px 28px rgba(0,0,0,.6);
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            #ska-bonus-tip strong {
+                color: #fff;
+                font-size: 12.5px;
+                display: block;
+                margin-bottom: 4px;
+            }
+            #ska-bonus-tip span {
+                color: rgba(255,255,255,.65);
             }
         `;
 
         document.head.appendChild(styles);
     }
 
-    function getAuctionItems() {
-        const listItems = [...document.querySelectorAll('ul.items-list li')];
-        return listItems.filter((li) => !li.classList.contains('last') && !li.classList.contains('clear'));
+    // ── Custom tooltip ─────────────────────────────────────────────────────────
+    function setupBonusTooltip() {
+        if (document.getElementById('ska-bonus-tip')) return;
+
+        const tip = document.createElement('div');
+        tip.id = 'ska-bonus-tip';
+        document.body.appendChild(tip);
+
+        function positionTip(e) {
+            const tw = tip.offsetWidth  || 220;
+            const th = tip.offsetHeight || 60;
+            let x = e.clientX + 14;
+            let y = e.clientY + 14;
+            if (x + tw > window.innerWidth  - 8) x = e.clientX - tw - 14;
+            if (y + th > window.innerHeight - 8) y = e.clientY - th - 14;
+            tip.style.left = `${x}px`;
+            tip.style.top  = `${y}px`;
+        }
+
+        document.addEventListener('mouseover', (e) => {
+            const pill = e.target.closest?.('.sidekick-auction-bonus-text');
+            if (!pill) { tip.style.display = 'none'; return; }
+
+            const name = pill.dataset.bonusName || pill.textContent.trim();
+            const desc = pill.dataset.bonusDesc || '';
+            if (!name) return;
+
+            tip.innerHTML = desc
+                ? `<strong>${name}</strong><span>${desc}</span>`
+                : `<strong>${name}</strong>`;
+
+            tip.style.display = 'block';
+            positionTip(e);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (tip.style.display === 'none') return;
+            const pill = e.target.closest?.('.sidekick-auction-bonus-text');
+            if (!pill) { tip.style.display = 'none'; return; }
+            positionTip(e);
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            const pill = e.target.closest?.('.sidekick-auction-bonus-text');
+            if (!pill) return;
+            // Only hide if we're not moving to a child element of the pill
+            if (!pill.contains(e.relatedTarget)) {
+                tip.style.display = 'none';
+            }
+        });
     }
 
-    function extractBonusText(span) {
-        const raw = span.title || span.getAttribute('title') || '';
+    // ── Bonus extraction ───────────────────────────────────────────────────────
+
+    /**
+     * Parse a bonus span and return { label, name, bonus, description }.
+     * The span's title attribute contains HTML like:
+     *   <b>Plunder</b><br>Steal an additional 20-49% of cash on hand...
+     */
+    function extractBonusData(span) {
+        const raw = span.title || span.getAttribute('data-original-title') || '';
+
+        // Parse name from <b>…</b>
         const nameMatch = raw.match(/<b>([^<]+)<\/b>/i);
+        const name = nameMatch?.[1]?.trim()
+            || raw.replace(/<[^>]*>/g, '').split('\n')[0].trim();
+
+        // Parse bonus value: "21%", "135%", "30 turns" etc.
         const bonusMatch = raw.match(/(\d+%|\d+\s*turns?)/i);
-        const name = nameMatch?.[1] ? nameMatch[1].trim() : raw.replace(/<[^>]*>/g, '').trim();
-        const bonus = bonusMatch?.[1] ? bonusMatch[1].trim() : '';
-        return name ? `${name}${bonus ? ` ${bonus}` : ''}` : '';
+        const bonus = bonusMatch?.[1]?.trim() || '';
+
+        const label = name ? `${name}${bonus ? ` ${bonus}` : ''}` : '';
+
+        // Parse description: text after <br> following the name
+        // Handles: <b>Name</b><br>Description  and  <b>Name</b><br/>Description
+        const descMatch = raw.match(/<\/b>\s*<br\s*\/?>\s*([\s\S]*)/i)
+            || raw.match(/<br\s*\/?>\s*([\s\S]+)/i);
+        const description = descMatch?.[1]
+            ? descMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+            : '';
+
+        return { label, name, bonus, description };
+    }
+
+    function getBonusData(item) {
+        const tooltipSpans = [...item.querySelectorAll('.item-bonuses .iconsbonuses span')];
+        return tooltipSpans
+            .map(extractBonusData)
+            .filter(d => d.label);
+    }
+
+    // Legacy wrapper — keep getBonusStrings for market/bazaar icon enhancement path
+    function extractBonusText(span) {
+        return extractBonusData(span).label;
     }
 
     function getBonusStrings(item) {
-        const tooltipSpans = [...item.querySelectorAll('.item-bonuses .iconsbonuses span')];
-        if (!tooltipSpans.length) {
-            return [];
-        }
-
-        return tooltipSpans
-            .map(extractBonusText)
-            .filter(Boolean);
+        return getBonusData(item).map(d => d.label).filter(Boolean);
     }
 
     function getMarketBonusSpans() {
@@ -139,7 +279,6 @@ const AuctionWeaponBonusModule = (() => {
         if (!isMarketOrBazaarPage()) {
             return;
         }
-
         getMarketBonusSpans().forEach(enhanceBonusIconSpan);
     }
 
@@ -158,7 +297,7 @@ const AuctionWeaponBonusModule = (() => {
             return;
         }
 
-        const bonuses = getBonusStrings(item);
+        const bonusData = getBonusData(item);
         const titleElement = item.querySelector('span.title');
 
         if (!titleElement) {
@@ -166,7 +305,7 @@ const AuctionWeaponBonusModule = (() => {
             return;
         }
 
-        if (!bonuses.length) {
+        if (!bonusData.length) {
             item.setAttribute(PROCESSED_ATTR, 'true');
             return;
         }
@@ -178,8 +317,13 @@ const AuctionWeaponBonusModule = (() => {
             titleElement.appendChild(bonusContainer);
         }
 
-        bonusContainer.innerHTML = bonuses
-            .map((bonus) => `<p class="sidekick-auction-bonus-text">${bonus}</p>`)
+        // Render pills — store name + description on data attributes for the tooltip
+        bonusContainer.innerHTML = bonusData
+            .map(({ label, name, description }) => {
+                const safeName = name.replace(/"/g, '&quot;');
+                const safeDesc = description.replace(/"/g, '&quot;');
+                return `<p class="sidekick-auction-bonus-text" data-bonus-name="${safeName}" data-bonus-desc="${safeDesc}">${label}</p>`;
+            })
             .join('');
 
         const colorType = getGlowType(item);
@@ -188,6 +332,11 @@ const AuctionWeaponBonusModule = (() => {
         }
 
         item.setAttribute(PROCESSED_ATTR, 'true');
+    }
+
+    function getAuctionItems() {
+        const listItems = [...document.querySelectorAll('ul.items-list li')];
+        return listItems.filter((li) => !li.classList.contains('last') && !li.classList.contains('clear'));
     }
 
     function updateAuctionItems() {
@@ -248,7 +397,15 @@ const AuctionWeaponBonusModule = (() => {
                 return;
             }
 
+            // Tag body with page type so CSS selectors scale icons correctly
+            if (marketPage) {
+                document.body.classList.add('ska-market-page');
+            } else if (auctionPage) {
+                document.body.classList.add('ska-auction-page');
+            }
+
             injectStylesheet();
+            setupBonusTooltip();
 
             if (auctionPage) {
                 updateAuctionItems();

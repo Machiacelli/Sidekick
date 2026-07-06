@@ -500,48 +500,71 @@
             }
 
             // Add target button
-            const addTargetBtn = element.querySelector('.add-target-btn');
-            addTargetBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdownContent.style.display = 'none';
-                this.showAddTargetDialog(attackList);
-            });
+            const addTargetBtn = dropdownContent.querySelector('.add-target-btn');
+
+            if (addTargetBtn) {
+                addTargetBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdownContent.style.display = 'none';
+                    this.showAddTargetDialog(attackList);
+                });
+            }
 
             // Color button
-            const colorBtn = element.querySelector('.color-attacklist-btn');
-            colorBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                dropdownContent.style.display = 'none';
-                if (window.SidekickModules?.Core?.ColorPicker) {
-                    window.SidekickModules.Core.ColorPicker.show(attackList.color || '#f44336', (selectedColor) => {
-                        attackList.color = selectedColor;
-                        const header = element.querySelector('.attacklist-header');
-                        if (header) {
-                            header.style.background = `linear-gradient(135deg, ${selectedColor}, ${this.darkenColor(selectedColor, 15)})`;
-                        }
-                        this.saveAttackLists();
-                    });
-                }
-            });
+            const colorBtn = dropdownContent.querySelector('.color-attacklist-btn');
+
+            if (colorBtn) {
+                colorBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dropdownContent.style.display = 'none';
+
+                    if (window.SidekickModules?.Core?.ColorPicker) {
+                        window.SidekickModules.Core.ColorPicker.show(
+                            attackList.color || '#f44336',
+                            (selectedColor) => {
+                                attackList.color = selectedColor;
+
+                                const header = element.querySelector('.attacklist-header');
+                                if (header) {
+                                    header.style.background =
+                                        `linear-gradient(135deg, ${selectedColor}, ${this.darkenColor(selectedColor, 15)})`;
+                                }
+
+                                this.saveAttackLists();
+                            }
+                        );
+                    }
+                });
+            }
 
             // Pin button
-            const pinBtn = element.querySelector('.pin-attacklist-btn');
-            pinBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                attackList.pinned = !attackList.pinned;
-                dropdownContent.style.display = 'none';
-                this.saveAttackLists();
-                this.renderAttackList(attackList);
-            });
+            const pinBtn = dropdownContent.querySelector('.pin-attacklist-btn');
+
+            if (pinBtn) {
+                pinBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    attackList.pinned = !attackList.pinned;
+                    dropdownContent.style.display = 'none';
+                    this.saveAttackLists();
+                    this.renderAttackList(attackList);
+                });
+            }
 
             // Close button
             const closeBtn = element.querySelector('.attacklist-close');
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (confirm(`Delete "${attackList.name}" attack list?`)) {
-                    this.deleteAttackList(attackList.id);
-                }
-            });
+
+            console.log("Close button found:", closeBtn);
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (confirm(`Delete "${attackList.name}" attack list?`)) {
+                        this.deleteAttackList(attackList.id);
+                    }
+                });
+            }
 
             // Resizing functionality (only if not pinned)
             let resizeTimeout;

@@ -244,17 +244,25 @@
             try {
                 let stat = '';
                 const searchStr = (url + '&' + bodyText).toLowerCase();
-                
+
                 if (searchStr.includes('strength') || searchStr.includes('stat=str')) stat = 'str';
                 else if (searchStr.includes('defense') || searchStr.includes('stat=def')) stat = 'def';
                 else if (searchStr.includes('speed') || searchStr.includes('stat=spe')) stat = 'spe';
                 else if (searchStr.includes('dexterity') || searchStr.includes('stat=dex')) stat = 'dex';
-                const bestGym = getBestGym(stat);
 
-                if (bestGym !== null && bestGym !== currentGym) {
-                    console.log(`💪 [AutoGym] Fetch Train intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
-                    console.log(`💪 [AutoGym] Switching ${currentGym} → ${bestGym} for ${stat}`);
-                    const fakeResp = await swapGyms(bestGym);
+                // ── Nice Helper override ───────────────────────────────────────
+                // When the Nice Helper is active it calculates the optimal gym for
+                // the current nice-number target and stores it in localStorage.
+                // We use that gym instead of the normal max-gain selection.
+                const niceActive = localStorage.getItem('sidekick_merit_active') === 'true';
+                const niceGymId  = niceActive ? parseInt(localStorage.getItem('sidekick_merit_target_gym') || '0') : 0;
+
+                const gymToUse = (niceActive && niceGymId) ? niceGymId : getBestGym(stat);
+
+                if (gymToUse !== null && gymToUse !== currentGym) {
+                    const tag = (niceActive && niceGymId) ? '[NiceHelper]' : '[AutoGym]';
+                    console.log(`💪 ${tag} Switching ${currentGym} → ${gymToUse} for ${stat}`);
+                    const fakeResp = await swapGyms(gymToUse);
                     if (fakeResp !== null) return fakeResp;
                 }
             } catch (err) {

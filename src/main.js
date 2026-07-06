@@ -157,6 +157,15 @@
                 console.warn("⚠️ Time on Tab module not available");
             }
 
+            // Initialize Auction Tracker Module
+            console.log("🏷️ Sidekick: Initializing Auction Tracker...");
+            if (window.SidekickModules.AuctionTracker?.init) {
+                await window.SidekickModules.AuctionTracker.init();
+                console.log("✅ Sidekick: Auction Tracker initialized");
+            } else {
+                console.warn("⚠️ Auction Tracker module not available");
+            }
+
             // Initialize Chain Timer Module
             console.log("⏱️ Sidekick: Initializing Chain Timer...");
             if (window.SidekickModules.ChainTimer?.init) {
@@ -333,6 +342,15 @@
                 console.log("✅ Sidekick: Stats Tracker initialized");
             } else {
                 console.warn("⚠️ Stats Tracker module not available");
+            }
+
+            // Initialize Merit Calculator Module
+            console.log('🎯 Sidekick: Initializing Merit Calculator...');
+            if (window.SidekickModules.MeritCalculator?.init) {
+                await window.SidekickModules.MeritCalculator.init();
+                console.log('✅ Sidekick: Merit Calculator initialized');
+            } else {
+                console.warn('⚠️ Merit Calculator module not available');
             }
 
 

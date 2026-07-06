@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sidekick",
-    "version": "1.2.24",
+    "version": "1.2.23",
     "description": "Enhanced sidebar and tools for Torn.com",
     "permissions": [
         "storage",
@@ -82,6 +82,7 @@
                 "src/modules/cracking.module.js",
                 "src/modules/disposal.module.js",
                 "src/modules/auction-weapon-bonus.module.js",
+                "src/modules/auction-tracker.module.js",
                 "src/modules/item-market-max-quantity.module.js",
                 "src/modules/legible-names.module.js",
                 "src/modules/mission-tracker.module.js",
@@ -94,6 +95,7 @@
                 "src/modules/ui.module.js",
                 "src/modules/smart-medical-button.module.js",
                 "src/modules/rehab-warning.module.js",
+                "src/modules/merit-calculator.module.js",
                 "src/main.js"
             ],
             "css": [

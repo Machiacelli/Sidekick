@@ -230,6 +230,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Bug reporting is handled securely through Cloudflare Worker
 // No API keys stored in the extension code
 
+// ── Torn API error codes that should trigger secondary key fallback ───────────
+// Code 5 = "Too many requests" (rate limit / overload)
+// Code 8 = "IP temporarily blocked"
+const SECONDARY_FALLBACK_CODES = new Set([5, 8]);
+
+// Read a value from chrome.storage.local (background context helper)
+function storagGet(key) {
+    return new Promise(resolve => {
+        chrome.storage.local.get(key, result => resolve(result[key] ?? null));
+    });
+}
+
 // Handle Torn API calls from content scripts (avoids CORS issues)
 async function handleTornApiCall(request) {
     const { apiKey, selections, userId, endpoint: requestEndpoint } = request;
@@ -241,33 +253,68 @@ async function handleTornApiCall(request) {
     // Determine the API endpoint
     const endpoint = requestEndpoint || (userId ? `user/${userId}` : 'user');
 
-    // Generate cache key for this request
+    // ── Primary attempt ───────────────────────────────────────────────────────
     const cacheKey = apiCache.getCacheKey(apiKey, selections, endpoint);
-
-    // Check cache first
     const cached = apiCache.get(cacheKey);
-    if (cached) {
-        return cached;
+    if (cached) return cached;
+
+    const result = await apiCache.deduplicate(cacheKey, async () => {
+        console.log('🔍 Background: Making fresh API call (primary):', { endpoint, selections });
+        const r = await makeActualApiCall(apiKey, selections, endpoint);
+        if (r.success) apiCache.set(cacheKey, r, selections);
+        return r;
+    });
+
+    // ── Check if we need to fall back to the secondary key ───────────────────
+    // A primary failure is signalled by success:false AND an apiErrorCode field,
+    // or by Torn error code 5/8 embedded in the error message.
+    const needsFallback = !result.success && (
+        SECONDARY_FALLBACK_CODES.has(result.apiErrorCode) ||
+        /too many requests|overloaded|rate.?limit|code[:\s]*[58]\b/i.test(result.error || '')
+    );
+
+    if (!needsFallback) return result;
+
+    // ── Secondary key retry ───────────────────────────────────────────────────
+    const secondaryKey = await storagGet('sidekick_secondary_api_key');
+    if (!secondaryKey) {
+        console.warn('⚠️ Background: Primary API rate-limited but no secondary key configured');
+        return result; // return original error
     }
 
-    // Deduplicate concurrent identical requests
-    return await apiCache.deduplicate(cacheKey, async () => {
-        console.log('🔍 Background: Making fresh API call:', { endpoint, selections });
+    console.log('🔄 Background: Primary key rate-limited — retrying with secondary key');
 
-        // Make the actual API call
-        const result = await makeActualApiCall(apiKey, selections, endpoint);
+    const secCacheKey = apiCache.getCacheKey(secondaryKey, selections, endpoint);
+    const secCached  = apiCache.get(secCacheKey);
+    if (secCached) return secCached;
 
-        // Cache successful results
-        if (result.success) {
-            apiCache.set(cacheKey, result, selections);
-        }
-
-        return result;
+    const secResult = await apiCache.deduplicate(secCacheKey, async () => {
+        const r = await makeActualApiCall(secondaryKey, selections, endpoint);
+        if (r.success) apiCache.set(secCacheKey, r, selections);
+        return r;
     });
+
+    if (secResult.success) {
+        console.log('✅ Background: Secondary key succeeded');
+        return { ...secResult, usedSecondaryKey: true };
+    }
+
+    console.warn('⚠️ Background: Both primary and secondary keys failed');
+    return secResult;
 }
+
 
 // Actual API call implementation (extracted from handleTornApiCall)
 async function makeActualApiCall(apiKey, selections, endpoint) {
+
+    // Helper: throw an Error that carries the Torn numeric error code so the
+    // outer handler can detect rate-limit codes and trigger secondary key retry.
+    function throwTornError(msg, code) {
+        const err = new Error(msg);
+        err.apiErrorCode = code ?? null;
+        throw err;
+    }
+
     try {
         // Prepare results object
         const results = {
@@ -295,13 +342,16 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
                 });
 
                 if (!statsResponse.ok) {
-                    throw new Error(`Personal stats fetch failed: ${statsResponse.status}`);
+                    throwTornError(`Personal stats fetch failed: ${statsResponse.status}`);
                 }
 
                 const statsData = await statsResponse.json();
 
                 if (statsData.error) {
-                    throw new Error(`API Error: ${statsData.error.error} (${statsData.error.code})`);
+                    throwTornError(
+                        `API Error: ${statsData.error.error} (${statsData.error.code})`,
+                        statsData.error.code
+                    );
                 }
 
                 results.personalstats = statsData.personalstats;
@@ -520,7 +570,10 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
                 const profileData = await profileResponse.json();
 
                 if (profileData.error) {
-                    throw new Error(`API Error: ${profileData.error.error} (${profileData.error.code})`);
+                    throwTornError(
+                        `API Error: ${profileData.error.error} (${profileData.error.code})`,
+                        profileData.error.code
+                    );
                 }
 
                 // Store the complete profile data
@@ -551,7 +604,10 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
                 const companyData = await companyResponse.json();
 
                 if (companyData.error) {
-                    throw new Error(`API Error: ${companyData.error.error} (${companyData.error.code})`);
+                    throwTornError(
+                        `API Error: ${companyData.error.error} (${companyData.error.code})`,
+                        companyData.error.code
+                    );
                 }
 
                 // Store company data
@@ -564,6 +620,51 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
             }
         }
 
+        // ── Generic endpoint fallback ────────────────────────────────────────────
+        // For endpoints like market/{id}, faction/, torn/ that don't match any
+        // selection above. Returns raw data in results.raw.
+        const knownEndpointPrefixes = ['company/', 'user'];
+        const noSelectionHandled = !selections?.length && !knownEndpointPrefixes.some(p => endpoint.startsWith(p));
+        const genericEndpoint = !endpoint.startsWith('user') &&
+            !endpoint.startsWith('company/') &&
+            !(selections?.includes('personalstats') || selections?.includes('bars') ||
+              selections?.includes('cooldowns') || selections?.includes('refills') ||
+              selections?.includes('items') || selections?.includes('profile') ||
+              selections?.includes('money') || selections?.includes('logs'));
+
+        if (genericEndpoint) {
+            console.log(`🔎 Background: Generic endpoint fetch: ${endpoint}`);
+            try {
+                const genSel = selections?.length ? `&selections=${selections.join(',')}` : '';
+                const genResponse = await fetch(
+                    `https://api.torn.com/${endpoint}?key=${apiKey}${genSel}`,
+                    { method: 'GET', headers: { 'User-Agent': 'Sidekick Chrome Extension Background' } }
+                );
+
+                if (!genResponse.ok) {
+                    throwTornError(`Generic endpoint fetch failed: ${genResponse.status}`);
+                }
+
+                const genData = await genResponse.json();
+
+                if (genData.error) {
+                    throwTornError(
+                        `API Error: ${genData.error.error} (${genData.error.code})`,
+                        genData.error.code
+                    );
+                }
+
+                results.raw = genData;
+                // Also spread all top-level keys for convenience
+                Object.assign(results, genData);
+                console.log(`✅ Background: Generic endpoint ${endpoint} retrieved successfully`);
+
+            } catch (error) {
+                console.error('❌ Background: Generic endpoint fetch failed:', error);
+                throw error;
+            }
+        }
+
         console.log('🎯 Background: API call completed successfully');
         return results;
 
@@ -571,7 +672,8 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
         console.error('❌ Background: Torn API call failed:', error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
+            apiErrorCode: error.apiErrorCode ?? null,
         };
     }
 }
