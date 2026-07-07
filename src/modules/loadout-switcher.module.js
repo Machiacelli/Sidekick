@@ -9,11 +9,11 @@
 
     console.log('👕 Loading Sidekick Loadout Switcher Module...');
 
-    const STYLE_ID      = 'sk-loadout-switcher-style';
-    const LS_RFCV       = 'silmaril-loadout-switcher-rfcv';
-    const LS_TITLES     = 'silmaril-loadout-switcher-titles';
-    const LS_SELECTED   = 'silmaril-loadout-switcher-selected-loadouts';
-    const rfcvArg       = 'rfcv=';
+    const STYLE_ID = 'sk-loadout-switcher-style';
+    const LS_RFCV = 'silmaril-loadout-switcher-rfcv';
+    const LS_TITLES = 'silmaril-loadout-switcher-titles';
+    const LS_SELECTED = 'silmaril-loadout-switcher-selected-loadouts';
+    const rfcvArg = 'rfcv=';
     const SET_LOADOUT_URL = '/page.php?sid=itemsLoadouts&step=changeLoadout&setID={loadoutId}&rfcv={rfcv}';
     const GET_EQUIPPED_URL = '/page.php?sid=itemsLoadouts&step=getEquippedItems';
 
@@ -25,7 +25,7 @@
         _rfcvUpdatedThisSession: false,
         _loadoutTitles: {},
         _selectedLoadouts: '1,2,3',
-        _selectedLoadoutsArray: ['1','2','3'],
+        _selectedLoadoutsArray: ['1', '2', '3'],
         _observer: null,
 
         async init() {
@@ -117,7 +117,7 @@
             document.querySelectorAll('.silmaril-torn-loadout-switcher-container button')
                 .forEach(b => b.classList.remove('disabled'));
             this._rfcvUpdatedThisSession = true;
-            if (Object.keys(this._loadoutTitles).length === 0) this._fetchTitlesManually();
+            this._fetchTitlesManually();
         },
 
         _startRfcvCapture() {
@@ -222,7 +222,6 @@
         // ── Title fetching ────────────────────────────────────────────────────
 
         async _fetchTitlesManually() {
-            if (Object.keys(this._loadoutTitles).length > 0) return;
             if (!this._rfcv) return;
             try {
                 const res = await fetch(`${GET_EQUIPPED_URL}&rfcv=${this._rfcv}`);

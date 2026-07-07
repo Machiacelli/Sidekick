@@ -1123,7 +1123,19 @@
                 const inp = overlay.querySelector(sel);
                 if (!inp) continue;
                 inp.addEventListener('change', async () => {
-                    try { await saveToggle(storKey, subKey, inp.checked); } catch (e) { }
+                    try {
+                        await saveToggle(storKey, subKey, inp.checked);
+
+                        if (subKey === 'bunker-bucks' && window.SidekickModules?.BunkerBucks) {
+                            if (inp.checked) {
+                                await window.SidekickModules.BunkerBucks.enable();
+                            } else {
+                                await window.SidekickModules.BunkerBucks.disable();
+                            }
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
                 });
             }
 
@@ -1289,7 +1301,7 @@
                 if (window.SidekickModules?.RehabWarning) {
                     window.SidekickModules.RehabWarning.updateSettings(d);
                 }
-                
+
                 if (rwCompanyWrap) {
                     rwCompanyWrap.style.display = rwCompanyEnable.checked ? 'block' : 'none';
                 }
@@ -1306,7 +1318,7 @@
                     if (rwEduThreshold && d.eduThreshold !== undefined) rwEduThreshold.value = d.eduThreshold;
                     if (rwCompanyEnable && d.companyEnable !== undefined) rwCompanyEnable.checked = d.companyEnable;
                     if (rwCompanyPenalty && d.companyPenalty !== undefined) rwCompanyPenalty.value = d.companyPenalty;
-                    
+
                     if (rwCompanyWrap) {
                         rwCompanyWrap.style.display = rwCompanyEnable.checked ? 'block' : 'none';
                     }
@@ -1393,22 +1405,22 @@
             if (slDeselAll) slDeselAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = false); saveShoplift(); });
 
             // === Mug Calculator: save/load merits, plunder, noPlunder, threshold ===
-            const mugMeritsEl   = overlay.querySelector('#mugMeritsInput');
-            const mugPlunderEl  = overlay.querySelector('#plunderInput');
+            const mugMeritsEl = overlay.querySelector('#mugMeritsInput');
+            const mugPlunderEl = overlay.querySelector('#plunderInput');
             const mugNoPlunderEl = overlay.querySelector('#noPlunderCheckbox');
-            const mugThreshEl   = overlay.querySelector('#thresholdInput');
+            const mugThreshEl = overlay.querySelector('#thresholdInput');
 
             // Load stored values into the inputs
             (async () => {
                 if (!CS()) return;
-                const merits    = await CS().get('mugMerits');
-                const plunder   = await CS().get('mugPlunder');
+                const merits = await CS().get('mugMerits');
+                const plunder = await CS().get('mugPlunder');
                 const noPlunder = await CS().get('mugNoPlunder');
-                const thresh    = await CS().get('mugThreshold');
-                if (mugMeritsEl   && merits    != null && merits    > 0) mugMeritsEl.value   = merits;
-                if (mugPlunderEl  && plunder   != null && plunder   > 0) mugPlunderEl.value  = plunder;
-                if (mugNoPlunderEl && noPlunder != null)                  mugNoPlunderEl.checked = noPlunder === true;
-                if (mugThreshEl   && thresh    != null && thresh    > 0) mugThreshEl.value   = thresh;
+                const thresh = await CS().get('mugThreshold');
+                if (mugMeritsEl && merits != null && merits > 0) mugMeritsEl.value = merits;
+                if (mugPlunderEl && plunder != null && plunder > 0) mugPlunderEl.value = plunder;
+                if (mugNoPlunderEl && noPlunder != null) mugNoPlunderEl.checked = noPlunder === true;
+                if (mugThreshEl && thresh != null && thresh > 0) mugThreshEl.value = thresh;
                 // Reflect noPlunder state on plunder input
                 if (mugPlunderEl && mugNoPlunderEl) {
                     mugPlunderEl.disabled = mugNoPlunderEl.checked;
@@ -1422,14 +1434,14 @@
                 clearTimeout(mugSaveTimer);
                 mugSaveTimer = setTimeout(async () => {
                     if (!CS()) return;
-                    const meritsVal  = parseInt(mugMeritsEl?.value  ?? '', 10);
-                    const threshVal  = parseInt(mugThreshEl?.value  ?? '', 10);
-                    const noPlunder  = mugNoPlunderEl?.checked ?? false;
+                    const meritsVal = parseInt(mugMeritsEl?.value ?? '', 10);
+                    const threshVal = parseInt(mugThreshEl?.value ?? '', 10);
+                    const noPlunder = mugNoPlunderEl?.checked ?? false;
                     const plunderVal = noPlunder ? 0 : parseFloat(mugPlunderEl?.value ?? 0);
-                    await CS().set('mugMerits',    isNaN(meritsVal)  ? 0 : Math.min(Math.max(meritsVal, 0), 10));
-                    await CS().set('mugPlunder',   isNaN(plunderVal) ? 0 : plunderVal);
+                    await CS().set('mugMerits', isNaN(meritsVal) ? 0 : Math.min(Math.max(meritsVal, 0), 10));
+                    await CS().set('mugPlunder', isNaN(plunderVal) ? 0 : plunderVal);
                     await CS().set('mugNoPlunder', noPlunder);
-                    await CS().set('mugThreshold', isNaN(threshVal)  ? 0 : threshVal);
+                    await CS().set('mugThreshold', isNaN(threshVal) ? 0 : threshVal);
                     // Invalidate the mug data cache so the next popup reflects new settings
                     if (window.SidekickModules?.MugCalculator?.clearCache) {
                         window.SidekickModules.MugCalculator.clearCache();
@@ -1437,13 +1449,13 @@
                 }, 400);
             };
 
-            if (mugMeritsEl)    mugMeritsEl.addEventListener('input',  saveMugSettings);
-            if (mugPlunderEl)   mugPlunderEl.addEventListener('input',  saveMugSettings);
-            if (mugThreshEl)    mugThreshEl.addEventListener('input',  saveMugSettings);
+            if (mugMeritsEl) mugMeritsEl.addEventListener('input', saveMugSettings);
+            if (mugPlunderEl) mugPlunderEl.addEventListener('input', saveMugSettings);
+            if (mugThreshEl) mugThreshEl.addEventListener('input', saveMugSettings);
             if (mugNoPlunderEl) {
                 mugNoPlunderEl.addEventListener('change', () => {
                     if (mugPlunderEl) {
-                        mugPlunderEl.disabled     = mugNoPlunderEl.checked;
+                        mugPlunderEl.disabled = mugNoPlunderEl.checked;
                         mugPlunderEl.style.opacity = mugNoPlunderEl.checked ? '0.4' : '1';
                     }
                     saveMugSettings();
@@ -1494,14 +1506,14 @@
                     });
                 }
             };
-            
+
             setupAutoSave(apiInput, 'sidekick_api_key');
             setupAutoSave(secApiInput, 'sidekick_secondary_api_key');
 
             testBtn.addEventListener('click', async () => {
                 const key1 = apiInput?.value.trim();
                 const key2 = secApiInput?.value.trim();
-                
+
                 if (!key1 && !key2) {
                     if (window.SidekickModules.Core.NotificationSystem) {
                         window.SidekickModules.Core.NotificationSystem.show('API Test', 'Please enter an API key first', 'error', 3000);
@@ -1525,7 +1537,7 @@
                         const d = await r.json();
                         results.push(d.error ? `Secondary Error: ${d.error.error}` : `Secondary Working (${d.name})`);
                     }
-                    
+
                     const isError = results.some(msg => msg.includes('Error'));
                     const finalMsg = results.join(' | ');
 
@@ -1560,7 +1572,7 @@
                     secApiBtn.style.display = 'none';
                     secApiCont.style.display = 'block';
                 });
-                
+
                 // If there's already a value in it, spawn it immediately
                 if (document.getElementById('sidekick-secondary-api-key')?.value) {
                     secApiBtn.style.display = 'none';
@@ -1658,6 +1670,7 @@
 
             if (exportBtn) {
                 exportBtn.addEventListener('click', async () => {
+                    console.log("📤 Export button clicked");
                     try {
                         exportBtn.disabled = true;
                         exportBtn.textContent = '📤 Exporting...';
@@ -1685,12 +1698,18 @@
 
                         // Trigger download
                         const date = new Date().toISOString().split('T')[0];
+
                         const link = document.createElement('a');
                         link.href = url;
                         link.download = `sidekick-backup-${date}.json`;
-                        link.click();
 
-                        URL.revokeObjectURL(url);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+
+                        setTimeout(() => {
+                            URL.revokeObjectURL(url);
+                        }, 1000);
 
                         this.showStatus(backupStatus, `Exported ${Object.keys(allData).length} items successfully!`, 'success');
 
@@ -2063,23 +2082,23 @@
 
             if (clearCacheBtn) {
                 clearCacheBtn.addEventListener('click', async () => {
-                try {
-                    await window.SidekickModules.Core.ChromeStorage.set('xanaxviewer_cache', {});
-                    this.showStatus(xanaxStatusDiv, 'Cache cleared successfully!', 'success');
+                    try {
+                        await window.SidekickModules.Core.ChromeStorage.set('xanaxviewer_cache', {});
+                        this.showStatus(xanaxStatusDiv, 'Cache cleared successfully!', 'success');
 
-                    if (window.SidekickModules.Core.NotificationSystem) {
-                        window.SidekickModules.Core.NotificationSystem.show(
-                            'Cache Cleared',
-                            'Xanax Viewer cache has been cleared',
-                            'info',
-                            3000
-                        );
+                        if (window.SidekickModules.Core.NotificationSystem) {
+                            window.SidekickModules.Core.NotificationSystem.show(
+                                'Cache Cleared',
+                                'Xanax Viewer cache has been cleared',
+                                'info',
+                                3000
+                            );
+                        }
+                    } catch (error) {
+                        console.error('Failed to clear Xanax Viewer cache:', error);
+                        this.showStatus(xanaxStatusDiv, 'Failed to clear cache', 'error');
                     }
-                } catch (error) {
-                    console.error('Failed to clear Xanax Viewer cache:', error);
-                    this.showStatus(xanaxStatusDiv, 'Failed to clear cache', 'error');
-                }
-            });
+                });
             }
         },
 
@@ -2149,7 +2168,46 @@
                 chainThresholdDisplay.textContent = `${chainThresholdSlider.value} min`;
             });
             chainThresholdSlider.addEventListener('change', autoSaveChainSettings);
+            // Abort if the Chain Timer controls don't exist yet
+            if (
+                !chainThresholdSlider ||
+                !chainThresholdDisplay ||
+                !chainAlertsCheckbox ||
+                !chainPopupCheckbox ||
+                !chainFlashCheckbox
+            ) {
+                console.warn('Chain Timer controls not found - skipping listeners.');
+                return;
+            }
 
+            // Abort if the Chain Timer controls don't exist yet
+            if (
+                !chainThresholdSlider ||
+                !chainThresholdDisplay ||
+                !chainAlertsCheckbox ||
+                !chainPopupCheckbox ||
+                !chainFlashCheckbox
+            ) {
+                console.warn('Chain Timer controls not found - skipping listeners.');
+                return;
+            }
+
+            // Auto-save on slider change
+            chainThresholdSlider.addEventListener('input', () => {
+                chainThresholdDisplay.textContent = `${chainThresholdSlider.value} min`;
+            });
+
+            chainThresholdSlider.addEventListener('change', autoSaveChainSettings);
+
+            // Auto-save on checkbox changes
+            chainAlertsCheckbox.addEventListener('change', autoSaveChainSettings);
+            chainPopupCheckbox.addEventListener('change', autoSaveChainSettings);
+            chainFlashCheckbox.addEventListener('change', autoSaveChainSettings);
+
+            const floatingDisplayCheckbox = panel.querySelector('#sidekick-chain-floating-display');
+            if (floatingDisplayCheckbox) {
+                floatingDisplayCheckbox.addEventListener('change', autoSaveChainSettings);
+            }
             // Auto-save on checkbox changes
             chainAlertsCheckbox.addEventListener('change', autoSaveChainSettings);
             chainPopupCheckbox.addEventListener('change', autoSaveChainSettings);
@@ -2253,6 +2311,31 @@
             if (notifAutoDismissCheckbox) {
                 notifAutoDismissCheckbox.addEventListener('change', autoSaveNotifSettings);
             }
+        },
+
+        showStatus(element, message, type = 'info') {
+            if (!element) return;
+
+            element.textContent = message;
+
+            switch (type) {
+                case 'success':
+                    element.style.background = 'rgba(76,175,80,0.3)';
+                    break;
+
+                case 'error':
+                    element.style.background = 'rgba(244,67,54,0.3)';
+                    break;
+
+                case 'warning':
+                    element.style.background = 'rgba(255,152,0,0.3)';
+                    break;
+
+                default:
+                    element.style.background = 'rgba(255,255,255,0.1)';
+            }
+
+            element.style.color = '#fff';
         },
 
         // Mug Calculator Tab listeners

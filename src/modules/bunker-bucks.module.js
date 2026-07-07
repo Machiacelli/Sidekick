@@ -138,11 +138,42 @@
             this.isEnabled = true;
             await this.saveSettings(true);
 
-            // Start observing for item popups
+            if (this.observer) {
+                this.observer.disconnect();
+                this.observer = null;
+            }
+
             this.startObserver();
 
-            // Process any existing popups
             this.processExistingPopups();
+
+
+        },
+
+        // Watch for new item popups
+        startObserver() {
+            if (this.observer) return;
+
+            this.observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        if (!(node instanceof HTMLElement)) continue;
+
+                        const propertiesList = node.matches('ul[class*="properties"]')
+                            ? node
+                            : node.querySelector('ul[class*="properties"]');
+
+                        if (!propertiesList) continue;
+
+                        this.addBunkerBucks(propertiesList);
+                    }
+                }
+            });
+
+            this.observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
         },
 
         // Disable the module
@@ -151,7 +182,6 @@
             this.isEnabled = false;
             await this.saveSettings(false);
 
-            // Stop observer
             if (this.observer) {
                 this.observer.disconnect();
                 this.observer = null;
@@ -232,72 +262,57 @@
         },
 
         // Add bunker bucks to item popup
-        addBunkerBucks(itemInfo) {
-            if (!this.isEnabled) return;
-            if (itemInfo.dataset.bunkerBucksAdded) return;
-            itemInfo.dataset.bunkerBucksAdded = 'true';
+        addBunkerBucks(propertiesList) {
+            console.log("Bunker Bucks: addBunkerBucks()", propertiesList);
 
-            const itemName = this.getItemName(itemInfo);
+            if (!this.isEnabled) return;
+            if (!propertiesList) return;
+
+            if (propertiesList.dataset.bunkerBucksAdded) return;
+            propertiesList.dataset.bunkerBucksAdded = "true";
+
+            const popup = propertiesList.parentElement;
+            if (!popup) return;
+
+            const itemName = this.getItemName(popup);
             const weaponType = this.getWeaponType(itemName);
-            const rarity = this.getRarity(itemInfo);
-            const bonusCount = this.countBonuses(itemInfo);
+            const rarity = this.getRarity(popup);
+            const bonusCount = this.countBonuses(popup);
 
             if (!weaponType || !rarity) return;
 
             const bunkerBucks = this.calculateBunkerBucks(rarity, weaponType, bonusCount);
-            if (bunkerBucks === null) return;
+            if (bunkerBucks == null) return;
 
-            const propertiesList = itemInfo.querySelector('.properties___pva_l');
-            if (!propertiesList) return;
+            // Increase popup height slightly
+            const currentHeight = parseInt(popup.style.height || "237", 10);
+            popup.style.height = (currentHeight + 36) + "px";
 
-            // Expand popup height slightly to ensure visibility
-            const previewWrapper = itemInfo.querySelector('.previewAndPropertiesWrapper___hqsZP');
-            if (previewWrapper) {
-                const currentHeight = parseInt(previewWrapper.style.height) || 203;
-                previewWrapper.style.height = (currentHeight + 40) + 'px';
+            // Reuse empty property row if one exists
+            let emptyRow = [...propertiesList.children].find(li => {
+                const div = li.firstElementChild;
+                return div && div.children.length === 0;
+            });
+
+            if (!emptyRow) {
+                emptyRow = document.createElement("li");
+                propertiesList.appendChild(emptyRow);
             }
 
-            // Look for an empty row to populate
-            const allWrappers = propertiesList.querySelectorAll('.propertyWrapper___xSOH1');
-            let emptyRow = null;
-
-            for (let wrapper of allWrappers) {
-                const propertyDiv = wrapper.querySelector('.property___hqXXN');
-                if (propertyDiv && propertyDiv.children.length === 0) {
-                    emptyRow = wrapper;
-                    break;
-                }
-            }
-
-            if (emptyRow) {
-                // Populate existing empty row
-                const propertyDiv = emptyRow.querySelector('.property___hqXXN');
-                propertyDiv.innerHTML = `
-                    <span class="title___DbORn">Bunker Bucks:</span>
-                    <div class="valueWrapper___vVHLn t-overflow" data-is-tooltip-opened="false">
-                        <span class="t-overflow">${this.formatNumber(bunkerBucks)} BB</span>
-                    </div>
-                `;
-            } else {
-                // Fallback: create new row
-                const bunkerRow = document.createElement('li');
-                bunkerRow.className = 'propertyWrapper___xSOH1 property___vsfqU';
-                bunkerRow.innerHTML = `
-                    <div class="property___hqXXN">
-                        <span class="title___DbORn">Bunker Bucks:</span>
-                        <div class="valueWrapper___vVHLn t-overflow" data-is-tooltip-opened="false">
-                            <span class="t-overflow">${this.formatNumber(bunkerBucks)} BB</span>
-                        </div>
-                    </div>
-                `;
-                propertiesList.appendChild(bunkerRow);
-            }
+            emptyRow.innerHTML = `
+        <div class="property___gpda9">
+            <span class="title___HudCE">Bunker Bucks:</span>
+            <div class="valueWrapper___yV0l4 t-overflow">
+                <span class="t-overflow">${this.formatNumber(bunkerBucks)} BB</span>
+            </div>
+        </div>
+    `;
         },
-
         // Process existing popups on page
         processExistingPopups() {
-            const popups = document.querySelectorAll('.itemInfo___mNZ5j');
-            popups.forEach(popup => {
+            const popups = document.querySelectorAll('ul[class*="properties"]');
+
+            popups.forEach((popup) => {
                 setTimeout(() => this.addBunkerBucks(popup), 100);
             });
         },
@@ -307,22 +322,29 @@
             if (this.observer) return;
 
             this.observer = new MutationObserver((mutations) => {
+
+
                 mutations.forEach((mutation) => {
                     mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === 1 && node.classList) {
-                            if (node.classList.contains('itemInfoWrapper___nA_eu') || node.classList.contains('itemInfo___mNZ5j')) {
-                                const popup = node.classList.contains('itemInfo___mNZ5j') ? node : node.querySelector('.itemInfo___mNZ5j');
-                                if (popup) {
-                                    setTimeout(() => this.addBunkerBucks(popup), 100);
-                                    setTimeout(() => this.addBunkerBucks(popup), 500);
-                                }
-                            }
+
+
+                        if (!(node instanceof HTMLElement)) return;
+
+                        let popup = null;
+
+                        if (node.matches('ul[class*="properties"]')) {
+                            popup = node;
+                        } else {
+                            popup = node.querySelector('ul[class*="properties"]');
+                        }
+
+                        if (popup) {
+
                         }
                     });
                 });
             });
 
-            this.observer.observe(document.body, { childList: true, subtree: true });
         },
 
         // Toggle module on/off
@@ -333,6 +355,7 @@
                 await this.enable();
             }
         }
+
     };
 
     // Export module to global namespace

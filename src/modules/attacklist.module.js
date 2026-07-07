@@ -206,18 +206,20 @@
                                 align-items: center;
                                 justify-content: center;
                             " title="Options">⚙️</button>
-                            <div class="attacklist-dropdown-content" style="
-                                display: none;
-                                position: absolute;
-                                background: #333;
-                                min-width: 120px;
-                                box-shadow: 0px 8px 16px rgba(0,0,0,0.3);
-                                z-index: 1001;
-                                border-radius: 4px;
-                                border: 1px solid #555;
-                                top: 100%;
-                                right: 0;
-                            ">
+<div class="attacklist-dropdown-content" style="
+    display: none;
+    position: absolute;
+    background: #333;
+    width: 160px;
+    box-shadow: 0px 8px 16px rgba(0,0,0,0.3);
+    z-index: 1001;
+    border-radius: 4px;
+    border: 1px solid #555;
+    top: 100%;
+    right: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+">
                                 <button class="add-target-btn" style="
                                     background: none;
                                     border: none;
