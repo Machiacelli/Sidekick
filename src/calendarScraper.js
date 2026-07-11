@@ -51,64 +51,16 @@
                 console.log(`📅 Fallback scan found ${eventElements.length} potential events`);
             }
 
-            eventElements.forEach(eventEl => {
-                try {
-                    // Get event name
-                    const nameEl = eventEl.querySelector('[class*="name"], h3, h4, strong, b') || eventEl;
-                    const eventName = nameEl.textContent.trim();
-
-                    if (!eventName) return;
-
-                    // Get date text (could be in same or different element)
-                    const dateText = eventEl.textContent;
-
-                    // Parse date patterns: "Dec 19 - Jan 2", "Dec 15-31", "December 19-31"
-                    const dateMatch = dateText.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:\s*[-–]\s*(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+)?(\d{1,2}))?/i);
-
-                    if (!dateMatch) return;
-
-                    const [, startMonth, startDay, endMonth, endDay] = dateMatch;
-
-                    // Month name to number mapping
-                    const monthMap = {
-                        'jan': 1, 'january': 1,
-                        'feb': 2, 'february': 2,
-                        'mar': 3, 'march': 3,
-                        'apr': 4, 'april': 4,
-                        'may': 5,
-                        'jun': 6, 'june': 6,
-                        'jul': 7, 'july': 7,
-                        'aug': 8, 'august': 8,
-                        'sep': 9, 'sept': 9, 'september': 9,
-                        'oct': 10, 'october': 10,
-                        'nov': 11, 'november': 11,
-                        'dec': 12, 'december': 12
-                    };
-
-                    const startMonthNum = monthMap[startMonth.toLowerCase()];
-                    const endMonthNum = endMonth ? monthMap[endMonth.toLowerCase()] : startMonthNum;
-
-                    if (!startMonthNum) return;
-
-                    // Normalize event name for matching
-                    const normalized = eventName
-                        .toLowerCase()
-                        .trim()
-                        .replace(/[^\w\s]/g, '')
-                        .replace(/\s+/g, ' ');
-
-                    events[normalized] = {
-                        startMonth: startMonthNum,
-                        startDay: parseInt(startDay),
-                        endMonth: endMonthNum,
-                        endDay: parseInt(endDay || startDay)
-                    };
-
-                    console.log(`✅ Scraped: "${eventName}" = ${startMonthNum}/${startDay} - ${endMonthNum}/${endDay || startDay}`);
-
-                } catch (err) {
-                    console.warn('⚠️ Failed to parse event:', err);
-                }
+            eventElements.forEach((eventEl, index) => {
+                console.log("========================================");
+                console.log(`EVENT ${index}`);
+                console.log("========================================");
+                console.log("OUTER HTML:");
+                console.log(eventEl.outerHTML);
+                console.log("TEXT CONTENT:");
+                console.log(eventEl.textContent);
+                console.log("INNER HTML:");
+                console.log(eventEl.innerHTML);
             });
 
             if (Object.keys(events).length > 0) {

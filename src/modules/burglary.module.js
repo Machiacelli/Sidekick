@@ -7,11 +7,71 @@
     'use strict';
 
     console.log('🏠 Loading Sidekick Burglary Module...');
+    const LOCATION_TIME_DATA = {
+        residential: {
+            optimalWindow: '09:00 - 14:59',
+            slots: [
+                { start: 0, end: 3, score: 79.58 },
+                { start: 3, end: 6, score: 79.79 },
+                { start: 6, end: 9, score: 79.00 },
+                { start: 9, end: 12, score: 81.65 },
+                { start: 12, end: 15, score: 80.31 },
+                { start: 15, end: 18, score: 79.37 },
+                { start: 18, end: 21, score: 79.33 },
+                { start: 21, end: 24, score: 79.96 }
+            ]
+        },
+
+        commercial: {
+            optimalWindow: '18:00 - 23:59',
+            slots: [
+                { start: 0, end: 3, score: 77.52 },
+                { start: 3, end: 6, score: 79.26 },
+                { start: 6, end: 9, score: 78.92 },
+                { start: 9, end: 12, score: 76.22 },
+                { start: 12, end: 15, score: 79.61 },
+                { start: 15, end: 18, score: 79.83 },
+                { start: 18, end: 21, score: 81.08 },
+                { start: 21, end: 24, score: 80.61 }
+            ]
+        },
+
+        industrial: {
+            optimalWindow: '21:00 - 08:59',
+            slots: [
+                { start: 0, end: 3, score: 83.03 },
+                { start: 3, end: 6, score: 79.80 },
+                { start: 6, end: 9, score: 81.11 },
+                { start: 9, end: 12, score: 78.44 },
+                { start: 12, end: 15, score: 76.53 },
+                { start: 15, end: 18, score: 74.27 },
+                { start: 18, end: 21, score: 80.43 },
+                { start: 21, end: 24, score: 81.76 }
+            ]
+        }
+    };
+
+    const LOCATION_BUTTON_SELECTORS = {
+        residential: 'button[class*="residential"]',
+        commercial: 'button[class*="commercial"]',
+        industrial: 'button[class*="industrial"]'
+    };
 
     const BurglaryModule = {
         isInitialized: false,
         isEnabled: false,
         _intervalId: null,
+        _locationButtonCache: null,
+        _colorAnchors: [
+            { score: 74.0, color: '#b71c1c' },
+            { score: 78.0, color: '#e53935' },
+            { score: 79.0, color: '#fb8c00' },
+            { score: 79.6, color: '#fdd835' },
+            { score: 80.2, color: '#9ccc65' },
+            { score: 81.0, color: '#43a047' },
+            { score: 81.6, color: '#2ecc71' },
+            { score: 83.0, color: '#00c853' }
+        ],
 
         async init() {
             if (this.isInitialized) return;
@@ -51,6 +111,104 @@
             if (percent >= 40) return '#8bc34a';   // Light green
             if (percent >= 30) return '#ff9800';   // Orange
             return '#f44336';                       // Red
+        },
+
+        updateLocationButtons() {
+            if (!window.location.hash.includes('burglary')) return;
+
+            const now = new Date();
+
+            // Torn time is UTC
+            const hour = now.getUTCHours();
+
+            Object.entries(LOCATION_TIME_DATA).forEach(([location, data]) => {
+
+                const button = document.querySelector(
+                    `button[class*="${location}"]`
+                );
+
+                if (!button) return;
+
+                // Native browser tooltip
+                button.title = data.optimalWindow;
+
+                const slot = data.slots.find(s =>
+                    hour >= s.start && hour < s.end
+                );
+
+                if (!slot) return;
+
+                const color = this.getLocationColor(slot.score);
+
+                const gradient = button.querySelector('linearGradient');
+                if (!gradient) return;
+
+                const stops = gradient.querySelectorAll('stop');
+
+                if (stops.length >= 2) {
+                    stops[0].setAttribute('stop-color', color.light);
+                    stops[1].setAttribute('stop-color', color.dark);
+                }
+            });
+        },
+
+        getLocationColor(score) {
+
+            const anchors = [...this._colorAnchors].sort((a, b) => a.score - b.score);
+
+            if (score <= anchors[0].score) {
+                return {
+                    light: anchors[0].color,
+                    dark: anchors[0].color
+                };
+            }
+
+            if (score >= anchors[anchors.length - 1].score) {
+                return {
+                    light: anchors[anchors.length - 1].color,
+                    dark: anchors[anchors.length - 1].color
+                };
+            }
+
+            for (let i = 0; i < anchors.length - 1; i++) {
+
+                const a = anchors[i];
+                const b = anchors[i + 1];
+
+                if (score >= a.score && score <= b.score) {
+
+                    const ratio = (score - a.score) / (b.score - a.score);
+
+                    const blend = (c1, c2) => {
+
+                        const r1 = parseInt(c1.substr(1, 2), 16);
+                        const g1 = parseInt(c1.substr(3, 2), 16);
+                        const b1 = parseInt(c1.substr(5, 2), 16);
+
+                        const r2 = parseInt(c2.substr(1, 2), 16);
+                        const g2 = parseInt(c2.substr(3, 2), 16);
+                        const b2 = parseInt(c2.substr(5, 2), 16);
+
+                        const r = Math.round(r1 + (r2 - r1) * ratio);
+                        const g = Math.round(g1 + (g2 - g1) * ratio);
+                        const b = Math.round(b1 + (b2 - b1) * ratio);
+
+                        return "#" + [r, g, b]
+                            .map(v => v.toString(16).padStart(2, "0"))
+                            .join("");
+                    };
+
+                    return {
+                        light: blend(a.color, b.color),
+                        dark: blend(a.color, b.color)
+                    };
+                }
+            }
+
+            return {
+                light: "#ffffff",
+                dark: "#ffffff"
+            };
         },
 
         addConfidencePercentages() {
@@ -115,9 +273,17 @@
 
         enable() {
             console.log('🏠 Enabling Burglary Module');
+
             this.isEnabled = true;
+
             this.addConfidencePercentages();
-            this._intervalId = setInterval(() => this.addConfidencePercentages(), 50);
+            this.updateLocationButtons();
+
+            this._intervalId = setInterval(() => {
+                this.addConfidencePercentages();
+                this.updateLocationButtons();
+            }, 250);
+
             this._watchForHeader();
             this._startNavWatcher();
         },
@@ -188,7 +354,9 @@
 
         disable() {
             console.log('🏠 Disabling Burglary Module');
+
             this.isEnabled = false;
+
             if (this._intervalId) {
                 clearInterval(this._intervalId);
                 this._intervalId = null;

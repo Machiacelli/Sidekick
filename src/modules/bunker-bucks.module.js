@@ -13,8 +13,8 @@
         isInitialized: false,
         isEnabled: false,
         observer: null,
+        _settings: null, // Assigned in init() once Core is ready
 
-        // Bunker Buck values
         bunkerBuckTable: {
             'Yellow': {
                 'Pistol / SMG': 4,
@@ -85,8 +85,9 @@
             console.log("💰 Initializing Bunker Bucks Calculator...");
 
             try {
-                // Check if module is enabled
-                this.isEnabled = await this.loadSettings();
+                // Initialise shared settings helper
+                this._settings = window.SidekickModules.Core.ModuleSettingsHelper('bunker-bucks', true);
+                this.isEnabled = await this._settings.load();
 
                 if (this.isEnabled) {
                     await this.enable();
@@ -99,44 +100,11 @@
             }
         },
 
-        // Load settings from storage
-        async loadSettings() {
-            try {
-                if (window.SidekickModules?.Core?.ChromeStorage?.get) {
-                    const settings = await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings');
-                    if (settings && settings['bunker-bucks']) {
-                        return settings['bunker-bucks'].isEnabled !== false;
-                    }
-                }
-                return true; // Default enabled
-            } catch (error) {
-                console.warn("⚠️ Failed to load Bunker Bucks settings:", error);
-                return true;
-            }
-        },
-
-        // Save settings to storage
-        async saveSettings(enabled) {
-            try {
-                if (window.SidekickModules?.Core?.ChromeStorage?.get) {
-                    const settings = await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings') || {};
-                    if (!settings['bunker-bucks']) {
-                        settings['bunker-bucks'] = {};
-                    }
-                    settings['bunker-bucks'].isEnabled = enabled;
-                    await window.SidekickModules.Core.ChromeStorage.set('sidekick_settings', settings);
-                }
-                this.isEnabled = enabled;
-            } catch (error) {
-                console.error("❌ Failed to save Bunker Bucks settings:", error);
-            }
-        },
-
         // Enable the module
         async enable() {
             console.log("💰 Enabling Bunker Bucks Calculator...");
             this.isEnabled = true;
-            await this.saveSettings(true);
+            if (this._settings) await this._settings.save(true);
 
             if (this.observer) {
                 this.observer.disconnect();
@@ -180,7 +148,7 @@
         async disable() {
             console.log("💰 Disabling Bunker Bucks Calculator...");
             this.isEnabled = false;
-            await this.saveSettings(false);
+            if (this._settings) await this._settings.save(false);
 
             if (this.observer) {
                 this.observer.disconnect();

@@ -953,6 +953,65 @@
         }
     };
 
+    // === SHARED MODULE SETTINGS HELPER ===
+    /**
+     * Factory that returns load/save/toggle helpers for a module's isEnabled flag.
+     * All modules should store their toggle state under:
+     *   sidekick_settings[moduleKey].isEnabled
+     *
+     * @param {string} moduleKey  - The key used in sidekick_settings (e.g. 'bunker-bucks')
+     * @param {boolean} defaultEnabled - Default value if not yet stored (default: false)
+     * @returns {{ load, save, toggle }}
+     */
+    function ModuleSettingsHelper(moduleKey, defaultEnabled = false) {
+        const SETTINGS_KEY = 'sidekick_settings';
+
+        return {
+            /**
+             * Load isEnabled from storage.
+             * @returns {Promise<boolean>}
+             */
+            async load() {
+                try {
+                    const all = await ChromeStorage.get(SETTINGS_KEY);
+                    if (all && all[moduleKey] !== undefined) {
+                        return all[moduleKey].isEnabled !== false;
+                    }
+                    return defaultEnabled;
+                } catch (e) {
+                    console.warn(`[ModuleSettingsHelper] Failed to load "${moduleKey}":`, e);
+                    return defaultEnabled;
+                }
+            },
+
+            /**
+             * Save isEnabled (and optionally extra fields) to storage.
+             * @param {boolean} enabled
+             * @param {object} [extra] - Additional settings to merge into the module's slot
+             */
+            async save(enabled, extra = {}) {
+                try {
+                    const all = await ChromeStorage.get(SETTINGS_KEY) || {};
+                    all[moduleKey] = Object.assign({}, all[moduleKey] || {}, extra, { isEnabled: enabled });
+                    await ChromeStorage.set(SETTINGS_KEY, all);
+                } catch (e) {
+                    console.error(`[ModuleSettingsHelper] Failed to save "${moduleKey}":`, e);
+                }
+            },
+
+            /**
+             * Toggle isEnabled and persist.
+             * @param {boolean} currentValue - The current isEnabled state to flip
+             * @returns {Promise<boolean>} new value
+             */
+            async toggle(currentValue) {
+                const next = !currentValue;
+                await this.save(next);
+                return next;
+            }
+        };
+    }
+
     // === CORE MODULE EXPORT ===
     const CoreModule = {
         STORAGE_KEYS,
@@ -963,6 +1022,7 @@
         WindowManager,
         StateManager,
         ColorPicker,
+        ModuleSettingsHelper,
 
         async init() {
             console.log("🔧 Initializing Core Module...");

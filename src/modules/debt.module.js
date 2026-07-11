@@ -636,24 +636,12 @@
                 // The background script approach should be the primary method
                 console.log('💰 Background script approach failed, payment monitoring disabled until next check');
 
-                // Show a user-friendly notification about the API issue
-                if (window.SidekickModules?.UI?.showNotification) {
-                    window.SidekickModules.UI.showNotification(
-                        'WARNING',
-                        'Payment monitoring temporarily unavailable - API connection throttle'
-                    );
-                }
+
 
             } catch (error) {
                 console.error("💰 Error checking payments:", error);
 
-                // Show user-friendly error notification
-                if (window.SidekickModules?.UI?.showNotification) {
-                    window.SidekickModules.UI.showNotification(
-                        'ERROR',
-                        'Payment monitoring error - check console for details'
-                    );
-                }
+
             }
         },
 
@@ -709,13 +697,7 @@
                         console.warn('💰 Extension context lost - Debt module disabled');
                         this.contextErrorLogged = true;
                     }
-                    // Show user a helpful message in the debt tracker
-                    if (window.SidekickModules?.UI?.showNotification) {
-                        window.SidekickModules.UI.showNotification(
-                            'EXTENSION_ERROR',
-                            '💰 Debt tracker lost connection to extension. Please refresh the page to restore auto-payment detection.'
-                        );
-                    }
+
                 } else {
                     console.error('💰 Error sending message to background script:', error);
 
@@ -723,7 +705,7 @@
                     if (window.SidekickModules?.UI?.showNotification) {
                         window.SidekickModules.UI.showNotification(
                             'ERROR',
-                            `💰 Failed to check payment logs: ${error.message}`
+                            `💰 Failed to check incoming payment logs: ${error.message}`
                         );
                     }
                 }

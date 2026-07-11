@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Chrome Extension - Settings Module V2
  * Comprehensive settings panel with all module toggles and configurations
  * Version: 2.0.0
@@ -2111,8 +2111,21 @@
             const chainPopupCheckbox = panel.querySelector('#sidekick-chain-popup');
             const chainFlashCheckbox = panel.querySelector('#sidekick-chain-flash');
             const chainStatusDiv = panel.querySelector('#sidekick-chain-status');
+            const floatingDisplayCheckbox = panel.querySelector('#sidekick-chain-floating-display');
 
-            // Auto-save helper function
+            // Guard: bail early if any required control is missing
+            if (
+                !chainThresholdSlider ||
+                !chainThresholdDisplay ||
+                !chainAlertsCheckbox ||
+                !chainPopupCheckbox ||
+                !chainFlashCheckbox
+            ) {
+                console.warn('Chain Timer controls not found - skipping listeners.');
+                return;
+            }
+
+            // Auto-save helper
             const autoSaveChainSettings = async () => {
                 const isEnabled = chainTimerToggle ? chainTimerToggle.dataset.active === 'true' : false;
 
@@ -2122,14 +2135,13 @@
                     alertsEnabled: chainAlertsCheckbox.checked,
                     popupEnabled: chainPopupCheckbox.checked,
                     screenFlashEnabled: chainFlashCheckbox.checked,
-                    floatingDisplayEnabled: panel.querySelector('#sidekick-chain-floating-display').checked
+                    floatingDisplayEnabled: floatingDisplayCheckbox ? floatingDisplayCheckbox.checked : true
                 };
 
                 try {
                     await window.SidekickModules.Core.ChromeStorage.set('sidekick_chain_timer', settings);
                     this.showAutoSaveStatus(chainStatusDiv, 'Settings saved ✓');
 
-                    // Toast notification
                     if (window.SidekickModules.Core.NotificationSystem) {
                         window.SidekickModules.Core.NotificationSystem.show(
                             'Chain Timer',
@@ -2139,7 +2151,7 @@
                         );
                     }
 
-                    // Immediately apply the settings to the chain timer module
+                    // Immediately apply to running module
                     if (window.SidekickModules?.ChainTimer) {
                         window.SidekickModules.ChainTimer.isEnabled = isEnabled;
                         window.SidekickModules.ChainTimer.alertThresholdSeconds = settings.alertThresholdSeconds;
@@ -2148,7 +2160,6 @@
                         window.SidekickModules.ChainTimer.screenFlashEnabled = settings.screenFlashEnabled;
                         window.SidekickModules.ChainTimer.floatingDisplayEnabled = settings.floatingDisplayEnabled;
 
-                        // Start or stop monitoring based on enabled state
                         if (isEnabled) {
                             console.log('✅ Chain Timer enabled via settings');
                             window.SidekickModules.ChainTimer.startMonitoring();
@@ -2163,56 +2174,19 @@
                 }
             };
 
-            // Auto-save on slider change
+            // Slider: update display on input, persist on change
             chainThresholdSlider.addEventListener('input', () => {
                 chainThresholdDisplay.textContent = `${chainThresholdSlider.value} min`;
             });
             chainThresholdSlider.addEventListener('change', autoSaveChainSettings);
-            // Abort if the Chain Timer controls don't exist yet
-            if (
-                !chainThresholdSlider ||
-                !chainThresholdDisplay ||
-                !chainAlertsCheckbox ||
-                !chainPopupCheckbox ||
-                !chainFlashCheckbox
-            ) {
-                console.warn('Chain Timer controls not found - skipping listeners.');
-                return;
-            }
 
-            // Abort if the Chain Timer controls don't exist yet
-            if (
-                !chainThresholdSlider ||
-                !chainThresholdDisplay ||
-                !chainAlertsCheckbox ||
-                !chainPopupCheckbox ||
-                !chainFlashCheckbox
-            ) {
-                console.warn('Chain Timer controls not found - skipping listeners.');
-                return;
-            }
-
-            // Auto-save on slider change
-            chainThresholdSlider.addEventListener('input', () => {
-                chainThresholdDisplay.textContent = `${chainThresholdSlider.value} min`;
-            });
-
-            chainThresholdSlider.addEventListener('change', autoSaveChainSettings);
-
-            // Auto-save on checkbox changes
+            // Checkboxes
             chainAlertsCheckbox.addEventListener('change', autoSaveChainSettings);
             chainPopupCheckbox.addEventListener('change', autoSaveChainSettings);
             chainFlashCheckbox.addEventListener('change', autoSaveChainSettings);
-
-            const floatingDisplayCheckbox = panel.querySelector('#sidekick-chain-floating-display');
             if (floatingDisplayCheckbox) {
                 floatingDisplayCheckbox.addEventListener('change', autoSaveChainSettings);
             }
-            // Auto-save on checkbox changes
-            chainAlertsCheckbox.addEventListener('change', autoSaveChainSettings);
-            chainPopupCheckbox.addEventListener('change', autoSaveChainSettings);
-            chainFlashCheckbox.addEventListener('change', autoSaveChainSettings);
-            panel.querySelector('#sidekick-chain-floating-display')?.addEventListener('change', autoSaveChainSettings);
         },
 
         // Notifications Tab listeners

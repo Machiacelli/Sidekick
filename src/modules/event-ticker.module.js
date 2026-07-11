@@ -177,6 +177,16 @@
                 return;
             }
 
+            // Temporary fix - remove any old cached event overrides
+            try {
+                if (window.SidekickModules?.Core?.ChromeStorage?.remove) {
+                    await window.SidekickModules.Core.ChromeStorage.remove("event_calendar_overrides");
+                    console.log("🗑️ Removed cached event overrides");
+                }
+            } catch (e) {
+                console.warn("Failed to clear cached overrides", e);
+            }
+
             console.log('🎪 Event Ticker: Initializing...');
 
             // Load cached user event start time
@@ -339,15 +349,14 @@
                     );
 
                     if (hardcodedEvent) {
-                        // Convert API timestamps to month/day
                         const apiStartDate = new Date(apiEvent.start * 1000);
                         const apiEndDate = apiEvent.end ? new Date(apiEvent.end * 1000) : apiStartDate;
 
                         const apiDates = {
-                            startMonth: apiStartDate.getUTCMonth() + 1,
-                            startDay: apiStartDate.getUTCDate(),
-                            endMonth: apiEndDate.getUTCMonth() + 1,
-                            endDay: apiEndDate.getUTCDate()
+                            startMonth: apiStartDate.getMonth() + 1,
+                            startDay: apiStartDate.getDate(),
+                            endMonth: apiEndDate.getMonth() + 1,
+                            endDay: apiEndDate.getDate()
                         };
 
                         // Check if dates differ from hardcoded
@@ -613,7 +622,8 @@
             this.tickerElement = textContainer;
             console.log('✅ Event Ticker: Created seamlessly in top bar');
 
-            // Show initial message
+            // Show initial message immediately
+            this.setTickerText('Loading events...');
             this.updateTickerDisplay();
         },
 
@@ -673,6 +683,8 @@
                 }
             }
 
+
+
             if (this.isTornBirthdayToday()) {
                 const years = this.getYearsInTorn();
                 activeEvents.push({
@@ -687,7 +699,7 @@
         },
 
         // Get the next upcoming event (for countdown)
-        getNextEvent() {
+        async getNextEvent() {
             const now = new Date();
             const currentYear = now.getFullYear();
             const currentTime = now.getTime();
@@ -695,21 +707,34 @@
             let nextEvent = null;
             let minTimeDiff = Infinity;
 
-            // Check all events for the current year and next year
+            // Check current year and next year
             for (let yearOffset = 0; yearOffset <= 1; yearOffset++) {
                 const checkYear = currentYear + yearOffset;
 
                 for (const event of this.events) {
-                    const eventStart = new Date(checkYear, event.startMonth - 1, event.startDay);
+
+                    // Use calendar overrides if available
+                    const dates = await this.getEventDates(event);
+
+                    const eventStart = new Date(
+                        checkYear,
+                        dates.startMonth - 1,
+                        dates.startDay
+                    );
+
                     eventStart.setHours(0, 0, 0, 0);
 
                     const timeDiff = eventStart.getTime() - currentTime;
 
-                    // Only consider future events
                     if (timeDiff > 0 && timeDiff < minTimeDiff) {
                         minTimeDiff = timeDiff;
+
                         nextEvent = {
                             ...event,
+                            startMonth: dates.startMonth,
+                            startDay: dates.startDay,
+                            endMonth: dates.endMonth,
+                            endDay: dates.endDay,
                             startDate: eventStart,
                             timeDiff: timeDiff
                         };
@@ -717,16 +742,19 @@
                 }
             }
 
-            // Check for upcoming birthday if we have player data
+            // Check for upcoming birthday
             if (this.playerSignupDate && !this.isTornBirthdayToday()) {
                 const nextBirthday = this.getNextBirthday();
+
                 if (nextBirthday) {
                     const birthdayDiff = nextBirthday.getTime() - currentTime;
+
                     if (birthdayDiff > 0 && birthdayDiff < minTimeDiff) {
                         const years = this.getYearsInTorn() + 1;
+
                         nextEvent = {
                             name: "Your Torn Birthday",
-                            feature: `${years} year${years !== 1 ? 's' : ''} celebration`,
+                            feature: `${years} year${years !== 1 ? "s" : ""} celebration`,
                             startDate: nextBirthday,
                             timeDiff: birthdayDiff,
                             isBirthday: true
@@ -885,7 +913,7 @@
                 this.setTickerText(displayText);
             } else {
                 // Show countdown to next event when no active events
-                const nextEvent = this.getNextEvent();
+                const nextEvent = await this.getNextEvent();
                 if (nextEvent) {
                     const timeUntilMs = nextEvent.timeDiff;
                     const timeUntilSeconds = Math.floor(timeUntilMs / 1000);
@@ -941,8 +969,9 @@
             console.log('✅ Event Ticker: Sequential rotation started');
         },
 
-        scheduleNextRotation() {
-            const activeEvents = this.getActiveEvents();
+        async scheduleNextRotation() {
+            const activeEvents = await this.getActiveEvents();
+
             const upcomingEvents = this.getUpcomingEvents(7).filter(event => {
                 const daysUntil = this.getDaysUntil(event);
                 return daysUntil <= 7;
@@ -952,15 +981,16 @@
 
             if (totalEvents > 1) {
                 this.currentEventIndex++;
-                console.log(`🔄 Event Ticker: Rotating to event ${(this.currentEventIndex % totalEvents) + 1}/${totalEvents}`);
+                console.log(
+                    `🔄 Event Ticker: Rotating to event ${(this.currentEventIndex % totalEvents) + 1}/${totalEvents}`
+                );
             }
 
-            this.updateTickerDisplay();
+            await this.updateTickerDisplay();
 
-            // Schedule next rotation only after current one completes
             this.rotationInterval = setTimeout(() => {
                 this.scheduleNextRotation();
-            }, 12000); // 12 seconds per message
+            }, 12000);
         },
 
         // ===== CALENDAR SCRAPING SYSTEM =====

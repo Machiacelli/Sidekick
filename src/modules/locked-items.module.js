@@ -5,12 +5,16 @@ const LockedItemsManagerModule = {
     lockedItems: {},
     observer: null,
     STORAGE_KEY: 'locked-items',
+    _settings: null, // Shared settings helper, assigned in init()
 
     // Initialize module
     async init() {
         console.log('🔒 Locked Items Manager initializing...');
 
-        await this.loadSettings();
+        // Initialise shared settings helper
+        this._settings = window.SidekickModules.Core.ModuleSettingsHelper(this.STORAGE_KEY, false);
+        this.isEnabled = await this._settings.load();
+
         await this.loadLockedItems();
 
         if (this.isEnabled) {
@@ -20,38 +24,11 @@ const LockedItemsManagerModule = {
         // Listen for storage changes from popup
         chrome.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local' && changes.sidekick_settings) {
-                this.loadSettings();
+                this._settings.load().then(v => { this.isEnabled = v; });
             }
         });
 
         console.log('🔒 Locked Items Manager initialized');
-    },
-
-    // Load settings from Chrome storage
-    async loadSettings() {
-        try {
-            const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings');
-            if (data && data[this.STORAGE_KEY]) {
-                const moduleSettings = data[this.STORAGE_KEY];
-                this.isEnabled = moduleSettings.isEnabled || false;
-                console.log('🔒 Settings loaded:', { isEnabled: this.isEnabled });
-            }
-        } catch (error) {
-            console.error('🔒 Failed to load settings:', error);
-        }
-    },
-
-    // Save settings to Chrome storage
-    async saveSettings() {
-        try {
-            const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings') || {};
-            data[this.STORAGE_KEY] = {
-                isEnabled: this.isEnabled
-            };
-            await window.SidekickModules.Core.ChromeStorage.set('sidekick_settings', data);
-        } catch (error) {
-            console.error('🔒 Failed to save settings:', error);
-        }
     },
 
     // Load locked items
@@ -96,7 +73,7 @@ const LockedItemsManagerModule = {
     enable() {
         console.log('🔒 Enabling Locked Items Manager');
         this.isEnabled = true;
-        this.saveSettings();
+        if (this._settings) this._settings.save(true);
 
         this.addStyles();
         this.processPage();
@@ -115,7 +92,7 @@ const LockedItemsManagerModule = {
     disable() {
         console.log('🔒 Disabling Locked Items Manager');
         this.isEnabled = false;
-        this.saveSettings();
+        if (this._settings) this._settings.save(false);
 
         if (this.observer) {
             this.observer.disconnect();

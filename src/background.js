@@ -285,7 +285,7 @@ async function handleTornApiCall(request) {
     console.log('🔄 Background: Primary key rate-limited — retrying with secondary key');
 
     const secCacheKey = apiCache.getCacheKey(secondaryKey, selections, endpoint);
-    const secCached  = apiCache.get(secCacheKey);
+    const secCached = apiCache.get(secCacheKey);
     if (secCached) return secCached;
 
     const secResult = await apiCache.deduplicate(secCacheKey, async () => {
@@ -628,12 +628,13 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
         const genericEndpoint = !endpoint.startsWith('user') &&
             !endpoint.startsWith('company/') &&
             !(selections?.includes('personalstats') || selections?.includes('bars') ||
-              selections?.includes('cooldowns') || selections?.includes('refills') ||
-              selections?.includes('items') || selections?.includes('profile') ||
-              selections?.includes('money') || selections?.includes('logs'));
+                selections?.includes('cooldowns') || selections?.includes('refills') ||
+                selections?.includes('items') || selections?.includes('profile') ||
+                selections?.includes('money') || selections?.includes('logs'));
 
         if (genericEndpoint) {
-            console.log(`🔎 Background: Generic endpoint fetch: ${endpoint}`);
+            console.log("Generic endpoint:", endpoint
+            );
             try {
                 const genSel = selections?.length ? `&selections=${selections.join(',')}` : '';
                 const genResponse = await fetch(
