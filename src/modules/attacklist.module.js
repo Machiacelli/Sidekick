@@ -356,7 +356,7 @@
                     align-items: center;
                     transition: background 0.2s;
                 ">
-                    <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${target.id}" 
+                    <a href="https://www.torn.com/profiles.php?XID=${target.id}" 
                        target="_blank" 
                        style="color: #4CAF50; text-decoration: none; font-size: 12px; font-weight: bold; flex: 1;">
                         ${this.escapeHtml(playerName)}

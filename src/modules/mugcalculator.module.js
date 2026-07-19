@@ -819,14 +819,16 @@ const MugCalculatorModule = (() => {
     // ── Process all ───────────────────────────────────────────────────────────
 
     function processAllMarketRows() {
-        if (window.location.href.includes('trade.php'))   return; // no mug icons on trade pages
-        if (window.location.href.includes('amarket.php')) return; // no mug icons on auction house
+        const url = window.location.href;
+        // Only scan on allowed pages (allowlist enforced by setup(), but guard here too)
+        if (!url.includes('imarket.php') && !url.includes('page.php?sid=ItemMarket')) return;
         const links = document.querySelectorAll("a[href*='profiles.php?XID=']");
         links.forEach(link => {
             const row = link.closest('li, tr, [class*="row___" i], [class*="seller___" i], [class*="item___" i], .item-row');
             if (row) attachInfoIconForMarketRow(row);
         });
     }
+
 
     function processAllBazaarRows() {
         document.querySelectorAll('#fullListingsView table tbody tr, #topCheapestView table tbody tr')
@@ -915,24 +917,31 @@ const MugCalculatorModule = (() => {
         setup() {
             setTimeout(() => {
                 const url = window.location.href;
-                if (url.includes('trade.php')) return; // skip trade pages entirely
 
-                waitForElements('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]', () => {
-                    processAllMarketRows();
-                    observeMarketRows();
-                });
-                waitForElements('#fullListingsView, #topCheapestView', () => {
-                    processAllBazaarRows();
-                    observeBazaarRows();
-                });
-                if (window.location.href.includes('pmarket.php')) {
+                // Allowlist: only run on Item Market and Points Market
+                const isItemMarket = url.includes('imarket.php') || url.includes('page.php?sid=ItemMarket');
+                const isPMarket    = url.includes('pmarket.php');
+
+                if (!isItemMarket && !isPMarket) {
+                    console.log('[Sidekick] Mug Calculator: not on an allowed page, skipping.');
+                    return;
+                }
+
+                if (isItemMarket) {
+                    waitForElements('[class*="rowWrapper___"], [class*="sellerRow___"], [class*="itemRowWrapper"]', () => {
+                        processAllMarketRows();
+                        observeMarketRows();
+                    });
+                    // Periodic sweep for lazily loaded rows
+                    setInterval(() => processAllMarketRows(), 2000);
+                }
+
+                if (isPMarket) {
                     waitForElements('ul.users-point-sell li', () => {
                         processAllPMarketRows();
                         observePMarketRows();
                     }, 20, 500);
                 }
-                // Periodic sweep for market rows loaded lazily
-                setInterval(() => processAllMarketRows(), 2000);
             }, 1000);
 
             document.addEventListener('click', (e) => {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Chrome Extension - Debt Module
  * Handles loan and debt tracking with automated API integration
  * Version: 1.0.0
@@ -354,6 +354,20 @@
             } catch (error) {
                 console.error('Failed to save debt data:', error);
             }
+        },
+
+        // Parse shorthand amount strings: "2m" -> 2000000, "500k" -> 500000, "1.5b" -> 1500000000
+        parseShorthand(value) {
+            if (typeof value !== 'string') return parseFloat(value);
+            const clean = value.trim().toLowerCase();
+            const match = clean.match(/^([\d.]+)\s*([kmb]?)$/);
+            if (!match) return parseFloat(clean);
+            const num = parseFloat(match[1]);
+            const suffix = match[2];
+            if (suffix === 'k') return num * 1000;
+            if (suffix === 'm') return num * 1000000;
+            if (suffix === 'b') return num * 1000000000;
+            return num;
         },
 
         // Create new debt entry (someone owes you money)
@@ -2097,7 +2111,7 @@
                         
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Amount ($):</label>
-                            <input type="number" id="amount" required min="0" step="0.01" style="
+                            <input type="text" id="amount" required style="
                                 width: 100%;
                                 padding: 8px;
                                 border: 1px solid #666;
@@ -2105,7 +2119,8 @@
                                 background: rgba(255,255,255,0.1);
                                 color: #fff;
                                 font-size: 14px;
-                            " placeholder="Enter amount">
+                            " placeholder="e.g. 2m, 500k, 250000">
+                            <div id="amount-preview" style="font-size: 11px; color: #aaa; margin-top: 3px; min-height: 14px;"></div>
                         </div>
                         
                         <div style="margin-bottom: 15px;">
@@ -2214,7 +2229,7 @@
                 e.preventDefault();
 
                 const playerId = dialog.querySelector('#player-id').value.trim();
-                const amount = parseFloat(dialog.querySelector('#amount').value);
+                const amount = this.parseShorthand(dialog.querySelector('#amount').value);
                 const interestRate = parseFloat(dialog.querySelector('#interest-rate').value) || 0;
                 const interestType = dialog.querySelector('#interest-type').value;
                 const notes = dialog.querySelector('#notes').value.trim();
@@ -2276,6 +2291,21 @@
             // setTimeout(() => {
             //     document.addEventListener('click', closeOnClickOutside);
             // }, 100);
+
+            // Amount input: M/K shorthand live preview
+            const amountInput = dialog.querySelector('#amount');
+            const amountPreview = dialog.querySelector('#amount-preview');
+            const updateAmountPreview = () => {
+                const val = amountInput.value.trim();
+                if (!val) { amountPreview.textContent = ''; return; }
+                const parsed = this.parseShorthand(val);
+                if (!isNaN(parsed) && parsed > 0) {
+                    amountPreview.textContent = '= $' + parsed.toLocaleString();
+                } else {
+                    amountPreview.textContent = 'Invalid amount';
+                }
+            };
+            amountInput?.addEventListener('input', updateAmountPreview);
 
             // Focus on player name field
             const playerNameField = dialog.querySelector('#player-name');

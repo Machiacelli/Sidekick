@@ -175,7 +175,7 @@
 
         // Sidekick project icon — sized 28px inside a constrained 38×38 button
         _iconImg(isTracking) {
-            const url   = chrome.runtime.getURL('assets/icons/swissknife-48.png');
+            const url = chrome.runtime.getURL('assets/icons/swissknife-48.png');
             const extra = isTracking ? 'filter:drop-shadow(0 0 4px #4CAF50);opacity:1;' : 'opacity:0.65;';
             // Enforce 28×28 via style so no external CSS can override the attribute
             return `<img src="${url}" style="display:block;width:28px;height:28px;max-width:28px;max-height:28px;${extra}" alt="Sidekick">`;
@@ -368,27 +368,64 @@
         // Parse status text → { status, country } or null
         _parseStatus(text) {
             if (!text) return null;
+
+            text = text.trim();
             let m;
 
-            // Outbound travel — several formats Torn uses:
-            // "Traveling to South Africa"
-            // "Torn to South Africa"  (profile page travel banner)
-            // "Traveling from Torn to South Africa"
-            m = text.match(/(?:Traveling(?:\s+from\s+Torn)?\s+to|Torn\s+to)\s+(.+?)(?:\s*$|\n)/i);
+            // Travel 2.0 route format
+            // Torn to Country = outbound
+            // Country to Torn = returning
+            m = text.match(/^(.+?)\s+to\s+(.+)$/i);
             if (m) {
-                const dest = m[1].trim();
-                if (this._isTornCountry(dest)) return { status: 'traveling', country: dest };
+                const from = m[1].trim();
+                const to = m[2].trim();
+
+                if (/^torn$/i.test(from) && this._isTornCountry(to)) {
+                    return {
+                        status: 'traveling',
+                        country: to
+                    };
+                }
+
+                if (/^torn$/i.test(to) && this._isTornCountry(from)) {
+                    return {
+                        status: 'returning',
+                        country: from
+                    };
+                }
             }
 
-            // Returning
-            m = text.match(/Returning\s+to\s+Torn(?:\s+from\s+(.+?))?(?:\s*$|\n)/i);
-            if (m) return { status: 'returning', country: (m[1] || '').trim() || null };
+            // Legacy outbound
+            m = text.match(/(?:Traveling(?:\s+from\s+Torn)?\s+to)\s+(.+?)(?:\s*$|\n)/i);
+            if (m) {
+                const country = m[1].trim();
+                if (this._isTornCountry(country)) {
+                    return {
+                        status: 'traveling',
+                        country
+                    };
+                }
+            }
 
-            // Already abroad — ONLY accept known Torn travel destinations
+            // Legacy returning
+            m = text.match(/Returning\s+to\s+Torn(?:\s+from\s+(.+?))?(?:\s*$|\n)/i);
+            if (m) {
+                return {
+                    status: 'returning',
+                    country: (m[1] || '').trim() || null
+                };
+            }
+
+            // Abroad
             m = text.match(/^In\s+(.+?)(?:\s*$|\n)/i);
             if (m) {
-                const place = m[1].trim();
-                if (this._isTornCountry(place)) return { status: 'abroad', country: place };
+                const country = m[1].trim();
+                if (this._isTornCountry(country)) {
+                    return {
+                        status: 'abroad',
+                        country
+                    };
+                }
             }
 
             return null;
@@ -477,7 +514,7 @@
             const positionWindow = () => {
                 const vw = window.innerWidth;
                 const vh = window.innerHeight;
-                const pw = win.offsetWidth  || 300;
+                const pw = win.offsetWidth || 300;
                 const ph = win.offsetHeight || 200;
 
                 let left, top;
@@ -485,18 +522,18 @@
                 if (anchor) {
                     const rect = anchor.getBoundingClientRect();
                     left = rect.right - pw;         // right-align with button
-                    top  = rect.bottom + 8;         // just below button
+                    top = rect.bottom + 8;         // just below button
                 } else {
                     left = vw - pw - 10;
-                    top  = 200;
+                    top = 200;
                 }
 
                 // Clamp so the popup is always fully within the viewport
                 left = Math.max(8, Math.min(left, vw - pw - 8));
-                top  = Math.max(8, Math.min(top,  vh - ph - 8));
+                top = Math.max(8, Math.min(top, vh - ph - 8));
 
                 win.style.left = `${left}px`;
-                win.style.top  = `${top}px`;
+                win.style.top = `${top}px`;
             };
 
             // Position immediately, then again once painted (to get real dimensions)

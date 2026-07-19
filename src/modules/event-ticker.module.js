@@ -280,15 +280,16 @@
                 }
 
                 console.log('🔄 Event Ticker: Fetching Torn calendar from API...');
-                const storage = await window.SidekickModules.Core.ChromeStorage.get('torn_api_key');
-                const apiKey = (storage && storage.torn_api_key) ? storage.torn_api_key : '';
+                // Use the correct storage key (same as all other modules)
+                const apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key');
 
                 if (!apiKey) {
                     console.log('⚠️ Event Ticker: No API key for calendar fetch');
                     return;
                 }
 
-                const response = await fetch(`https://api.torn.com/v2/torn/?selections=calendar&key=${apiKey}`);
+                // Correct v2 calendar endpoint
+                const response = await fetch(`https://api.torn.com/v2/torn/calendar?key=${apiKey}`);
                 const data = await response.json();
 
                 if (data.error) {
@@ -297,20 +298,7 @@
                 }
 
                 if (data.calendar) {
-                    // Store user's personal event start time from calendar
-                    if (data.calendar.start_time) {
-                        this.userEventStartTime = data.calendar.start_time.toLowerCase().split(" tct")[0];
-                        await window.SidekickModules.Core.ChromeStorage.set('userEventStartTime', this.userEventStartTime);
-                        console.log('⏰ Event Ticker: User personal event start time:', this.userEventStartTime);
-                    }
-
-                    // Store user's personal event end time from calendar
-                    if (data.calendar.end_time) {
-                        this.userEventEndTime = data.calendar.end_time.toLowerCase().split(" tct")[0];
-                        await window.SidekickModules.Core.ChromeStorage.set('userEventEndTime', this.userEventEndTime);
-                        console.log('⏰ Event Ticker: User personal event end time:', this.userEventEndTime);
-                    }
-
+                    // Merge events and competitions into a single list
                     let events = data.calendar.events || [];
                     if (data.calendar.competitions) {
                         events = events.concat(data.calendar.competitions);
@@ -320,16 +308,17 @@
                     await window.SidekickModules.Core.ChromeStorage.set('torn_events', events);
                     await window.SidekickModules.Core.ChromeStorage.set('torn_events_update', currentTime);
 
-                    // AUTO-CORRECT hardcoded dates using API data
+                    // Auto-correct hardcoded dates using API data
                     await this.autoCorrectEventDates(events);
 
-                    console.log(`✅ Event Ticker: Fetched ${events.length} Torn events`);
+                    console.log(`✅ Event Ticker: Fetched ${events.length} Torn events from /v2/torn/calendar`);
                     this.calculateNearestEvent();
                 }
             } catch (error) {
                 console.error('❌ Event Ticker: Failed to fetch calendar:', error);
             }
         },
+
 
         // Auto-correct hardcoded dates when API provides better data
         async autoCorrectEventDates(apiEvents) {
