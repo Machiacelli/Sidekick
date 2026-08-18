@@ -97,7 +97,7 @@
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
-    width: 500px !important;
+    width: var(--sidekick-width, 500px) !important;
     height: 100vh !important;
     background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%) !important;
     border-right: 2px solid #444 !important;
@@ -111,6 +111,105 @@
     overscroll-behavior: contain !important;
     display: flex !important;
     flex-direction: column !important;
+}
+
+/* Resize handle on the right edge of the sidebar */
+#sidekick-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 1000001;
+    background: transparent;
+    transition: background 0.2s;
+}
+#sidekick-resize-handle:hover,
+#sidekick-resize-handle.dragging {
+    background: rgba(255,255,255,0.15);
+}
+
+/* Multi-page tab bar at the bottom of the sidebar */
+#sidekick-page-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.25);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+    min-height: 32px;
+}
+.sidekick-page-tab {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 10px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    color: rgba(255,255,255,0.6);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.18s;
+    user-select: none;
+    white-space: nowrap;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sidekick-page-tab.active {
+    background: rgba(139,195,74,0.2);
+    border-color: rgba(139,195,74,0.4);
+    color: #8BC34A;
+}
+.sidekick-page-tab:hover:not(.active) {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+}
+.sidekick-page-tab .tab-delete {
+    opacity: 0;
+    font-size: 10px;
+    line-height: 1;
+    color: rgba(255,80,80,0.8);
+    cursor: pointer;
+    padding: 0 1px;
+    transition: opacity 0.15s;
+}
+.sidekick-page-tab:hover .tab-delete {
+    opacity: 1;
+}
+#sidekick-add-page-btn {
+    background: none;
+    border: 1px dashed rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.4);
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: all 0.18s;
+}
+#sidekick-add-page-btn:hover {
+    border-color: rgba(139,195,74,0.5);
+    color: #8BC34A;
+}
+
+/* Page containers - only active page is visible */
+.sidekick-page {
+    display: none;
+    flex: 1;
+    position: relative;
+    overflow: visible;
+}
+.sidekick-page.active {
+    display: flex;
+    flex-direction: column;
 }
 
 #sidekick-sidebar.hidden {
@@ -545,4 +644,27 @@ body.sidekick-sidebar-hidden {
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
+}
+
+/* Action Menu Styles */
+.sk-action-menu {
+    position: fixed !important;
+    background: #222 !important;
+    border: 1px solid #555 !important;
+    border-radius: 6px !important;
+    min-width: 180px !important;
+    z-index: 999999 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,.5) !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    color: #fff !important;
+}
+
+.sk-action-menu-item {
+    padding: 10px !important;
+    cursor: pointer !important;
+    transition: background 0.15s !important;
+}
+
+.sk-action-menu-item:hover {
+    background: #333 !important;
 }

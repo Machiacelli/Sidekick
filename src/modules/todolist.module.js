@@ -69,9 +69,9 @@
                 name: 'Xanax Dose',
                 icon: '💊',
                 color: '#E74C3C',
-                description: 'Daily Xanax dose (up to 3)',
+                description: 'Daily Xanax dose (up to 4)',
                 apiField: 'xantaken',  // Use personalstats.xantaken for instant updates
-                maxCount: 3,
+                maxCount: 4,
                 currentCount: 0,
                 completed: false,
                 resetDaily: true,  // Reset baseline at midnight UTC
@@ -1763,7 +1763,7 @@
             todoListElement.dataset.todolistId = todoList.id;
 
             const width = Math.max(todoList.width || 320, 200);
-            const height = Math.max(todoList.height || 400, 200);
+            const height = Math.max(todoList.height || 400, 120);
             const x = Math.max(todoList.x || 10, 0);
             const y = Math.max(todoList.y || 10, 0);
 
@@ -1779,10 +1779,10 @@
                 display: flex;
                 flex-direction: column;
                 min-width: 200px;
-                min-height: 200px;
+                min-height: 120px;
                 z-index: 1000;
-                resize: ${todoList.pinned ? 'none' : 'both'};
-                overflow: visible;
+                resize: vertical;
+                overflow: auto;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             `;
 

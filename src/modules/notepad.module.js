@@ -421,6 +421,22 @@
                                    onmouseout="this.style.background='none'">
                                     🎨 Change Color
                                 </button>
+                                <div style="height: 1px; background: #555; margin: 2px 4px;"></div>
+                                <button class="fmt-btn" data-cmd="bold" style="
+                                    background: none; border: none; color: #fff;
+                                    padding: 8px 12px; width: 100%; text-align: left;
+                                    cursor: pointer; font-size: 12px; transition: background 0.2s;
+                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'"><b style="margin-right:6px;">B</b> Bold</button>
+                                <button class="fmt-btn" data-cmd="italic" style="
+                                    background: none; border: none; color: #fff;
+                                    padding: 8px 12px; width: 100%; text-align: left;
+                                    cursor: pointer; font-size: 12px; transition: background 0.2s;
+                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'"><i style="margin-right:6px;">I</i> Italic</button>
+                                <button class="fmt-btn" data-cmd="strikeThrough" style="
+                                    background: none; border: none; color: #fff;
+                                    padding: 8px 12px; width: 100%; text-align: left;
+                                    cursor: pointer; font-size: 12px; transition: background 0.2s;
+                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'"><s style="margin-right:6px;">S</s> Strikethrough</button>
                             </div>
                         </div>
                         <button class="close-btn" style="
@@ -445,47 +461,44 @@
                            title="Delete notepad">×</button>
                     </div>
                 </div>
-                <textarea placeholder="Write your notes here..." 
-                          class="notepad-textarea" 
-                          style="
-                              flex: 1;
-                              background: transparent;
-                              border: none;
-                              color: #fff;
-                              padding: 8px;
-                              font-size: 12px;
-                              font-family: inherit;
-                              resize: none;
-                              outline: none;
-                              line-height: 1.3;
-                              width: 100%;
-                              box-sizing: border-box;
-                              scrollbar-width: thin;
-                              scrollbar-color: rgba(255,255,255,0.3) transparent;
-                          ">${this.escapeHtml(notepad.content)}</textarea>
+                <div class="notepad-editor" contenteditable="true" 
+                     data-placeholder="Write your notes here..."
+                     style="
+                         flex: 1;
+                         background: transparent;
+                         border: none;
+                         color: #fff;
+                         padding: 8px;
+                         font-size: 12px;
+                         font-family: inherit;
+                         outline: none;
+                         line-height: 1.3;
+                         width: 100%;
+                         box-sizing: border-box;
+                         overflow-x: hidden;
+                         overflow-y: auto;
+                         scrollbar-width: none;
+                         word-break: break-word;
+                         white-space: pre-wrap;
+                     ">${notepad.content || ""}</div>
             `;
 
-            // Add CSS for webkit scrollbars
+            // Add CSS for notepad editor (scrollbar + placeholder)
             if (!document.getElementById('notepad-scrollbar-style')) {
                 const style = document.createElement('style');
                 style.id = 'notepad-scrollbar-style';
                 style.textContent = `
-                    .notepad-textarea::-webkit-scrollbar {
-                        width: 6px;
-                    }
-                    .notepad-textarea::-webkit-scrollbar-track {
-                        background: transparent;
-                    }
-                    .notepad-textarea::-webkit-scrollbar-thumb {
-                        background: rgba(255,255,255,0.3);
-                        border-radius: 3px;
-                    }
-                    .notepad-textarea::-webkit-scrollbar-thumb:hover {
-                        background: rgba(255,255,255,0.5);
+                    .notepad-editor::-webkit-scrollbar { display: none; }
+                    .notepad-editor[data-empty="true"]::before {
+                        content: attr(data-placeholder);
+                        color: rgba(255,255,255,0.3);
+                        pointer-events: none;
+                        position: absolute;
                     }
                 `;
                 document.head.appendChild(style);
             }
+
 
             // Setup event handlers for the notepad
             this.setupNotepadHandlers(notepadElement, notepad);
@@ -503,13 +516,14 @@
         // Setup event handlers for notepad window
         setupNotepadHandlers(notepadElement, notepad) {
             const titleInput = notepadElement.querySelector('.notepad-title');
-            const textarea = notepadElement.querySelector('.notepad-textarea');
+            const editor = notepadElement.querySelector('.notepad-editor');
             const header = notepadElement.querySelector('.notepad-header');
             const closeBtn = notepadElement.querySelector('.close-btn');
             const dropdownBtn = notepadElement.querySelector('.dropdown-btn');
             const dropdownContent = notepadElement.querySelector('.dropdown-content');
             const pinBtn = notepadElement.querySelector('.pin-btn');
             const colorBtn = notepadElement.querySelector('.color-btn');
+            const fmtBtns = notepadElement.querySelectorAll('.fmt-btn');
 
             // Title editing
             if (titleInput) {
@@ -531,32 +545,56 @@
             }
 
             // Content editing with debounced auto-save
-            if (textarea) {
-                textarea.addEventListener('input', async () => {
-                    notepad.content = textarea.value;
+            if (editor) {
+                const saveContent = async () => {
+                    notepad.content = editor.innerHTML;
 
                     // Use StateManager for debounced save (1 second delay)
                     if (window.SidekickModules?.Core?.StateManager) {
                         await window.SidekickModules.Core.StateManager.saveModuleState(
                             `notepad_${notepad.id}`,
                             { content: notepad.content },
-                            1000 // 1 second debounce
+                            1000
                         );
                     }
-
-                    // Also save to main notepads array (for backwards compatibility)
                     this.saveNotepads();
-                });
+                };
 
-                // Focus effects - removed border styling per user feedback
-                textarea.addEventListener('focus', () => {
-                    // No visual change on focus
-                });
+                editor.addEventListener('input', saveContent);
 
-                textarea.addEventListener('blur', () => {
-                    // No visual change on blur
-                });
+                // Placeholder simulation for contenteditable
+                const updatePlaceholder = () => {
+                    if (editor.innerHTML === '' || editor.innerHTML === '<br>') {
+                        editor.dataset.empty = 'true';
+                    } else {
+                        delete editor.dataset.empty;
+                    }
+                };
+                editor.addEventListener('input', updatePlaceholder);
+                editor.addEventListener('focus', updatePlaceholder);
+                editor.addEventListener('blur', updatePlaceholder);
+                updatePlaceholder();
             }
+
+            // Format buttons (Bold / Italic / Strikethrough)
+            fmtBtns.forEach(btn => {
+                btn.addEventListener('mousedown', (e) => {
+                    // mousedown so focus stays in editor when button is clicked
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const cmd = btn.dataset.cmd;
+                    if (editor) editor.focus();
+                    document.execCommand(cmd, false, null);
+                    if (editor) {
+                        notepad.content = editor.innerHTML;
+                        this.saveNotepads();
+                    }
+                    dropdownContent.style.display = 'none';
+                });
+            });
 
             // Close button
             if (closeBtn) {

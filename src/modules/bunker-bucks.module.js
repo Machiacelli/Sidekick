@@ -118,7 +118,7 @@
 
         },
 
-        // Watch for new item popups
+        // Watch for new item popups (Item Market and Auction House)
         startObserver() {
             if (this.observer) return;
 
@@ -127,13 +127,21 @@
                     for (const node of mutation.addedNodes) {
                         if (!(node instanceof HTMLElement)) continue;
 
+                        // Item Market: properties list popup
                         const propertiesList = node.matches('ul[class*="properties"]')
                             ? node
                             : node.querySelector('ul[class*="properties"]');
+                        if (propertiesList) {
+                            this.addBunkerBucks(propertiesList);
+                        }
 
-                        if (!propertiesList) continue;
-
-                        this.addBunkerBucks(propertiesList);
+                        // Auction House: item expanded row (li inside ul.items-list)
+                        const auctionItem = node.matches('li[class*="Auction"], li[class*="item"]')
+                            ? node
+                            : node.querySelector('li[class*="Auction"], li[class*="item"]');
+                        if (auctionItem) {
+                            this.addBunkerBucksToAuction(auctionItem);
+                        }
                     }
                 }
             });
@@ -276,44 +284,56 @@
         </div>
     `;
         },
-        // Process existing popups on page
+        // Process existing popups on page (Item Market + Auction House)
         processExistingPopups() {
-            const popups = document.querySelectorAll('ul[class*="properties"]');
-
-            popups.forEach((popup) => {
+            // Item Market properties lists
+            document.querySelectorAll('ul[class*="properties"]').forEach((popup) => {
                 setTimeout(() => this.addBunkerBucks(popup), 100);
             });
-        },
-
-        // Start mutation observer
-        startObserver() {
-            if (this.observer) return;
-
-            this.observer = new MutationObserver((mutations) => {
-
-
-                mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach((node) => {
-
-
-                        if (!(node instanceof HTMLElement)) return;
-
-                        let popup = null;
-
-                        if (node.matches('ul[class*="properties"]')) {
-                            popup = node;
-                        } else {
-                            popup = node.querySelector('ul[class*="properties"]');
-                        }
-
-                        if (popup) {
-
-                        }
-                    });
-                });
+            // Auction House items already expanded
+            document.querySelectorAll('ul.items-list li').forEach((li) => {
+                setTimeout(() => this.addBunkerBucksToAuction(li), 100);
             });
-
         },
+
+        // Get item name from an Auction House list item
+        getItemNameFromAuction(li) {
+            // The item name is usually in a .t-blue or .bold .title-black anchor or div
+            const title = li.querySelector('[class*="title"] a, [class*="name"] a, .bold a, .item-name');
+            if (title) return title.textContent.trim();
+            const boldEl = li.querySelector('.bold, b');
+            if (boldEl) return boldEl.textContent.trim();
+            return '';
+        },
+
+        // Add Bunker Bucks to an Auction House expanded item row
+        addBunkerBucksToAuction(li) {
+            if (!this.isEnabled) return;
+            if (!li || li.dataset.bunkerBucksAdded) return;
+
+            // Only process li items that have expanded detail (description visible)
+            const descEl = li.querySelector('[class*="description"], [class*="detail"], [class*="info"]');
+            if (!descEl) return;
+
+            li.dataset.bunkerBucksAdded = 'true';
+
+            const itemName = this.getItemNameFromAuction(li);
+            const weaponType = this.getWeaponType(itemName);
+            const rarity = this.getRarity(li);
+            const bonusCount = this.countBonuses(li);
+
+            if (!weaponType || !rarity) return;
+
+            const bunkerBucks = this.calculateBunkerBucks(rarity, weaponType, bonusCount);
+            if (bunkerBucks == null) return;
+
+            const bbDiv = document.createElement('div');
+            bbDiv.className = 'sidekick-bb-auction';
+            bbDiv.style.cssText = 'margin-top:4px; font-size:12px; color:#f0c040; font-weight:bold;';
+            bbDiv.textContent = `💰 Bunker Bucks: ${this.formatNumber(bunkerBucks)} BB`;
+            descEl.appendChild(bbDiv);
+        },
+
 
         // Toggle module on/off
         async toggle() {

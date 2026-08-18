@@ -14,7 +14,7 @@ const WarMonitorModule = {
     descriptionCache: new Map(),
 
     lastRequest: null,
-    MIN_TIME_SINCE_LAST_REQUEST: 10000,
+    MIN_TIME_SINCE_LAST_REQUEST: 5000,
     TIME_BETWEEN_FRAMES: 500,
 
     everSorted: false,

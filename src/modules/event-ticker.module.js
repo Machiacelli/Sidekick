@@ -24,10 +24,14 @@
         userEventStartTime: null,
         userEventEndTime: null,
         lastApiUpdate: 0,
-        apiUpdateInterval: 1800, // 30 minutes in seconds
+        apiUpdateInterval: 1800,
+        userCalendarUpdateInterval: 60,
         countdownInterval: null,
+        tickerWrapper: null,
+        tickerAnimation: null,
+        tickerAnimationDuration: 12000,
+        calendarRefreshInFlight: false,
 
-        // Event data from events.txt
         events: [
             {
                 startMonth: 1, startDay: 19,
@@ -177,10 +181,39 @@
                 return;
             }
 
-            // Temporary fix - remove any old cached event overrides
+            try {
+                const settings =
+                    await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings') || {};
+                const calSetting = settings['event-calendar'];
+
+                if (calSetting && calSetting.isEnabled === false) {
+                    console.log('🎪 Event Ticker: disabled in settings, skipping init');
+                    this.isInitialized = true;
+                    return;
+                }
+            } catch (e) {
+                // Storage not ready. Continue initialization.
+            }
+
+            chrome.storage.onChanged.addListener((changes, area) => {
+                if (area !== 'local' || !changes.sidekick_settings) return;
+
+                const newSettings = changes.sidekick_settings.newValue || {};
+                const calSetting = newSettings['event-calendar'];
+                const enabled = !calSetting || calSetting.isEnabled !== false;
+
+                if (!enabled && this.tickerElement) {
+                    this.tickerElement.style.display = 'none';
+                } else if (enabled && this.tickerElement) {
+                    this.tickerElement.style.display = '';
+                }
+            });
+
             try {
                 if (window.SidekickModules?.Core?.ChromeStorage?.remove) {
-                    await window.SidekickModules.Core.ChromeStorage.remove("event_calendar_overrides");
+                    await window.SidekickModules.Core.ChromeStorage.remove(
+                        "event_calendar_overrides"
+                    );
                     console.log("🗑️ Removed cached event overrides");
                 }
             } catch (e) {
@@ -189,39 +222,56 @@
 
             console.log('🎪 Event Ticker: Initializing...');
 
-            // Load cached user event start time
             try {
-                const storage = await window.SidekickModules.Core.ChromeStorage.get('userEventStartTime');
-                if (storage && storage.userEventStartTime) {
-                    this.userEventStartTime = storage.userEventStartTime;
-                    console.log('📦 Event Ticker: Loaded cached user event start time:', this.userEventStartTime);
+                const storedStartTime =
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'userEventStartTime'
+                    );
+
+                if (
+                    typeof storedStartTime === 'string' &&
+                    storedStartTime.trim()
+                ) {
+                    this.userEventStartTime = storedStartTime.trim();
+                    console.log(
+                        '📦 Event Ticker: Loaded cached user event start time:',
+                        this.userEventStartTime
+                    );
                 }
 
-                // Load cached user event end time
-                const endStorage = await window.SidekickModules.Core.ChromeStorage.get('userEventEndTime');
-                if (endStorage && endStorage.userEventEndTime) {
-                    this.userEventEndTime = endStorage.userEventEndTime;
-                    console.log('📦 Event Ticker: Loaded cached user event end time:', this.userEventEndTime);
+                const storedEndTime =
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'userEventEndTime'
+                    );
+
+                if (
+                    typeof storedEndTime === 'string' &&
+                    storedEndTime.trim()
+                ) {
+                    this.userEventEndTime = storedEndTime.trim();
+                    console.log(
+                        '📦 Event Ticker: Loaded cached user event end time:',
+                        this.userEventEndTime
+                    );
                 }
             } catch (error) {
-                console.warn('⚠️ Event Ticker: Error loading cached times:', error);
+                console.warn(
+                    '⚠️ Event Ticker: Error loading cached times:',
+                    error
+                );
             }
 
-            // Fetch player's Torn birthday
             this.fetchPlayerBirthday();
 
-            // Scrape calendar if needed (yearly)
-            this.scrapeCalendarPage().catch(err => {
-                console.warn('⚠️ Event Ticker: Calendar scrape failed (non-fatal):', err);
+            this.scrapeCalendarPage().catch(error => {
+                console.warn(
+                    '⚠️ Event Ticker: Calendar scrape failed (non-fatal):',
+                    error
+                );
             });
 
-            // Fetch nearest event from Torn calendar
             this.fetchNearestEvent();
-
-            // Start countdown timer
             this.startCountdown();
-
-            // Wait for sidebar to be created
             this.waitForTicker();
 
             this.isInitialized = true;
@@ -231,115 +281,393 @@
             if (this.playerBirthdayChecked) return;
 
             try {
-                console.log('🎂 Event Ticker: Fetching player birthday from Torn API...');
-                const storage = await window.SidekickModules.Core.ChromeStorage.get('torn_api_key');
-                const apiKey = (storage && storage.torn_api_key) ? storage.torn_api_key : '';
+                console.log(
+                    '🎂 Event Ticker: Fetching player birthday from Torn API...'
+                );
+
+                const storage =
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'torn_api_key'
+                    );
+
+                const apiKey =
+                    storage && storage.torn_api_key
+                        ? storage.torn_api_key
+                        : '';
 
                 if (!apiKey) {
-                    console.log('⚠️ Event Ticker: No API key found, skipping birthday check');
+                    console.log(
+                        '⚠️ Event Ticker: No API key found, skipping birthday check'
+                    );
                     this.playerBirthdayChecked = true;
                     return;
                 }
 
-                const response = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
+                const response = await fetch(
+                    `https://api.torn.com/user/?selections=profile&key=${apiKey}`
+                );
                 const data = await response.json();
 
                 if (data.error) {
-                    console.error('❌ Event Ticker: API error:', data.error);
+                    console.error(
+                        '❌ Event Ticker: API error:',
+                        data.error
+                    );
                     this.playerBirthdayChecked = true;
                     return;
                 }
 
                 if (data.signup) {
                     this.playerSignupDate = new Date(data.signup);
-                    console.log('✅ Event Ticker: Player joined Torn on', data.signup);
+                    console.log(
+                        '✅ Event Ticker: Player joined Torn on',
+                        data.signup
+                    );
 
                     const yearsInTorn = this.getYearsInTorn();
-                    console.log(`🎉 Event Ticker: Player has been in Torn for ${yearsInTorn} years!`);
+                    console.log(
+                        `🎉 Event Ticker: Player has been in Torn for ${yearsInTorn} years!`
+                    );
                 }
 
                 this.playerBirthdayChecked = true;
             } catch (error) {
-                console.error('❌ Event Ticker: Failed to fetch player birthday:', error);
+                console.error(
+                    '❌ Event Ticker: Failed to fetch player birthday:',
+                    error
+                );
                 this.playerBirthdayChecked = true;
             }
         },
 
         async fetchNearestEvent() {
-            try {
-                const currentTime = Math.round(Date.now() / 1000);
-                const cachedEvents = await window.SidekickModules.Core.ChromeStorage.get('torn_events');
-                const lastUpdateStorage = await window.SidekickModules.Core.ChromeStorage.get('torn_events_update');
-                const lastUpdate = (lastUpdateStorage && lastUpdateStorage.torn_events_update) ? lastUpdateStorage.torn_events_update : 0;
+            if (this.calendarRefreshInFlight) return;
+            this.calendarRefreshInFlight = true;
 
-                // Check if we need to update (30 min interval)
-                if (cachedEvents && cachedEvents.torn_events && (currentTime - lastUpdate) < this.apiUpdateInterval) {
-                    this.tornEvents = cachedEvents.torn_events;
+            const storage = window.SidekickModules.Core.ChromeStorage;
+            const currentTime = Math.floor(Date.now() / 1000);
+
+            try {
+                const cachedEventsValue = await storage.get('torn_events');
+                const cachedEvents = Array.isArray(cachedEventsValue)
+                    ? cachedEventsValue
+                    : (
+                        Array.isArray(cachedEventsValue?.torn_events)
+                            ? cachedEventsValue.torn_events
+                            : null
+                    );
+
+                const eventsUpdateValue =
+                    await storage.get('torn_events_update');
+
+                const eventsLastUpdate = Number(
+                    typeof eventsUpdateValue === 'number'
+                        ? eventsUpdateValue
+                        : eventsUpdateValue?.torn_events_update
+                ) || 0;
+
+                const userCalendarUpdateValue =
+                    await storage.get('user_calendar_update');
+
+                const userCalendarLastUpdate = Number(
+                    typeof userCalendarUpdateValue === 'number'
+                        ? userCalendarUpdateValue
+                        : userCalendarUpdateValue?.user_calendar_update
+                ) || 0;
+
+                if (cachedEvents) {
+                    this.tornEvents = cachedEvents;
+                }
+
+                const shouldFetchEvents =
+                    !cachedEvents ||
+                    currentTime - eventsLastUpdate >= this.apiUpdateInterval;
+
+                const shouldFetchUserTime =
+                    !this.userEventStartTime ||
+                    currentTime - userCalendarLastUpdate >=
+                    this.userCalendarUpdateInterval;
+
+                if (!shouldFetchEvents && !shouldFetchUserTime) {
                     this.calculateNearestEvent();
+                    this.refreshTickerIfReady();
                     return;
                 }
 
-                console.log('🔄 Event Ticker: Fetching Torn calendar from API...');
-                // Use the correct storage key (same as all other modules)
-                const apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key');
+                const apiKey = await storage.get('sidekick_api_key');
 
                 if (!apiKey) {
-                    console.log('⚠️ Event Ticker: No API key for calendar fetch');
-                    return;
-                }
-
-                // Correct v2 calendar endpoint
-                const response = await fetch(`https://api.torn.com/v2/torn/calendar?key=${apiKey}`);
-                const data = await response.json();
-
-                if (data.error) {
-                    console.error('❌ Event Ticker: Calendar API error:', data.error);
-                    return;
-                }
-
-                if (data.calendar) {
-                    // Merge events and competitions into a single list
-                    let events = data.calendar.events || [];
-                    if (data.calendar.competitions) {
-                        events = events.concat(data.calendar.competitions);
-                    }
-
-                    this.tornEvents = events;
-                    await window.SidekickModules.Core.ChromeStorage.set('torn_events', events);
-                    await window.SidekickModules.Core.ChromeStorage.set('torn_events_update', currentTime);
-
-                    // Auto-correct hardcoded dates using API data
-                    await this.autoCorrectEventDates(events);
-
-                    console.log(`✅ Event Ticker: Fetched ${events.length} Torn events from /v2/torn/calendar`);
+                    console.log(
+                        '⚠️ Event Ticker: No API key for calendar fetch'
+                    );
                     this.calculateNearestEvent();
+                    this.refreshTickerIfReady();
+                    return;
                 }
+
+                const requests = [];
+
+                if (shouldFetchEvents) {
+                    console.log(
+                        '🔄 Event Ticker: Fetching Torn calendar from API...'
+                    );
+
+                    requests.push(
+                        this.fetchTornCalendar(apiKey).then(async events => {
+                            this.tornEvents = events;
+
+                            await storage.set('torn_events', events);
+                            await storage.set(
+                                'torn_events_update',
+                                currentTime
+                            );
+                            await this.autoCorrectEventDates(events);
+
+                            console.log(
+                                `✅ Event Ticker: Fetched ${events.length} Torn events from /v2/torn/calendar`
+                            );
+                        })
+                    );
+                }
+
+                if (shouldFetchUserTime) {
+                    console.log(
+                        '🔄 Event Ticker: Fetching personal calendar time from API...'
+                    );
+
+                    requests.push(
+                        this.fetchUserCalendarStartTime(apiKey).then(
+                            async startTime => {
+                                if (!startTime) return;
+
+                                this.userEventStartTime = startTime;
+
+                                await storage.set(
+                                    'userEventStartTime',
+                                    startTime
+                                );
+                                await storage.set(
+                                    'user_calendar_update',
+                                    currentTime
+                                );
+
+                                console.log(
+                                    '✅ Event Ticker: Personal event start time:',
+                                    startTime,
+                                    'TCT'
+                                );
+                            }
+                        )
+                    );
+                }
+
+                const results = await Promise.allSettled(requests);
+
+                results.forEach(result => {
+                    if (result.status === 'rejected') {
+                        console.warn(
+                            '⚠️ Event Ticker: Calendar request failed (using cached/global fallback):',
+                            result.reason
+                        );
+                    }
+                });
+
+                this.calculateNearestEvent();
+                this.refreshTickerIfReady();
             } catch (error) {
-                console.error('❌ Event Ticker: Failed to fetch calendar:', error);
+                console.error(
+                    '❌ Event Ticker: Failed to update calendar:',
+                    error
+                );
+                this.calculateNearestEvent();
+                this.refreshTickerIfReady();
+            } finally {
+                this.calendarRefreshInFlight = false;
             }
         },
 
+        async fetchCalendarJson(path, apiKey) {
+            const response = await fetch(
+                `https://api.torn.com/v2/${path}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `ApiKey ${apiKey}`
+                    },
+                    cache: 'no-store'
+                }
+            );
 
-        // Auto-correct hardcoded dates when API provides better data
+            let data;
+
+            try {
+                data = await response.json();
+            } catch (error) {
+                throw new Error(`${path} returned invalid JSON`);
+            }
+
+            if (!response.ok || data?.error) {
+                const apiError = data?.error;
+                const message =
+                    apiError?.error ||
+                    apiError?.message ||
+                    `HTTP ${response.status}`;
+
+                throw new Error(`${path}: ${message}`);
+            }
+
+            return data;
+        },
+
+        async fetchTornCalendar(apiKey) {
+            const data = await this.fetchCalendarJson(
+                'torn/calendar',
+                apiKey
+            );
+
+            const events = Array.isArray(data?.calendar?.events)
+                ? data.calendar.events
+                : [];
+
+            const competitions = Array.isArray(
+                data?.calendar?.competitions
+            )
+                ? data.calendar.competitions
+                : [];
+
+            return events.concat(competitions);
+        },
+
+        async fetchUserCalendarStartTime(apiKey) {
+            const data = await this.fetchCalendarJson(
+                'user/calendar',
+                apiKey
+            );
+
+            const startTime = data?.calendar?.start_time;
+
+            return typeof startTime === 'string' && startTime.trim()
+                ? startTime.trim()
+                : null;
+        },
+
+        parseTctStartTime(startTime) {
+            if (typeof startTime !== 'string') return null;
+
+            const value = startTime.trim();
+            const timeMatch = value.match(
+                /(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?(?:\s*TCT)?(?:$|\s)/i
+            );
+
+            if (timeMatch) {
+                return {
+                    hours: Number(timeMatch[1]),
+                    minutes: Number(timeMatch[2]),
+                    seconds: Number(timeMatch[3] || 0)
+                };
+            }
+
+            const parsed = new Date(value);
+
+            if (!Number.isNaN(parsed.getTime())) {
+                return {
+                    hours: parsed.getUTCHours(),
+                    minutes: parsed.getUTCMinutes(),
+                    seconds: parsed.getUTCSeconds()
+                };
+            }
+
+            return null;
+        },
+
+        applyPersonalStartTime(eventStartTimestamp, personalStartTime) {
+            if (!Number.isFinite(Number(eventStartTimestamp))) {
+                return null;
+            }
+
+            const time = this.parseTctStartTime(personalStartTime);
+            if (!time) return null;
+
+            const eventDate =
+                new Date(Number(eventStartTimestamp) * 1000);
+
+            return Math.floor(
+                Date.UTC(
+                    eventDate.getUTCFullYear(),
+                    eventDate.getUTCMonth(),
+                    eventDate.getUTCDate(),
+                    time.hours,
+                    time.minutes,
+                    time.seconds
+                ) / 1000
+            );
+        },
+
+        resolveEventStartTime(event) {
+            const globalStart = Number(event?.start);
+
+            if (!Number.isFinite(globalStart)) return null;
+
+            if (
+                event.fixed_start_time !== false ||
+                !this.userEventStartTime
+            ) {
+                return globalStart;
+            }
+
+            const personalStart = this.applyPersonalStartTime(
+                globalStart,
+                this.userEventStartTime
+            );
+
+            if (personalStart === null) {
+                console.warn(
+                    `⚠️ Event Ticker: Could not parse personal calendar time "${this.userEventStartTime}"; using global time for ${event.title || 'event'}`
+                );
+                return globalStart;
+            }
+
+            return personalStart;
+        },
+
+        refreshTickerIfReady() {
+            if (this.tickerElement) {
+                this.updateTickerDisplay();
+            }
+        },
+
         async autoCorrectEventDates(apiEvents) {
             try {
-                const storage = await window.SidekickModules.Core.ChromeStorage.get('event_calendar_overrides');
-                const overrides = storage?.event_calendar_overrides || {};
+                const storage =
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'event_calendar_overrides'
+                    );
+
+                const overrides =
+                    storage?.event_calendar_overrides || {};
+
                 let correctionsMade = 0;
 
                 for (const apiEvent of apiEvents) {
                     if (!apiEvent.title || !apiEvent.start) continue;
 
-                    const normalizedApiName = this.normalizeEventName(apiEvent.title);
+                    const normalizedApiName =
+                        this.normalizeEventName(apiEvent.title);
 
-                    // Find matching hardcoded event
-                    const hardcodedEvent = this.events.find(e =>
-                        this.normalizeEventName(e.name) === normalizedApiName
+                    const hardcodedEvent = this.events.find(
+                        event =>
+                            this.normalizeEventName(event.name) ===
+                            normalizedApiName
                     );
 
                     if (hardcodedEvent) {
-                        const apiStartDate = new Date(apiEvent.start * 1000);
-                        const apiEndDate = apiEvent.end ? new Date(apiEvent.end * 1000) : apiStartDate;
+                        const apiStartDate =
+                            new Date(apiEvent.start * 1000);
+
+                        const apiEndDate = apiEvent.end
+                            ? new Date(apiEvent.end * 1000)
+                            : apiStartDate;
 
                         const apiDates = {
                             startMonth: apiStartDate.getMonth() + 1,
@@ -348,109 +676,157 @@
                             endDay: apiEndDate.getDate()
                         };
 
-                        // Check if dates differ from hardcoded
                         const datesDiffer =
-                            apiDates.startMonth !== hardcodedEvent.startMonth ||
-                            apiDates.startDay !== hardcodedEvent.startDay ||
-                            apiDates.endMonth !== hardcodedEvent.endMonth ||
-                            apiDates.endDay !== hardcodedEvent.endDay;
+                            apiDates.startMonth !==
+                            hardcodedEvent.startMonth ||
+                            apiDates.startDay !==
+                            hardcodedEvent.startDay ||
+                            apiDates.endMonth !==
+                            hardcodedEvent.endMonth ||
+                            apiDates.endDay !==
+                            hardcodedEvent.endDay;
 
                         if (datesDiffer) {
                             overrides[normalizedApiName] = apiDates;
                             correctionsMade++;
 
-                            console.log(`📅 AUTO-CORRECTED "${hardcodedEvent.name}": ${hardcodedEvent.startMonth}/${hardcodedEvent.startDay} → ${apiDates.startMonth}/${apiDates.startDay}`);
+                            console.log(
+                                `📅 AUTO-CORRECTED "${hardcodedEvent.name}": ${hardcodedEvent.startMonth}/${hardcodedEvent.startDay} → ${apiDates.startMonth}/${apiDates.startDay}`
+                            );
                         }
                     }
                 }
 
                 if (correctionsMade > 0) {
-                    await window.SidekickModules.Core.ChromeStorage.set('event_calendar_overrides', overrides);
-                    console.log(`✅ Auto-corrected ${correctionsMade} event date(s) from API`);
-                }
+                    await window.SidekickModules.Core.ChromeStorage.set(
+                        'event_calendar_overrides',
+                        overrides
+                    );
 
+                    console.log(
+                        `✅ Auto-corrected ${correctionsMade} event date(s) from API`
+                    );
+                }
             } catch (error) {
-                console.error('❌ Failed to auto-correct event dates:', error);
+                console.error(
+                    '❌ Failed to auto-correct event dates:',
+                    error
+                );
             }
         },
 
         calculateNearestEvent() {
-            if (!this.tornEvents || this.tornEvents.length === 0) return;
+            if (!this.tornEvents || this.tornEvents.length === 0) {
+                return;
+            }
 
             const currentTime = Math.round(Date.now() / 1000);
-            let upcomingEvents = [];
+            const upcomingEvents = [];
 
-            // Check if user's personal event has ended
             let userEventEnded = false;
             let userEndTimestamp = null;
+
             if (this.userEventEndTime) {
                 try {
-                    const userEndDate = new Date(this.userEventEndTime);
-                    userEndTimestamp = Math.round(userEndDate.getTime() / 1000);
+                    const userEndDate =
+                        new Date(this.userEventEndTime);
+
+                    userEndTimestamp = Math.round(
+                        userEndDate.getTime() / 1000
+                    );
+
                     if (currentTime >= userEndTimestamp) {
                         userEventEnded = true;
-                        console.log('⏰ Event Ticker: User\'s personal event period has ended');
+                        console.log(
+                            '⏰ Event Ticker: User\'s personal event period has ended'
+                        );
                     }
-                } catch (e) {
-                    console.warn('Failed to parse user event end time:', e);
+                } catch (error) {
+                    console.warn(
+                        'Failed to parse user event end time:',
+                        error
+                    );
                 }
             }
 
-            for (let event of this.tornEvents) {
-                // Use user's personal event start time if available
-                let eventStartTime = event.start;
+            for (const event of this.tornEvents) {
+                const eventStartTime =
+                    this.resolveEventStartTime(event);
 
-                if (this.userEventStartTime && event.title && event.title.toLowerCase().includes('competition')) {
-                    try {
-                        const userStartDate = new Date(this.userEventStartTime);
-                        const userStartTimestamp = Math.round(userStartDate.getTime() / 1000);
+                if (eventStartTime === null) continue;
 
-                        if (Math.abs(userStartTimestamp - event.start) < 86400) { // Within 24 hours
-                            eventStartTime = userStartTimestamp;
-                            console.log(`⏰ Using personal start time for ${event.title}: ${this.userEventStartTime}`);
-                        }
-                    } catch (e) {
-                        console.warn('Failed to parse user event start time:', e);
-                    }
-                }
-
-                // Skip ACTIVE competitions if user's personal event period has ended
-                if (userEventEnded && event.title && event.title.toLowerCase().includes('competition')) {
+                if (
+                    userEventEnded &&
+                    event.title &&
+                    event.title.toLowerCase().includes('competition')
+                ) {
                     const diff = eventStartTime - currentTime;
+
                     if (diff < 0) {
-                        console.log(`⏰ Skipping active ${event.title} - user's event period ended`);
+                        console.log(
+                            `⏰ Skipping active ${event.title} - user's event period ended`
+                        );
                         continue;
                     }
                 }
 
                 const diff = eventStartTime - currentTime;
+
                 if (diff >= 0) {
-                    upcomingEvents.push({ ...event, start: eventStartTime, diff: diff });
+                    upcomingEvents.push({
+                        ...event,
+                        start: eventStartTime,
+                        diff
+                    });
                 }
             }
 
             if (upcomingEvents.length === 0) {
                 this.nearestEvent = null;
-                console.log('⏰ Event Ticker: No upcoming events found');
+                console.log(
+                    '⏰ Event Ticker: No upcoming events found'
+                );
                 return;
             }
 
             upcomingEvents.sort((a, b) => a.diff - b.diff);
             this.nearestEvent = upcomingEvents[0];
 
-            console.log('⏱️ Event Ticker: Next event:', this.nearestEvent.title, 'in', this.formatCountdown(this.nearestEvent.diff));
+            console.log(
+                '⏱️ Event Ticker: Next event:',
+                this.nearestEvent.title,
+                'in',
+                this.formatCountdown(this.nearestEvent.diff)
+            );
         },
 
         formatCountdown(seconds) {
             const days = Math.floor(seconds / 86400);
-            const hours = Math.floor((seconds % 86400) / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
+            const hours = Math.floor(
+                (seconds % 86400) / 3600
+            );
+            const minutes = Math.floor(
+                (seconds % 3600) / 60
+            );
             const secs = seconds % 60;
 
             if (days > 0) {
-                return `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                return `${days}d ${hours
+                    .toString()
+                    .padStart(2, '0')}:${minutes
+                        .toString()
+                        .padStart(2, '0')}:${secs
+                            .toString()
+                            .padStart(2, '0')}`;
             }
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            return `${hours
+                .toString()
+                .padStart(2, '0')}:${minutes
+                    .toString()
+                    .padStart(2, '0')}:${secs
+                        .toString()
+                        .padStart(2, '0')}`;
         },
 
         startCountdown() {
@@ -460,8 +836,11 @@
 
             this.countdownInterval = setInterval(() => {
                 if (this.nearestEvent) {
-                    const currentTime = Math.round(Date.now() / 1000);
-                    const timeUntil = this.nearestEvent.start - currentTime;
+                    const currentTime =
+                        Math.round(Date.now() / 1000);
+
+                    const timeUntil =
+                        this.nearestEvent.start - currentTime;
 
                     if (timeUntil <= 0) {
                         this.fetchNearestEvent();
@@ -474,7 +853,9 @@
             if (!this.playerSignupDate) return 0;
 
             const now = new Date();
-            const years = now.getFullYear() - this.playerSignupDate.getFullYear();
+            const years =
+                now.getFullYear() -
+                this.playerSignupDate.getFullYear();
 
             const thisYearBirthday = new Date(
                 now.getFullYear(),
@@ -493,82 +874,125 @@
             if (!this.playerSignupDate) return false;
 
             const now = new Date();
-            const signupMonth = this.playerSignupDate.getMonth();
-            const signupDay = this.playerSignupDate.getDate();
+            const signupMonth =
+                this.playerSignupDate.getMonth();
+            const signupDay =
+                this.playerSignupDate.getDate();
 
-            return now.getMonth() === signupMonth && now.getDate() === signupDay;
+            return (
+                now.getMonth() === signupMonth &&
+                now.getDate() === signupDay
+            );
         },
 
         isTornBirthdaySoon(daysAhead = 7) {
             if (!this.playerSignupDate) return false;
 
             const now = new Date();
-            const signupMonth = this.playerSignupDate.getMonth();
-            const signupDay = this.playerSignupDate.getDate();
+            const signupMonth =
+                this.playerSignupDate.getMonth();
+            const signupDay =
+                this.playerSignupDate.getDate();
 
-            let birthdayThisYear = new Date(now.getFullYear(), signupMonth, signupDay);
+            let birthdayThisYear = new Date(
+                now.getFullYear(),
+                signupMonth,
+                signupDay
+            );
 
             if (birthdayThisYear < now) {
-                birthdayThisYear = new Date(now.getFullYear() + 1, signupMonth, signupDay);
+                birthdayThisYear = new Date(
+                    now.getFullYear() + 1,
+                    signupMonth,
+                    signupDay
+                );
             }
 
-            const daysUntil = Math.floor((birthdayThisYear - now) / (1000 * 60 * 60 * 24));
+            const daysUntil = Math.floor(
+                (birthdayThisYear - now) /
+                (1000 * 60 * 60 * 24)
+            );
+
             return daysUntil >= 0 && daysUntil <= daysAhead;
         },
 
         waitForTicker() {
             let attempts = 0;
-            const maxAttempts = 100; // 10 seconds
+            const maxAttempts = 100;
 
             const checkTicker = setInterval(() => {
                 attempts++;
-                const placeholder = document.getElementById('sidekick-ticker-placeholder');
+
+                const placeholder =
+                    document.getElementById(
+                        'sidekick-ticker-placeholder'
+                    );
 
                 if (placeholder) {
-                    console.log('✅ Event Ticker: Found placeholder, creating ticker...');
+                    console.log(
+                        '✅ Event Ticker: Found placeholder, creating ticker...'
+                    );
                     clearInterval(checkTicker);
                     this.createTicker();
                     this.startRotation();
                 } else if (attempts >= maxAttempts) {
-                    console.error('❌ Event Ticker: Timeout waiting for placeholder after 10 seconds');
+                    console.error(
+                        '❌ Event Ticker: Timeout waiting for placeholder after 10 seconds'
+                    );
                     clearInterval(checkTicker);
                 }
             }, 100);
         },
 
         createTicker() {
-            if (document.getElementById('sidekick-event-ticker')) {
-                console.log('⚠️ Event Ticker: Ticker already exists, skipping creation');
+            if (
+                document.getElementById(
+                    'sidekick-event-ticker'
+                )
+            ) {
+                console.log(
+                    '⚠️ Event Ticker: Ticker already exists, skipping creation'
+                );
                 return;
             }
 
-            const placeholder = document.getElementById('sidekick-ticker-placeholder');
+            const placeholder =
+                document.getElementById(
+                    'sidekick-ticker-placeholder'
+                );
+
             if (!placeholder) {
-                console.warn('⚠️ Event Ticker: Placeholder not found, retrying in 200ms...');
+                console.warn(
+                    '⚠️ Event Ticker: Placeholder not found, retrying in 200ms...'
+                );
                 setTimeout(() => this.createTicker(), 200);
                 return;
             }
 
-            console.log('🎪 Event Ticker: Creating ticker element...');
+            console.log(
+                '🎪 Event Ticker: Creating ticker element...'
+            );
 
-            // Add CSS keyframes for scrolling animation
-            if (!document.getElementById('sidekick-ticker-styles')) {
-                const style = document.createElement('style');
+            let style =
+                document.getElementById(
+                    'sidekick-ticker-styles'
+                );
+
+            if (!style) {
+                style = document.createElement('style');
                 style.id = 'sidekick-ticker-styles';
-                style.textContent = `
-                    @keyframes sidekick-ticker-scroll {
-                        0% { transform: translateX(100%); }
-                        100% { transform: translateX(-100%); }
-                    }
-                    
-                    .sidekick-ticker-scrolling {
-                        animation: sidekick-ticker-scroll 20s linear infinite;
-                    }
-                `;
                 document.head.appendChild(style);
             }
 
-            // Create ticker container
+            style.textContent = `
+                .sidekick-ticker-scrolling {
+                    animation: none;
+                    will-change: transform;
+                    backface-visibility: hidden;
+                    -webkit-font-smoothing: antialiased;
+                }
+            `;
+
             const ticker = document.createElement('div');
             ticker.id = 'sidekick-event-ticker';
             ticker.style.cssText = `
@@ -581,105 +1005,143 @@
                 margin: 0;
             `;
 
-            // Scrolling wrapper
-            const scrollWrapper = document.createElement('div');
+            const scrollWrapper =
+                document.createElement('div');
+
             scrollWrapper.style.cssText = `
                 flex: 1;
                 overflow: hidden;
                 position: relative;
             `;
 
-            // Text container with scrolling animation
-            const textContainer = document.createElement('div');
+            const textContainer =
+                document.createElement('div');
+
             textContainer.id = 'sidekick-ticker-text';
-            textContainer.className = 'sidekick-ticker-scrolling';
+            textContainer.className =
+                'sidekick-ticker-scrolling';
+
             textContainer.style.cssText = `
                 color: #ccc;
                 font-size: 11px;
                 white-space: nowrap;
                 display: inline-block;
-                transition: opacity 0.3s ease;
+                opacity: 1;
+                animation: none;
+                will-change: transform;
             `;
 
             scrollWrapper.appendChild(textContainer);
             ticker.appendChild(scrollWrapper);
 
-            // Append to placeholder instead of replacing it
             placeholder.innerHTML = '';
             placeholder.appendChild(ticker);
 
             this.tickerElement = textContainer;
-            console.log('✅ Event Ticker: Created seamlessly in top bar');
+            this.tickerWrapper = scrollWrapper;
 
-            // Show initial message immediately
+            console.log(
+                '✅ Event Ticker: Created seamlessly in top bar'
+            );
+
             this.setTickerText('Loading events...');
             this.updateTickerDisplay();
         },
 
-        // ===== UTC TIMING HELPERS =====
-
-        // Get current time in UTC (Torn uses UTC/TCT)
         getCurrentUTC() {
             const now = new Date();
-            return new Date(Date.UTC(
-                now.getUTCFullYear(),
-                now.getUTCMonth(),
-                now.getUTCDate(),
-                now.getUTCHours(),
-                now.getUTCMinutes(),
-                now.getUTCSeconds()
-            ));
+
+            return new Date(
+                Date.UTC(
+                    now.getUTCFullYear(),
+                    now.getUTCMonth(),
+                    now.getUTCDate(),
+                    now.getUTCHours(),
+                    now.getUTCMinutes(),
+                    now.getUTCSeconds()
+                )
+            );
         },
 
-        // Check if a date is within an event's range (UTC-based)
         async isEventActive(event, now = null) {
-            // Use UTC if no time provided
             if (!now) {
                 now = this.getCurrentUTC();
             }
 
             const currentYear = now.getUTCFullYear();
             const currentMonth = now.getUTCMonth() + 1;
-            const currentDay = now.getUTCDate();
 
-            // Get merged dates (calendar override + hardcoded fallback)
             const dates = await this.getEventDates(event);
 
-            // Create UTC dates for comparison
-            let startDate = new Date(Date.UTC(currentYear, dates.startMonth - 1, dates.startDay, 0, 0, 0));
-            let endDate = new Date(Date.UTC(currentYear, dates.endMonth - 1, dates.endDay, 0, 0, 0));
+            let startDate = new Date(
+                Date.UTC(
+                    currentYear,
+                    dates.startMonth - 1,
+                    dates.startDay,
+                    0,
+                    0,
+                    0
+                )
+            );
 
-            // Handle events that span year boundary
+            let endDate = new Date(
+                Date.UTC(
+                    currentYear,
+                    dates.endMonth - 1,
+                    dates.endDay,
+                    0,
+                    0,
+                    0
+                )
+            );
+
             if (dates.endMonth < dates.startMonth) {
                 if (currentMonth >= dates.startMonth) {
-                    endDate = new Date(Date.UTC(currentYear + 1, dates.endMonth - 1, dates.endDay, 0, 0, 0));
+                    endDate = new Date(
+                        Date.UTC(
+                            currentYear + 1,
+                            dates.endMonth - 1,
+                            dates.endDay,
+                            0,
+                            0,
+                            0
+                        )
+                    );
                 } else {
-                    startDate = new Date(Date.UTC(currentYear - 1, dates.startMonth - 1, dates.startDay, 0, 0, 0));
+                    startDate = new Date(
+                        Date.UTC(
+                            currentYear - 1,
+                            dates.startMonth - 1,
+                            dates.startDay,
+                            0,
+                            0,
+                            0
+                        )
+                    );
                 }
             }
 
-            return now >= startDate && now < endDate; // Use < instead of <= for end date
+            return now >= startDate && now < endDate;
         },
 
         async getActiveEvents() {
-            const now = this.getCurrentUTC(); // Use UTC for consistency
-
-            // Filter active events with async isEventActive
+            const now = this.getCurrentUTC();
             const activeEvents = [];
+
             for (const event of this.events) {
                 if (await this.isEventActive(event, now)) {
                     activeEvents.push(event);
                 }
             }
 
-
-
             if (this.isTornBirthdayToday()) {
                 const years = this.getYearsInTorn();
+
                 activeEvents.push({
                     name: "Your Torn Birthday",
                     feature: "Personal celebration",
-                    notification: `🎂 Happy Torn Birthday! ${years} year${years !== 1 ? 's' : ''} of mayhem and counting!`,
+                    notification:
+                        `🎂 Happy Torn Birthday! ${years} year${years !== 1 ? 's' : ''} of mayhem and counting!`,
                     isBirthday: true
                 });
             }
@@ -687,7 +1149,6 @@
             return activeEvents;
         },
 
-        // Get the next upcoming event (for countdown)
         async getNextEvent() {
             const now = new Date();
             const currentYear = now.getFullYear();
@@ -696,14 +1157,16 @@
             let nextEvent = null;
             let minTimeDiff = Infinity;
 
-            // Check current year and next year
-            for (let yearOffset = 0; yearOffset <= 1; yearOffset++) {
+            for (
+                let yearOffset = 0;
+                yearOffset <= 1;
+                yearOffset++
+            ) {
                 const checkYear = currentYear + yearOffset;
 
                 for (const event of this.events) {
-
-                    // Use calendar overrides if available
-                    const dates = await this.getEventDates(event);
+                    const dates =
+                        await this.getEventDates(event);
 
                     const eventStart = new Date(
                         checkYear,
@@ -713,9 +1176,13 @@
 
                     eventStart.setHours(0, 0, 0, 0);
 
-                    const timeDiff = eventStart.getTime() - currentTime;
+                    const timeDiff =
+                        eventStart.getTime() - currentTime;
 
-                    if (timeDiff > 0 && timeDiff < minTimeDiff) {
+                    if (
+                        timeDiff > 0 &&
+                        timeDiff < minTimeDiff
+                    ) {
                         minTimeDiff = timeDiff;
 
                         nextEvent = {
@@ -725,25 +1192,35 @@
                             endMonth: dates.endMonth,
                             endDay: dates.endDay,
                             startDate: eventStart,
-                            timeDiff: timeDiff
+                            timeDiff
                         };
                     }
                 }
             }
 
-            // Check for upcoming birthday
-            if (this.playerSignupDate && !this.isTornBirthdayToday()) {
-                const nextBirthday = this.getNextBirthday();
+            if (
+                this.playerSignupDate &&
+                !this.isTornBirthdayToday()
+            ) {
+                const nextBirthday =
+                    this.getNextBirthday();
 
                 if (nextBirthday) {
-                    const birthdayDiff = nextBirthday.getTime() - currentTime;
+                    const birthdayDiff =
+                        nextBirthday.getTime() -
+                        currentTime;
 
-                    if (birthdayDiff > 0 && birthdayDiff < minTimeDiff) {
-                        const years = this.getYearsInTorn() + 1;
+                    if (
+                        birthdayDiff > 0 &&
+                        birthdayDiff < minTimeDiff
+                    ) {
+                        const years =
+                            this.getYearsInTorn() + 1;
 
                         nextEvent = {
                             name: "Your Torn Birthday",
-                            feature: `${years} year${years !== 1 ? "s" : ""} celebration`,
+                            feature:
+                                `${years} year${years !== 1 ? "s" : ""} celebration`,
                             startDate: nextBirthday,
                             timeDiff: birthdayDiff,
                             isBirthday: true
@@ -755,21 +1232,30 @@
             return nextEvent;
         },
 
-        // Get next birthday date
         getNextBirthday() {
             if (!this.playerSignupDate) return null;
 
             const now = new Date();
             const currentYear = now.getFullYear();
-            const signupMonth = this.playerSignupDate.getMonth();
-            const signupDay = this.playerSignupDate.getDate();
+            const signupMonth =
+                this.playerSignupDate.getMonth();
+            const signupDay =
+                this.playerSignupDate.getDate();
 
-            let nextBirthday = new Date(currentYear, signupMonth, signupDay);
+            let nextBirthday = new Date(
+                currentYear,
+                signupMonth,
+                signupDay
+            );
+
             nextBirthday.setHours(0, 0, 0, 0);
 
-            // If this year's birthday has passed, get next year's
             if (nextBirthday <= now) {
-                nextBirthday = new Date(currentYear + 1, signupMonth, signupDay);
+                nextBirthday = new Date(
+                    currentYear + 1,
+                    signupMonth,
+                    signupDay
+                );
                 nextBirthday.setHours(0, 0, 0, 0);
             }
 
@@ -778,36 +1264,72 @@
 
         getUpcomingEvents(daysAhead = 7) {
             const now = new Date();
-            const future = new Date(now.getTime() + (daysAhead * 24 * 60 * 60 * 1000));
+
+            const future = new Date(
+                now.getTime() +
+                daysAhead * 24 * 60 * 60 * 1000
+            );
 
             const upcomingEvents = this.events.filter(event => {
                 const currentYear = now.getFullYear();
-                let eventStart = new Date(currentYear, event.startMonth - 1, event.startDay);
+
+                let eventStart = new Date(
+                    currentYear,
+                    event.startMonth - 1,
+                    event.startDay
+                );
 
                 if (eventStart < now) {
-                    eventStart = new Date(currentYear + 1, event.startMonth - 1, event.startDay);
+                    eventStart = new Date(
+                        currentYear + 1,
+                        event.startMonth - 1,
+                        event.startDay
+                    );
                 }
 
                 return eventStart > now && eventStart <= future;
             });
 
-            if (this.isTornBirthdaySoon(daysAhead) && !this.isTornBirthdayToday()) {
-                const signupMonth = this.playerSignupDate.getMonth();
-                const signupDay = this.playerSignupDate.getDate();
-                const birthdayThisYear = new Date(now.getFullYear(), signupMonth, signupDay);
-                const birthdayDate = birthdayThisYear < now
-                    ? new Date(now.getFullYear() + 1, signupMonth, signupDay)
-                    : birthdayThisYear;
+            if (
+                this.isTornBirthdaySoon(daysAhead) &&
+                !this.isTornBirthdayToday()
+            ) {
+                const signupMonth =
+                    this.playerSignupDate.getMonth();
 
-                const daysUntil = Math.floor((birthdayDate - now) / (1000 * 60 * 60 * 24));
-                const years = this.getYearsInTorn() + 1;
+                const signupDay =
+                    this.playerSignupDate.getDate();
+
+                const birthdayThisYear = new Date(
+                    now.getFullYear(),
+                    signupMonth,
+                    signupDay
+                );
+
+                const birthdayDate =
+                    birthdayThisYear < now
+                        ? new Date(
+                            now.getFullYear() + 1,
+                            signupMonth,
+                            signupDay
+                        )
+                        : birthdayThisYear;
+
+                const daysUntil = Math.floor(
+                    (birthdayDate - now) /
+                    (1000 * 60 * 60 * 24)
+                );
+
+                const years =
+                    this.getYearsInTorn() + 1;
 
                 upcomingEvents.push({
                     name: "Your Torn Birthday",
                     feature: `${years} years in Torn`,
-                    notification: `Your Torn anniversary is coming up!`,
+                    notification:
+                        `Your Torn anniversary is coming up!`,
                     isBirthday: true,
-                    daysUntil: daysUntil
+                    daysUntil
                 });
             }
 
@@ -816,160 +1338,298 @@
 
         async updateTickerDisplay() {
             if (!this.tickerElement) {
-                console.warn('⚠️ Event Ticker: tickerElement not ready, skipping update');
+                console.warn(
+                    '⚠️ Event Ticker: tickerElement not ready, skipping update'
+                );
                 return;
             }
 
-            // Prevent multiple simultaneous updates
             if (this.isUpdating) {
-                console.log('⚠️ Event Ticker: Update already in progress, skipping');
+                console.log(
+                    '⚠️ Event Ticker: Update already in progress, skipping'
+                );
                 return;
             }
+
             this.isUpdating = true;
 
-            const activeEvents = await this.getActiveEvents(); // Now awaits async function
-            const upcomingEvents = this.getUpcomingEvents(7); // Increased range to catch more events
+            try {
+                const activeEvents =
+                    await this.getActiveEvents();
 
-            let displayText = '';
+                const upcomingEvents =
+                    this.getUpcomingEvents(7);
 
-            console.log('🔄 Event Ticker: Updating display...', {
-                nearestEvent: !!this.nearestEvent,
-                activeCount: activeEvents.length,
-                upcomingCount: upcomingEvents.length,
-                currentIndex: this.currentEventIndex
-            });
+                let displayText = '';
 
-            // Priority 1: Show nearest API event countdown
-            if (this.nearestEvent) {
-                const currentTime = Math.round(Date.now() / 1000);
-                const timeUntil = this.nearestEvent.start - currentTime;
-
-                if (timeUntil > 0) {
-                    displayText = `⏰ Next Event: ${this.nearestEvent.title} in ${this.formatCountdown(timeUntil)}`;
-                    console.log('✅ Event Ticker: Showing API countdown:', displayText);
-                    this.setTickerText(displayText);
-                    this.isUpdating = false;
-                    return;
-                }
-            }
-
-            // Combine active and upcoming events for rotation
-            let allRelevantEvents = [];
-
-            // Add active events
-            activeEvents.forEach(event => {
-                allRelevantEvents.push({
-                    ...event,
-                    type: 'active',
-                    displayText: event.isBirthday ? event.notification : `🔴 LIVE: ${event.notification}`
-                });
-            });
-
-            // Add upcoming events (filter to next 7 days)
-            upcomingEvents.filter(event => {
-                const daysUntil = this.getDaysUntil(event);
-                return daysUntil <= 7; // Only show events within a week
-            }).forEach(event => {
-                if (event.isBirthday && event.daysUntil !== undefined) {
-                    const daysText = event.daysUntil === 0 ? 'tomorrow' :
-                        event.daysUntil === 1 ? 'in 1 day' :
-                            `in ${event.daysUntil} days`;
-                    allRelevantEvents.push({
-                        ...event,
-                        type: 'upcoming',
-                        displayText: `🎂 Your Torn Birthday is ${daysText}! (${event.feature})`
-                    });
-                } else {
-                    const daysUntil = this.getDaysUntil(event);
-                    const timeText = daysUntil === 0 ? 'tomorrow' :
-                        daysUntil === 1 ? 'in 1 day' :
-                            `in ${daysUntil + 1} days`;
-                    allRelevantEvents.push({
-                        ...event,
-                        type: 'upcoming',
-                        displayText: `📅 Coming ${timeText}: ${event.name} - ${event.feature}`
-                    });
-                }
-            });
-
-            // Show events in rotation if we have any
-            if (allRelevantEvents.length > 0) {
-                const eventToShow = allRelevantEvents[this.currentEventIndex % allRelevantEvents.length];
-                displayText = eventToShow.displayText;
-
-                console.log(`✅ Event Ticker: Showing event ${(this.currentEventIndex % allRelevantEvents.length) + 1}/${allRelevantEvents.length}:`, eventToShow.name, `(${eventToShow.type})`);
-
-                this.setTickerText(displayText);
-            } else {
-                // Show countdown to next event when no active events
-                const nextEvent = await this.getNextEvent();
-                if (nextEvent) {
-                    const timeUntilMs = nextEvent.timeDiff;
-                    const timeUntilSeconds = Math.floor(timeUntilMs / 1000);
-
-                    if (nextEvent.isBirthday) {
-                        displayText = `🎂 Next Event: Your Torn Birthday in ${this.formatCountdown(timeUntilSeconds)}`;
-                    } else {
-                        displayText = `⏰ Next Event: ${nextEvent.name} in ${this.formatCountdown(timeUntilSeconds)}`;
+                console.log(
+                    '🔄 Event Ticker: Updating display...',
+                    {
+                        nearestEvent: !!this.nearestEvent,
+                        activeCount: activeEvents.length,
+                        upcomingCount: upcomingEvents.length,
+                        currentIndex: this.currentEventIndex
                     }
-                    console.log('✅ Event Ticker: Showing countdown to next event:', nextEvent.name);
-                } else {
-                    displayText = '✨ No events currently scheduled - Stay sharp, stay violent';
-                    console.log('📭 Event Ticker: No next event found, showing fallback message');
+                );
+
+                if (this.nearestEvent) {
+                    const currentTime =
+                        Math.round(Date.now() / 1000);
+
+                    const timeUntil =
+                        this.nearestEvent.start -
+                        currentTime;
+
+                    if (timeUntil > 0) {
+                        displayText =
+                            `⏰ Next Event: ${this.nearestEvent.title} in ${this.formatCountdown(timeUntil)}`;
+
+                        console.log(
+                            '✅ Event Ticker: Showing API countdown:',
+                            displayText
+                        );
+
+                        this.setTickerText(displayText);
+                        return;
+                    }
                 }
 
-                this.setTickerText(displayText);
-            }
+                const allRelevantEvents = [];
 
-            this.isUpdating = false;
+                activeEvents.forEach(event => {
+                    allRelevantEvents.push({
+                        ...event,
+                        type: 'active',
+                        displayText: event.isBirthday
+                            ? event.notification
+                            : `🔴 LIVE: ${event.notification}`
+                    });
+                });
+
+                upcomingEvents
+                    .filter(event => {
+                        const daysUntil =
+                            this.getDaysUntil(event);
+
+                        return daysUntil <= 7;
+                    })
+                    .forEach(event => {
+                        if (
+                            event.isBirthday &&
+                            event.daysUntil !== undefined
+                        ) {
+                            const daysText =
+                                event.daysUntil === 0
+                                    ? 'tomorrow'
+                                    : event.daysUntil === 1
+                                        ? 'in 1 day'
+                                        : `in ${event.daysUntil} days`;
+
+                            allRelevantEvents.push({
+                                ...event,
+                                type: 'upcoming',
+                                displayText:
+                                    `🎂 Your Torn Birthday is ${daysText}! (${event.feature})`
+                            });
+                        } else {
+                            const daysUntil =
+                                this.getDaysUntil(event);
+
+                            const timeText =
+                                daysUntil === 0
+                                    ? 'tomorrow'
+                                    : daysUntil === 1
+                                        ? 'in 1 day'
+                                        : `in ${daysUntil + 1} days`;
+
+                            allRelevantEvents.push({
+                                ...event,
+                                type: 'upcoming',
+                                displayText:
+                                    `📅 Coming ${timeText}: ${event.name} - ${event.feature}`
+                            });
+                        }
+                    });
+
+                if (allRelevantEvents.length > 0) {
+                    const eventToShow =
+                        allRelevantEvents[
+                        this.currentEventIndex %
+                        allRelevantEvents.length
+                        ];
+
+                    displayText =
+                        eventToShow.displayText;
+
+                    console.log(
+                        `✅ Event Ticker: Showing event ${(this.currentEventIndex % allRelevantEvents.length) + 1}/${allRelevantEvents.length}:`,
+                        eventToShow.name,
+                        `(${eventToShow.type})`
+                    );
+
+                    this.setTickerText(displayText);
+                } else {
+                    const nextEvent =
+                        await this.getNextEvent();
+
+                    if (nextEvent) {
+                        const timeUntilSeconds =
+                            Math.floor(
+                                nextEvent.timeDiff / 1000
+                            );
+
+                        if (nextEvent.isBirthday) {
+                            displayText =
+                                `🎂 Next Event: Your Torn Birthday in ${this.formatCountdown(timeUntilSeconds)}`;
+                        } else {
+                            displayText =
+                                `⏰ Next Event: ${nextEvent.name} in ${this.formatCountdown(timeUntilSeconds)}`;
+                        }
+
+                        console.log(
+                            '✅ Event Ticker: Showing countdown to next event:',
+                            nextEvent.name
+                        );
+                    } else {
+                        displayText =
+                            '✨ No events currently scheduled - Stay sharp, stay violent';
+
+                        console.log(
+                            '📭 Event Ticker: No next event found, showing fallback message'
+                        );
+                    }
+
+                    this.setTickerText(displayText);
+                }
+            } finally {
+                this.isUpdating = false;
+            }
         },
 
-        // Helper method to set ticker text with smooth transition
         setTickerText(text) {
-            // Clear any existing transition timeout
-            if (this.transitionTimeout) {
-                clearTimeout(this.transitionTimeout);
+            if (
+                !this.tickerElement ||
+                !this.tickerWrapper
+            ) {
+                return;
             }
 
-            this.tickerElement.style.opacity = '0.5';
-            this.transitionTimeout = setTimeout(() => {
-                this.tickerElement.textContent = text;
-                this.tickerElement.style.opacity = '1';
-                this.transitionTimeout = null;
-            }, 150);
+            if (this.tickerAnimation) {
+                this.tickerAnimation.cancel();
+                this.tickerAnimation = null;
+            }
+
+            this.tickerElement.textContent = text;
+            this.tickerElement.style.opacity = '1';
+
+            const wrapperWidth = Math.max(
+                1,
+                this.tickerWrapper.clientWidth
+            );
+
+            const textWidth = Math.max(
+                1,
+                this.tickerElement.scrollWidth
+            );
+
+            const startTransform =
+                `translate3d(${wrapperWidth}px, 0, 0)`;
+
+            const endTransform =
+                `translate3d(-${textWidth}px, 0, 0)`;
+
+            if (
+                typeof this.tickerElement.animate ===
+                'function'
+            ) {
+                this.tickerAnimation =
+                    this.tickerElement.animate(
+                        [
+                            {
+                                transform:
+                                    startTransform
+                            },
+                            {
+                                transform:
+                                    endTransform
+                            }
+                        ],
+                        {
+                            duration:
+                                this.tickerAnimationDuration,
+                            easing: 'linear',
+                            fill: 'forwards'
+                        }
+                    );
+            } else {
+                this.tickerElement.style.transition =
+                    'none';
+
+                this.tickerElement.style.transform =
+                    startTransform;
+
+                requestAnimationFrame(() => {
+                    this.tickerElement.style.transition =
+                        `transform ${this.tickerAnimationDuration}ms linear`;
+
+                    this.tickerElement.style.transform =
+                        endTransform;
+                });
+            }
         },
 
         getDaysUntil(event) {
             const now = new Date();
             const currentYear = now.getFullYear();
-            let eventStart = new Date(currentYear, event.startMonth - 1, event.startDay);
+
+            let eventStart = new Date(
+                currentYear,
+                event.startMonth - 1,
+                event.startDay
+            );
 
             if (eventStart < now) {
-                eventStart = new Date(currentYear + 1, event.startMonth - 1, event.startDay);
+                eventStart = new Date(
+                    currentYear + 1,
+                    event.startMonth - 1,
+                    event.startDay
+                );
             }
 
             const diffTime = eventStart - now;
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            return diffDays;
+
+            return Math.floor(
+                diffTime / (1000 * 60 * 60 * 24)
+            );
         },
 
         startRotation() {
             this.scheduleNextRotation();
-            console.log('✅ Event Ticker: Sequential rotation started');
+
+            console.log(
+                '✅ Event Ticker: Sequential rotation started'
+            );
         },
 
         async scheduleNextRotation() {
-            const activeEvents = await this.getActiveEvents();
+            const activeEvents =
+                await this.getActiveEvents();
 
-            const upcomingEvents = this.getUpcomingEvents(7).filter(event => {
-                const daysUntil = this.getDaysUntil(event);
-                return daysUntil <= 7;
-            });
+            const upcomingEvents =
+                this.getUpcomingEvents(7).filter(event => {
+                    const daysUntil =
+                        this.getDaysUntil(event);
 
-            const totalEvents = activeEvents.length + upcomingEvents.length;
+                    return daysUntil <= 7;
+                });
+
+            const totalEvents =
+                activeEvents.length +
+                upcomingEvents.length;
 
             if (totalEvents > 1) {
                 this.currentEventIndex++;
+
                 console.log(
                     `🔄 Event Ticker: Rotating to event ${(this.currentEventIndex % totalEvents) + 1}/${totalEvents}`
                 );
@@ -982,53 +1642,82 @@
             }, 12000);
         },
 
-        // ===== CALENDAR SCRAPING SYSTEM =====
-
-        // Normalize event name for matching (lowercase, trim, remove special chars)
         normalizeEventName(name) {
             if (!name) return '';
+
             return name
                 .toLowerCase()
                 .trim()
-                .replace(/[^\w\s]/g, '') // Remove punctuation
-                .replace(/\s+/g, ' '); // Normalize spaces
+                .replace(/[^\w\s]/g, '')
+                .replace(/\s+/g, ' ');
         },
 
-        // Check if we should scrape the calendar
         async shouldScrapeCalendar() {
             try {
-                const storage = await window.SidekickModules.Core.ChromeStorage.get('calendar_last_scraped_year');
-                const lastScrapedYear = storage?.calendar_last_scraped_year || 0;
-                const currentYear = new Date().getFullYear();
+                const storage =
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'calendar_last_scraped_year'
+                    );
 
-                console.log(`📅 Calendar scrape check: last=${lastScrapedYear}, current=${currentYear}`);
+                const lastScrapedYear =
+                    storage?.calendar_last_scraped_year || 0;
+
+                const currentYear =
+                    new Date().getFullYear();
+
+                console.log(
+                    `📅 Calendar scrape check: last=${lastScrapedYear}, current=${currentYear}`
+                );
+
                 return currentYear > lastScrapedYear;
             } catch (error) {
-                console.error('❌ Error checking scrape status:', error);
-                return true; // Scrape on error to be safe
+                console.error(
+                    '❌ Error checking scrape status:',
+                    error
+                );
+                return true;
             }
         },
 
-        // Scrape Torn calendar page for event dates
         async scrapeCalendarPage(forceRefresh = false) {
             try {
-                // Check if we need to scrape
                 if (!forceRefresh) {
-                    const shouldScrape = await this.shouldScrapeCalendar();
+                    const shouldScrape =
+                        await this.shouldScrapeCalendar();
+
                     if (!shouldScrape) {
-                        console.log('📅 Calendar already scraped this year, skipping');
+                        console.log(
+                            '📅 Calendar already scraped this year, skipping'
+                        );
                         return;
                     }
                 }
 
-                const isCalendarPage = window.location.pathname.includes('calendar.php');
-                if (!isCalendarPage) {
-                    const existing = await window.SidekickModules.Core.ChromeStorage.get('event_calendar_overrides');
-                    const cachedOverrides = existing?.event_calendar_overrides || {};
-                    const cachedCount = Object.keys(cachedOverrides).length;
+                const isCalendarPage =
+                    window.location.pathname.includes(
+                        'calendar.php'
+                    );
 
-                    console.log(`📅 Calendar scrape skipped: not on calendar.php (cached overrides: ${cachedCount})`);
-                    if (!forceRefresh && cachedCount > 0) {
+                if (!isCalendarPage) {
+                    const existing =
+                        await window.SidekickModules.Core.ChromeStorage.get(
+                            'event_calendar_overrides'
+                        );
+
+                    const cachedOverrides =
+                        existing?.event_calendar_overrides || {};
+
+                    const cachedCount =
+                        Object.keys(cachedOverrides).length;
+
+                    console.log(
+                        `📅 Calendar scrape skipped: not on calendar.php (cached overrides: ${cachedCount})`
+                    );
+
+                    if (
+                        !forceRefresh &&
+                        cachedCount > 0
+                    ) {
                         return {
                             success: true,
                             usedCachedOverrides: true,
@@ -1043,21 +1732,43 @@
                     };
                 }
 
-                console.log('🔄 Scraping Torn calendar page from current DOM...');
-                const currentYear = new Date().getFullYear();
-                const overrides = this.extractCalendarOverridesFromDocument(document);
+                console.log(
+                    '🔄 Scraping Torn calendar page from current DOM...'
+                );
 
-                // Store overrides and update last scraped year
-                await window.SidekickModules.Core.ChromeStorage.set('event_calendar_overrides', overrides);
-                await window.SidekickModules.Core.ChromeStorage.set('calendar_last_scraped_year', currentYear);
+                const currentYear =
+                    new Date().getFullYear();
 
-                console.log(`✅ Calendar scraped successfully! Found ${Object.keys(overrides).length} events`);
-                console.log('📅 Event overrides:', overrides);
+                const overrides =
+                    this.extractCalendarOverridesFromDocument(
+                        document
+                    );
+
+                await window.SidekickModules.Core.ChromeStorage.set(
+                    'event_calendar_overrides',
+                    overrides
+                );
+
+                await window.SidekickModules.Core.ChromeStorage.set(
+                    'calendar_last_scraped_year',
+                    currentYear
+                );
+
+                console.log(
+                    `✅ Calendar scraped successfully! Found ${Object.keys(overrides).length} events`
+                );
+
+                console.log(
+                    '📅 Event overrides:',
+                    overrides
+                );
 
                 return overrides;
-
             } catch (error) {
-                console.error('❌ Failed to scrape calendar:', error);
+                console.error(
+                    '❌ Failed to scrape calendar:',
+                    error
+                );
                 return null;
             }
         },
@@ -1065,73 +1776,139 @@
         extractCalendarOverridesFromDocument(doc) {
             const overrides = {};
 
-            // Torn calendar markup can vary, so try multiple selectors.
-            const eventElements = doc.querySelectorAll(
-                '.calendarEvents .event, .calendar-wrap .event-item, .calendar-event, div[class*="calendar"] div[class*="event"]'
+            const eventElements =
+                doc.querySelectorAll(
+                    '.calendarEvents .event, .calendar-wrap .event-item, .calendar-event, div[class*="calendar"] div[class*="event"]'
+                );
+
+            console.log(
+                `📅 Found ${eventElements.length} event elements on calendar`
             );
-            console.log(`📅 Found ${eventElements.length} event elements on calendar`);
 
             const monthMap = {
-                'jan': 1, 'january': 1,
-                'feb': 2, 'february': 2,
-                'mar': 3, 'march': 3,
-                'apr': 4, 'april': 4,
-                'may': 5,
-                'jun': 6, 'june': 6,
-                'jul': 7, 'july': 7,
-                'aug': 8, 'august': 8,
-                'sep': 9, 'sept': 9, 'september': 9,
-                'oct': 10, 'october': 10,
-                'nov': 11, 'november': 11,
-                'dec': 12, 'december': 12
+                jan: 1,
+                january: 1,
+                feb: 2,
+                february: 2,
+                mar: 3,
+                march: 3,
+                apr: 4,
+                april: 4,
+                may: 5,
+                jun: 6,
+                june: 6,
+                jul: 7,
+                july: 7,
+                aug: 8,
+                august: 8,
+                sep: 9,
+                sept: 9,
+                september: 9,
+                oct: 10,
+                october: 10,
+                nov: 11,
+                november: 11,
+                dec: 12,
+                december: 12
             };
 
             eventElements.forEach(eventEl => {
                 try {
-                    const nameEl = eventEl.querySelector('.event-name, .name, h3, h4, strong, b') || eventEl;
-                    const eventName = nameEl.textContent?.trim();
+                    const nameEl =
+                        eventEl.querySelector(
+                            '.event-name, .name, h3, h4, strong, b'
+                        ) || eventEl;
+
+                    const eventName =
+                        nameEl.textContent?.trim();
+
                     if (!eventName) return;
 
-                    const dateEl = eventEl.querySelector('.event-date, .date, .time');
-                    const dateText = (dateEl?.textContent || eventEl.textContent || '').trim();
+                    const dateEl =
+                        eventEl.querySelector(
+                            '.event-date, .date, .time'
+                        );
 
-                    const dateMatch = dateText.match(/\b(\w+)\s+(\d+)(?:\s*[-–]\s*(?:(\w+)\s+)?(\d+))?/i);
+                    const dateText =
+                        (
+                            dateEl?.textContent ||
+                            eventEl.textContent ||
+                            ''
+                        ).trim();
+
+                    const dateMatch =
+                        dateText.match(
+                            /\b(\w+)\s+(\d+)(?:\s*[-–]\s*(?:(\w+)\s+)?(\d+))?/i
+                        );
+
                     if (!dateMatch) return;
 
-                    const [, startMonth, startDay, endMonth, endDay] = dateMatch;
-                    const startMonthNum = monthMap[startMonth.toLowerCase()];
-                    const endMonthNum = endMonth ? monthMap[endMonth.toLowerCase()] : startMonthNum;
+                    const [
+                        ,
+                        startMonth,
+                        startDay,
+                        endMonth,
+                        endDay
+                    ] = dateMatch;
+
+                    const startMonthNum =
+                        monthMap[startMonth.toLowerCase()];
+
+                    const endMonthNum = endMonth
+                        ? monthMap[endMonth.toLowerCase()]
+                        : startMonthNum;
+
                     if (!startMonthNum) return;
 
-                    const normalized = this.normalizeEventName(eventName);
+                    const normalized =
+                        this.normalizeEventName(eventName);
+
                     overrides[normalized] = {
                         startMonth: startMonthNum,
                         startDay: parseInt(startDay, 10),
                         endMonth: endMonthNum,
-                        endDay: parseInt(endDay || startDay, 10)
+                        endDay: parseInt(
+                            endDay || startDay,
+                            10
+                        )
                     };
 
-                    console.log(`✅ Scraped: "${eventName}" = ${startMonthNum}/${startDay} - ${endMonthNum}/${endDay || startDay}`);
-                } catch (err) {
-                    console.warn('⚠️ Failed to parse event:', err);
+                    console.log(
+                        `✅ Scraped: "${eventName}" = ${startMonthNum}/${startDay} - ${endMonthNum}/${endDay || startDay}`
+                    );
+                } catch (error) {
+                    console.warn(
+                        '⚠️ Failed to parse event:',
+                        error
+                    );
                 }
             });
 
             return overrides;
         },
 
-        // Get merged event dates (override + hardcoded fallback)
         async getEventDates(event) {
             try {
-                // Load overrides from storage
-                const storage = await window.SidekickModules.Core.ChromeStorage.get('event_calendar_overrides');
-                const overrides = storage?.event_calendar_overrides || {};
+                const storage =
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'event_calendar_overrides'
+                    );
 
-                const normalized = this.normalizeEventName(event.name);
-                const override = overrides[normalized];
+                const overrides =
+                    storage?.event_calendar_overrides || {};
+
+                const normalized =
+                    this.normalizeEventName(event.name);
+
+                const override =
+                    overrides[normalized];
 
                 if (override) {
-                    console.log(`📅 Using calendar override for "${event.name}":`, override);
+                    console.log(
+                        `📅 Using calendar override for "${event.name}":`,
+                        override
+                    );
+
                     return {
                         startMonth: override.startMonth,
                         startDay: override.startDay,
@@ -1140,7 +1917,6 @@
                     };
                 }
 
-                // Fall back to hardcoded dates
                 return {
                     startMonth: event.startMonth,
                     startDay: event.startDay,
@@ -1148,8 +1924,11 @@
                     endDay: event.endDay
                 };
             } catch (error) {
-                console.error('❌ Error getting event dates:', error);
-                // Fall back to hardcoded on error
+                console.error(
+                    '❌ Error getting event dates:',
+                    error
+                );
+
                 return {
                     startMonth: event.startMonth,
                     startDay: event.startDay,
@@ -1168,24 +1947,36 @@
 
         destroy() {
             this.stopRotation();
+
             if (this.countdownInterval) {
                 clearInterval(this.countdownInterval);
+                this.countdownInterval = null;
             }
-            if (this.transitionTimeout) {
-                clearTimeout(this.transitionTimeout);
-                this.transitionTimeout = null;
+
+            if (this.tickerAnimation) {
+                this.tickerAnimation.cancel();
+                this.tickerAnimation = null;
             }
+
+            this.calendarRefreshInFlight = false;
             this.isUpdating = false;
-            if (this.tickerElement && this.tickerElement.parentElement) {
+
+            if (
+                this.tickerElement &&
+                this.tickerElement.parentElement
+            ) {
                 this.tickerElement.parentElement.remove();
             }
+
+            this.tickerElement = null;
+            this.tickerWrapper = null;
         }
     };
 
-    // Register module
     if (!window.SidekickModules) {
         window.SidekickModules = {};
     }
+
     window.SidekickModules.EventTicker = EventTicker;
 
     console.log('✅ Event Ticker Module loaded');

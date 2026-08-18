@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sidekick Chrome Extension - Debt Module
  * Handles loan and debt tracking with automated API integration
  * Version: 1.0.0
@@ -2120,10 +2120,15 @@
                                 color: #fff;
                                 font-size: 14px;
                             " placeholder="e.g. 2m, 500k, 250000">
-                            <div id="amount-preview" style="font-size: 11px; color: #aaa; margin-top: 3px; min-height: 14px;"></div>
                         </div>
                         
-                        <div style="margin-bottom: 15px;">
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #ccc;">
+                                <input type="checkbox" id="no-interest" style="width:16px;height:16px;cursor:pointer;"> No Interest (0%)
+                            </label>
+                        </div>
+                        
+                        <div id="interest-fields" style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Interest Rate (%):</label>
                             <input type="number" id="interest-rate" min="0" step="0.01" style="
                                 width: 100%;
@@ -2136,7 +2141,7 @@
                             " placeholder="0.00" value="0">
                         </div>
                         
-                        <div style="margin-bottom: 15px;">
+                        <div id="interest-type-field" style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Interest Type:</label>
                             <select id="interest-type" style="
                                 width: 100%;
@@ -2292,20 +2297,38 @@
             //     document.addEventListener('click', closeOnClickOutside);
             // }, 100);
 
-            // Amount input: M/K shorthand live preview
+            // Amount input: M/K shorthand — auto-expand on blur or Enter
             const amountInput = dialog.querySelector('#amount');
-            const amountPreview = dialog.querySelector('#amount-preview');
-            const updateAmountPreview = () => {
+            const expandAmount = () => {
                 const val = amountInput.value.trim();
-                if (!val) { amountPreview.textContent = ''; return; }
+                if (!val) return;
                 const parsed = this.parseShorthand(val);
                 if (!isNaN(parsed) && parsed > 0) {
-                    amountPreview.textContent = '= $' + parsed.toLocaleString();
-                } else {
-                    amountPreview.textContent = 'Invalid amount';
+                    amountInput.value = Math.round(parsed).toString();
                 }
             };
-            amountInput?.addEventListener('input', updateAmountPreview);
+            amountInput?.addEventListener('blur', expandAmount);
+            amountInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') expandAmount(); });
+
+            // No Interest checkbox — hides/disables interest fields
+            const noInterestChk = dialog.querySelector('#no-interest');
+            const interestFields = dialog.querySelector('#interest-fields');
+            const interestTypeField = dialog.querySelector('#interest-type-field');
+            const interestRateInput = dialog.querySelector('#interest-rate');
+            const interestTypeSelect = dialog.querySelector('#interest-type');
+            if (noInterestChk) {
+                const toggleInterest = () => {
+                    const hide = noInterestChk.checked;
+                    if (interestFields) interestFields.style.display = hide ? 'none' : '';
+                    if (interestTypeField) interestTypeField.style.display = hide ? 'none' : '';
+                    if (interestRateInput) { interestRateInput.disabled = hide; if (hide) interestRateInput.value = '0'; }
+                    if (interestTypeSelect) interestTypeSelect.disabled = hide;
+                };
+                noInterestChk.addEventListener('change', toggleInterest);
+                // Default: No Interest checked
+                noInterestChk.checked = true;
+                toggleInterest();
+            }
 
             // Focus on player name field
             const playerNameField = dialog.querySelector('#player-name');

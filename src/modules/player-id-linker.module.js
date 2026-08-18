@@ -42,7 +42,9 @@ const PlayerIdLinkerModule = (() => {
         });
     }
 
-    // ── Own profile page guard ─────────────────────────────────────────────────
+    function isProfilePage() {
+        return window.location.href.includes('profiles.php');
+    }
 
     function isOwnProfilePage() {
         if (!ownId) return false;
@@ -52,10 +54,42 @@ const PlayerIdLinkerModule = (() => {
 
     // ── Link injection ─────────────────────────────────────────────────────────
 
+    // Profile header containers: skip these on any profile page so the title/ID
+    // heading is not hyperlinked, but chat (torn-chat) is always allowed.
+    const PROFILE_HEADER_SELECTORS = [
+        '.profile-wrapper',
+        '.profile-wrapper-col',
+        '.info-table',
+        '[class*="basicInfo"]',
+        '[class*="playerName"]',
+        '[class*="profileTitle"]',
+        'h1',
+        '.profile-header',
+    ];
+
     function shouldSkipNode(node) {
         // Don't process inside scripts, styles, inputs, or existing anchors
         const tag = node.parentElement?.tagName?.toLowerCase();
-        return ['script', 'style', 'textarea', 'input', 'a', 'noscript'].includes(tag);
+        if (['script', 'style', 'textarea', 'input', 'a', 'noscript'].includes(tag)) return true;
+
+        // G1: On any profile page, skip the page title/header sections
+        // but ALLOW chat — chat containers have 'chat' in their id/class
+        if (isProfilePage()) {
+            // Allow if inside a chat element
+            let el = node.parentElement;
+            while (el && el !== document.body) {
+                const cls = (el.className || '').toLowerCase();
+                const id = (el.id || '').toLowerCase();
+                if (cls.includes('chat') || id.includes('chat')) return false; // allow
+                el = el.parentElement;
+            }
+            // Skip if inside a profile header area
+            for (const sel of PROFILE_HEADER_SELECTORS) {
+                if (node.parentElement?.closest(sel)) return true;
+            }
+        }
+
+        return false;
     }
 
     function wrapIdsInText(textNode) {

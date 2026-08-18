@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Chrome Extension - UI Module
  * Handles hamburger button, sidebar, and main UI components
  * Converted from Tampermonkey userscript to Chrome extension
@@ -36,6 +36,10 @@
         sidebarVisible: false,
         hamburgerButton: null,
         sidebar: null,
+        savedState: { visible: false, width: 500, activePage: 0 },
+        pages: [],            // Array of { id, name, contentEl }
+        activePageIndex: 0,
+        sidebarWidth: 500,
 
         // Initialize the UI module
         async init() {
@@ -114,7 +118,12 @@
             // Create sidebar container
             this.sidebar = document.createElement('div');
             this.sidebar.id = 'sidekick-sidebar';
-            this.sidebar.className = 'sidekick-sidebar hidden'; // Start hidden
+            this.sidebar.className = 'sidekick-sidebar hidden';
+
+            // ── Resize handle (right edge) ────────────────────────────────
+            const resizeHandle = document.createElement('div');
+            resizeHandle.id = 'sidekick-resize-handle';
+            this.sidebar.appendChild(resizeHandle);
 
             // Create top bar inside sidebar
             this.topBar = document.createElement('div');
@@ -213,23 +222,30 @@
 
             this.topBar.appendChild(cogButton);
 
-            // Create sidebar content with proper positioning
-            const sidebarContent = document.createElement('div');
-            sidebarContent.className = 'sidekick-sidebar-content';
-            sidebarContent.style.cssText = `
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                position: relative;
-                height: 100%;
-            `;
+            // Assemble sidebar
+            this.sidebar.appendChild(this.topBar);
 
-            // Create content area (no header needed since logo is in top bar)
-            const contentArea = document.createElement('div');
-            contentArea.id = 'sidekick-content';
-            contentArea.style.cssText = 'flex: 1; overflow: visible; position: relative; padding: 5px;';
+            // ── Page containers + tab bar ─────────────────────────────────
+            // Use saved pages or create a single default page
+            const savedPages = this.savedState?.pages || [];
+            if (savedPages.length === 0) savedPages.push({ id: Date.now(), name: 'Page 1' });
 
-            // Create Add Module button - position it on the left
+            const pageHost = document.createElement('div');
+            pageHost.id = 'sidekick-page-host';
+            pageHost.style.cssText = 'flex:1; display:flex; flex-direction:column; position:relative; overflow:hidden;';
+
+            this.pages = [];
+            savedPages.forEach((pg, idx) => {
+                const contentEl = document.createElement('div');
+                contentEl.className = 'sidekick-page' + (idx === 0 ? ' active' : '');
+                contentEl.dataset.pageId = pg.id;
+                contentEl.id = 'sidekick-content'; // keep backward compat for first page
+                contentEl.style.cssText = 'flex:1; overflow:visible; position:relative; padding:5px;';
+                pageHost.appendChild(contentEl);
+                this.pages.push({ id: pg.id, name: pg.name, contentEl });
+            });
+
+            // Add module (+) button — lives in the add-module button area per page
             const addModuleButton = document.createElement('button');
             addModuleButton.className = 'sidekick-add-module-btn';
             addModuleButton.innerHTML = '+';
@@ -256,36 +272,53 @@
                 z-index: 20000;
                 opacity: 0.85;
             `;
-
             addModuleButton.addEventListener('mouseenter', () => {
                 addModuleButton.style.background = 'rgba(255,255,255,0.2)';
                 addModuleButton.style.color = 'white';
                 addModuleButton.style.transform = 'translateY(-2px)';
             });
-
             addModuleButton.addEventListener('mouseleave', () => {
                 addModuleButton.style.background = 'rgba(255,255,255,0.1)';
                 addModuleButton.style.color = 'rgba(255,255,255,0.7)';
                 addModuleButton.style.transform = 'translateY(0)';
             });
+            addModuleButton.addEventListener('click', () => this.showAddModuleMenu());
+            pageHost.appendChild(addModuleButton);
 
-            addModuleButton.addEventListener('click', () => {
-                this.showAddModuleMenu();
-            });
+            // ── Tab bar ───────────────────────────────────────────────────
+            const tabBar = document.createElement('div');
+            tabBar.id = 'sidekick-page-tabs';
+            this.tabBar = tabBar;
 
-            // Assemble sidebar (without header and close button)
-            this.sidebar.appendChild(this.topBar); // Add top bar first
-            sidebarContent.appendChild(contentArea);
-            sidebarContent.appendChild(addModuleButton);
-            this.sidebar.appendChild(sidebarContent);
+            const addPageBtn = document.createElement('button');
+            addPageBtn.id = 'sidekick-add-page-btn';
+            addPageBtn.textContent = '+';
+            addPageBtn.title = 'Add new page';
+            addPageBtn.addEventListener('click', () => this.addPage());
+            this.addPageBtn = addPageBtn;
+
+            this.sidebar.appendChild(pageHost);
+            this.sidebar.appendChild(tabBar);
 
             // Append to body
             document.body.appendChild(this.sidebar);
 
-            // Initialize notepad functionality immediately
+            // Render tabs
+            this.activePageIndex = Math.min(this.savedState?.activePage || 0, this.pages.length - 1);
+            this.renderPageTabs();
+            this.switchPage(this.activePageIndex, true);
+
+            // Apply saved width
+            this.sidebarWidth = this.savedState?.width || 500;
+            this.updateSidebarWidth(this.sidebarWidth);
+
+            // Wire resize handle
+            this.initResizeHandle(resizeHandle);
+
+            // Initialize notepad functionality
             this.initializeNotepadArea();
 
-            console.log("✅ Sidebar created");
+            console.log('✅ Sidebar created with ' + this.pages.length + ' page(s)');
         },
 
         // Toggle sidebar visibility
@@ -389,6 +422,148 @@
             if (this.topBar) {
                 this.topBar.classList.add('hidden');
             }
+        },
+
+        // ── Multi-page system ──────────────────────────────────────────────
+
+        // Render the page tab strip
+        renderPageTabs() {
+            if (!this.tabBar) return;
+            this.tabBar.innerHTML = '';
+            this.pages.forEach((pg, idx) => {
+                const tab = document.createElement('div');
+                tab.className = 'sidekick-page-tab' + (idx === this.activePageIndex ? ' active' : '');
+                tab.dataset.idx = idx;
+                tab.innerHTML = `<span class="tab-label" style="flex:1;overflow:hidden;text-overflow:ellipsis;">${this.escapeTabName(pg.name)}</span>`
+                    + (this.pages.length > 1 ? `<span class="tab-delete" title="Delete page">✕</span>` : '');
+
+                // Click tab label to switch page
+                tab.querySelector('.tab-label').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.switchPage(idx);
+                });
+
+                // Double-click to rename
+                tab.querySelector('.tab-label').addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    const input = document.createElement('input');
+                    input.value = pg.name;
+                    input.style.cssText = 'background:transparent;border:none;outline:none;color:#8BC34A;width:80px;font-size:11px;';
+                    const lbl = tab.querySelector('.tab-label');
+                    lbl.textContent = '';
+                    lbl.appendChild(input);
+                    input.focus();
+                    input.select();
+                    const done = () => {
+                        const v = input.value.trim() || pg.name;
+                        pg.name = v;
+                        this.renderPageTabs();
+                        this.saveSidebarState();
+                    };
+                    input.addEventListener('blur', done);
+                    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+                });
+
+                // Delete button
+                const delBtn = tab.querySelector('.tab-delete');
+                if (delBtn) {
+                    delBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.deletePage(idx);
+                    });
+                }
+
+                this.tabBar.appendChild(tab);
+            });
+            this.tabBar.appendChild(this.addPageBtn);
+        },
+
+        escapeTabName(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        },
+
+        // Switch to a page by index
+        switchPage(idx, silent = false) {
+            this.pages.forEach((pg, i) => {
+                pg.contentEl.classList.toggle('active', i === idx);
+            });
+            this.activePageIndex = idx;
+            // Update backward-compat #sidekick-content to point to active page
+            this.pages.forEach((pg, i) => {
+                pg.contentEl.id = i === idx ? 'sidekick-content' : `sidekick-page-${pg.id}`;
+            });
+            if (!silent) {
+                this.renderPageTabs();
+                this.saveSidebarState();
+            }
+        },
+
+        // Add a new page
+        addPage() {
+            const pg = { id: Date.now() + Math.random(), name: `Page ${this.pages.length + 1}` };
+            const contentEl = document.createElement('div');
+            contentEl.className = 'sidekick-page';
+            contentEl.dataset.pageId = pg.id;
+            contentEl.style.cssText = 'flex:1; overflow:visible; position:relative; padding:5px;';
+            const pageHost = document.getElementById('sidekick-page-host');
+            // Insert before the add-module (+) button
+            const addModBtn = pageHost?.querySelector('.sidekick-add-module-btn');
+            if (addModBtn) pageHost.insertBefore(contentEl, addModBtn);
+            else pageHost?.appendChild(contentEl);
+            this.pages.push({ ...pg, contentEl });
+            this.switchPage(this.pages.length - 1);
+            this.renderPageTabs();
+            this.saveSidebarState();
+        },
+
+        // Delete a page (and all its module windows)
+        deletePage(idx) {
+            if (this.pages.length <= 1) return; // Always keep at least one page
+            const pg = this.pages[idx];
+            if (!pg) return;
+            if (!confirm(`Delete "${pg.name}" and all its modules?`)) return;
+
+            // Remove all child module windows in this page
+            while (pg.contentEl.firstChild) pg.contentEl.removeChild(pg.contentEl.firstChild);
+            pg.contentEl.remove();
+
+            this.pages.splice(idx, 1);
+            const newActive = Math.min(this.activePageIndex, this.pages.length - 1);
+            this.switchPage(newActive, true);
+            this.renderPageTabs();
+            this.saveSidebarState();
+        },
+
+        // ── Resize handle ─────────────────────────────────────────────────
+        initResizeHandle(handle) {
+            let startX = 0, startW = 0;
+            const MIN_W = 280, MAX_W = 900;
+
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                startX = e.clientX;
+                startW = this.sidebarWidth;
+                handle.classList.add('dragging');
+
+                const onMove = (ev) => {
+                    const delta = ev.clientX - startX;
+                    const newW = Math.min(MAX_W, Math.max(MIN_W, startW + delta));
+                    this.updateSidebarWidth(newW);
+                };
+                const onUp = () => {
+                    handle.classList.remove('dragging');
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    this.saveSidebarState();
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        },
+
+        updateSidebarWidth(w) {
+            this.sidebarWidth = w;
+            document.documentElement.style.setProperty('--sidekick-width', w + 'px');
         },
 
         // Initialize notepad area instead of navigation tabs
@@ -1113,12 +1288,12 @@
             try {
                 if (window.SidekickModules?.Core?.ChromeStorage?.get) {
                     const saved = await window.SidekickModules.Core.ChromeStorage.get('sidekick_sidebar_state');
-                    this.savedState = saved || { visible: false };
-                    console.log("📖 Sidebar state loaded:", this.savedState);
+                    this.savedState = saved || { visible: false, width: 500, activePage: 0, pages: [] };
+                    console.log('📖 Sidebar state loaded:', this.savedState);
                 }
             } catch (error) {
-                console.warn("⚠️ Failed to load sidebar state:", error);
-                this.savedState = { visible: false };
+                console.warn('⚠️ Failed to load sidebar state:', error);
+                this.savedState = { visible: false, width: 500, activePage: 0, pages: [] };
             }
         },
 
@@ -1126,23 +1301,22 @@
         async saveSidebarState() {
             try {
                 if (window.SidekickModules?.Core?.ChromeStorage?.set) {
-                    const state = { visible: this.sidebarVisible };
+                    const state = {
+                        visible: this.sidebarVisible,
+                        width: this.sidebarWidth,
+                        activePage: this.activePageIndex,
+                        pages: this.pages.map(pg => ({ id: pg.id, name: pg.name }))
+                    };
                     await window.SidekickModules.Core.ChromeStorage.set('sidekick_sidebar_state', state);
 
-                    // Broadcast to other tabs (only if runtime is valid)
+                    // Broadcast to other tabs
                     if (chrome?.runtime?.id) {
-                        chrome.runtime.sendMessage({
-                            type: 'SIDEBAR_STATE_CHANGED',
-                            state: state
-                        }).catch(() => {
-                            // Silent fail if no other tabs or context invalid
-                        });
+                        chrome.runtime.sendMessage({ type: 'SIDEBAR_STATE_CHANGED', state }).catch(() => {});
                     }
                 }
             } catch (error) {
-                // Silent catch - extension context may be invalidated after reload
                 if (error.message && !error.message.includes('Extension context invalidated')) {
-                    console.warn("⚠️ Failed to save sidebar state:", error);
+                    console.warn('⚠️ Failed to save sidebar state:', error);
                 }
             }
         },

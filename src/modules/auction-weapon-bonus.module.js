@@ -18,6 +18,11 @@ const AuctionWeaponBonusModule = (() => {
         return window.location.href.includes('bazaar.php');
     }
 
+    function isInventoryPage() {
+        const url = window.location.href;
+        return url.includes('inventory.php') || url.includes('page.php?sid=inventory');
+    }
+
     function isMarketOrBazaarPage() {
         return isItemMarketPage() || isBazaarPage();
     }
@@ -95,15 +100,28 @@ const AuctionWeaponBonusModule = (() => {
             /* On item market / bazaar: much larger icons */
             .ska-market-page .sidekick-auction-bonus-icon-enhanced,
             .ska-market-page .sidekick-auction-bonus-icon-enhanced i {
-                transform: scale(2.1);
+                transform: scale(2.8);
                 transform-origin: center center;
                 filter: drop-shadow(0 0 3px rgba(255,255,255,0.25));
             }
 
             .ska-market-page .sidekick-auction-bonus-icon-enhanced:hover,
             .ska-market-page .sidekick-auction-bonus-icon-enhanced:hover i {
-                transform: scale(2.4);
+                transform: scale(3.1);
                 filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));
+            }
+
+            /* On inventory: same size as auction house, but icons get a red square outline */
+            .ska-inventory-page .sidekick-auction-bonus-icon-enhanced {
+                outline: 2px solid #cc2222;
+                outline-offset: 2px;
+                border-radius: 2px;
+                transform: scale(1.22);
+            }
+
+            .ska-inventory-page .sidekick-auction-bonus-icon-enhanced:hover {
+                transform: scale(1.45);
+                outline-color: #ff4444;
             }
 
             /* On auction house: modest size (existing behaviour) */
@@ -387,8 +405,9 @@ const AuctionWeaponBonusModule = (() => {
         async init() {
             const auctionPage = isAuctionPage();
             const marketPage = isMarketOrBazaarPage();
+            const inventoryPage = isInventoryPage();
 
-            if (!auctionPage && !marketPage) {
+            if (!auctionPage && !marketPage && !inventoryPage) {
                 return;
             }
 
@@ -402,6 +421,8 @@ const AuctionWeaponBonusModule = (() => {
                 document.body.classList.add('ska-market-page');
             } else if (auctionPage) {
                 document.body.classList.add('ska-auction-page');
+            } else if (inventoryPage) {
+                document.body.classList.add('ska-inventory-page');
             }
 
             injectStylesheet();
@@ -411,7 +432,7 @@ const AuctionWeaponBonusModule = (() => {
                 updateAuctionItems();
             }
 
-            if (marketPage) {
+            if (marketPage || inventoryPage) {
                 updateMarketBonusIcons();
             }
 

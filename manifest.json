@@ -96,6 +96,9 @@
                 "src/modules/smart-medical-button.module.js",
                 "src/modules/rehab-warning.module.js",
                 "src/modules/merit-calculator.module.js",
+                "src/modules/halloween-helper.module.js",
+                "src/modules/christmas-helper.module.js",
+                "src/modules/hustling-helper.module.js",
                 "src/main.js"
             ],
             "css": [
@@ -124,6 +127,16 @@
             ],
             "world": "MAIN",
             "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/christmas_town.php*"
+            ],
+            "js": [
+                "src/modules/christmas-helper-inject.js"
+            ],
+            "world": "MAIN",
+            "run_at": "document_start"
         },
         {
             "matches": [
@@ -170,7 +183,8 @@
                 "assets/sounds/NotificationSound1.mp3",
                 "icons/*.png",
                 "src/core/notification-bridge-page.js",
-                "src/modules/auto-gym-switch-inject.js"
+                "src/modules/auto-gym-switch-inject.js",
+                "src/modules/christmas-helper-inject.js"
             ],
             "matches": [
                 "\u003call_urls\u003e"

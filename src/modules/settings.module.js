@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sidekick Chrome Extension - Settings Module V2
  * Comprehensive settings panel with all module toggles and configurations
  * Version: 2.0.0
@@ -558,7 +558,7 @@
             <button class="sk-btn sk-btn-danger" style="width:100%;">Clear Ghost Trade ID</button>
           </div>
           <div class="sk-sh" style="margin-top:18px;">Bunker</div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Bunker Bucks</div><div class="sk-row-desc">Displays live value of your bunker investments on the Torn City page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-bunker-bucks" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Bunker Bucks</div><div class="sk-row-desc">Shows the Bunker Buck (BB) value of weapons &amp; armor on item listings — visible in Item Market, Auction House, and Inventory</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-bunker-bucks" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -742,6 +742,7 @@
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Disposal</div><div class="sk-row-desc">Highlights best options and shows maximum nerve cost for Disposal</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-disposal" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Cracking</div><div class="sk-row-desc">Shows word suggestions while solving the Cracking crime</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-cracking" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Scamming</div><div class="sk-row-desc">Provides hints and assistance for the Scamming crime</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-scamming" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Hustling</div><div class="sk-row-desc">Shows audience status, suggests next action, tracks technique progress</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-hustling" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-outcome">
           <div class="sk-sh">Crime Outcome Display</div>
@@ -848,6 +849,8 @@
       <div class="sk-subtab-bar">
         <button class="sk-subtab-btn active" data-tab="ev-calendar">Calendar</button>
         <button class="sk-subtab-btn" data-tab="ev-egg">Easter</button>
+        <button class="sk-subtab-btn" data-tab="ev-halloween">Halloween</button>
+        <button class="sk-subtab-btn" data-tab="ev-christmas">Christmas</button>
       </div>
       <div class="sk-scroll">
         <div class="sk-subtab-panel active" id="skp-tab-ev-calendar">
@@ -857,6 +860,27 @@
         <div class="sk-subtab-panel" id="skp-tab-ev-egg">
           <div class="sk-sh">Easter</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Egg Helper</div><div class="sk-row-desc">Assists with seasonal easter egg hunt events by tracking found eggs and showing hints</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-easter" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        </div>
+        <div class="sk-subtab-panel" id="skp-tab-ev-halloween">
+          <div class="sk-sh">Halloween</div>
+          <div class="sk-row" style="align-items:flex-start;gap:12px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Enable Halloween Helper</div>
+              <div class="sk-row-desc">Assist with keeping track of trick or treat targets</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-halloween" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Trick Or Treat List &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-halloween"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-halloween" style="display:none;">
+            <div class="sk-sh" style="margin-top:0;font-size:10px;">Trick Or Treat List</div>
+            <div id="skp-halloween-targets-list" style="margin-bottom:10px;"></div>
+            <button class="sk-btn sk-btn-primary" id="skp-btn-open-halloween" style="width:auto; margin:0 auto; display:block; padding:4px 10px; font-size:10px;">Open in a new window</button>
+          </div>
+        </div>
+        <div class="sk-subtab-panel" id="skp-tab-ev-christmas">
+          <div class="sk-sh">Christmas</div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Bigger window</div><div class="sk-row-desc">Makes the Christmas Town map bigger</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-christmas-zoom"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Fast beers</div><div class="sk-row-desc">Faster beer rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-christmas-beers"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -881,6 +905,22 @@
                         alert('Weapon XP Tracker module not loaded. Please enable it and reload the page.');
                     }
                 });
+            }
+
+            // Halloween window button
+            const halloweenWindowBtn = overlay.querySelector('#skp-btn-open-halloween');
+            if (halloweenWindowBtn) {
+                halloweenWindowBtn.addEventListener('click', () => {
+                    if (window.SidekickModules?.HalloweenHelper?.openWindow) {
+                        window.SidekickModules.HalloweenHelper.openWindow();
+                    } else {
+                        alert('Halloween Helper module not loaded. Please enable it and reload the page.');
+                    }
+                });
+            }
+
+            if (window.SidekickModules?.HalloweenHelper?.refreshUI) {
+                window.SidekickModules.HalloweenHelper.refreshUI();
             }
 
 
@@ -1043,6 +1083,7 @@
                 ['#skp-tog-disposal', 'sidekick_settings', 'crime-disposal', false],
                 ['#skp-tog-cracking', 'sidekick_settings', 'crime-cracking', false],
                 ['#skp-tog-scamming', 'sidekick_settings', 'crime-scamming', false],
+                ['#skp-tog-hustling', 'sidekick_settings', 'crime-hustling', false],
                 // War
                 ['#skp-tog-chain-timer', 'sidekick_chain_timer', null, false],
                 ['#skp-tog-war-monitor', 'sidekick_war_monitor', null, false],
@@ -1056,6 +1097,9 @@
                 // Events
                 ['#skp-tog-event-calendar', 'sidekick_settings', 'event-calendar', false],
                 ['#skp-tog-easter', 'sidekick_holiday', null, false],
+                ['#skp-tog-halloween', 'sidekick_halloween', null, false],
+                ['#skp-tog-christmas-zoom', 'sidekick_settings', 'christmas_zoom', false],
+                ['#skp-tog-christmas-beers', 'sidekick_settings', 'christmas_beers', false],
                 // Medical
                 ['#skp-tog-smart-medical', 'sidekick_smart_medical', null, false],
                 // Mugging
@@ -1133,11 +1177,36 @@
                                 await window.SidekickModules.BunkerBucks.disable();
                             }
                         }
+
+                        // J1: update hustling active badge
+                        if (sel === '#skp-tog-hustling') {
+                            const badge = overlay.querySelector('#sk-hustling-active-badge');
+                            if (badge) badge.style.display = inp.checked ? 'inline' : 'none';
+                        }
                     } catch (e) {
                         console.error(e);
                     }
                 });
             }
+
+            // J1: Hustling "Active" badge — inject into the row title and show if enabled
+            (() => {
+                const hustlingRow = overlay.querySelector('#skp-tog-hustling')?.closest('.sk-row');
+                if (hustlingRow) {
+                    const titleEl = hustlingRow.querySelector('.sk-row-title');
+                    if (titleEl && !titleEl.querySelector('#sk-hustling-active-badge')) {
+                        const badge = document.createElement('span');
+                        badge.id = 'sk-hustling-active-badge';
+                        badge.textContent = ' ✅ Active';
+                        badge.style.cssText = 'font-size:11px;color:#8BC34A;font-weight:normal;margin-left:4px;';
+                        badge.style.display = 'none';
+                        titleEl.appendChild(badge);
+                        // Set initial visibility from module state
+                        const isOn = window.SidekickModules?.HustlingHelper?.isEnabled === true;
+                        badge.style.display = isOn ? 'inline' : 'none';
+                    }
+                }
+            })();
 
             // ─── Medical settings: load and wire dropdowns ─────────────────
             const medItemSrc = overlay.querySelector('#skp-med-item-source');

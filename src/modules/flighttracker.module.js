@@ -166,11 +166,107 @@
             // :last-child green rule won't affect us
             buttonsList.appendChild(btn);
 
-            btn.addEventListener('click', e => {
+            btn.addEventListener("click", e => {
                 e.preventDefault();
                 e.stopPropagation();
+                this._showActionMenu(playerId, btn);
+            });
+        },
+
+        // ── Action menu ──────────────────────────────────────────────────────
+        _showActionMenu(playerId, btn) {
+            // Remove any existing menu
+            document.querySelector(".sk-action-menu")?.remove();
+
+            const menu = document.createElement("div");
+            menu.className = "sk-action-menu";
+
+            const addItem = (text, onClick) => {
+                const item = document.createElement("div");
+                item.className = "sk-action-menu-item";
+                item.textContent = text;
+
+                item.onclick = () => {
+                    menu.remove();
+                    onClick();
+                };
+
+                menu.appendChild(item);
+            };
+
+            // Existing Flight Tracker functionality
+            addItem("Track Target", () => {
                 this._handleButtonClick(playerId, btn);
             });
+
+            // Halloween Helper
+            if (window.SidekickModules?.HalloweenHelper?.isEnabled()) {
+
+                addItem("Add to Halloween List", async () => {
+
+                    let username = "Unknown";
+                    
+                    try {
+                        const apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key');
+                        if (apiKey) {
+                            const response = await fetch(`https://api.torn.com/user/${playerId}?selections=profile&key=${apiKey}`);
+                            const data = await response.json();
+                            if (data && data.name) {
+                                username = data.name;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Sidekick: Failed to fetch username from API', e);
+                    }
+
+                    // Fallback if API fails or no key
+                    if (username === "Unknown") {
+                        const userLink = document.querySelector(`a[href*="XID=${playerId}"]`);
+                        if (userLink && userLink.innerText) {
+                            username = userLink.innerText.trim();
+                        } else if (document.title.includes(" - Profile")) {
+                            username = document.title.split(" [")[0].trim();
+                        } else if (document.title.includes("'s profile")) {
+                            username = document.title.split("'s profile")[0].trim();
+                        }
+                    }
+
+                    await window.SidekickModules.HalloweenHelper.addTarget(
+                        playerId,
+                        username
+                    );
+
+                    console.log("Added to Halloween list:", username);
+                    
+                    if (window.SidekickModules?.UI?.showNotification) {
+                        window.SidekickModules.UI.showNotification(
+                            'Halloween Helper',
+                            `Added ${username} to Trick or Treat List.`,
+                            'success'
+                        );
+                    }
+
+                });
+
+            }
+
+            document.body.appendChild(menu);
+
+            const rect = btn.getBoundingClientRect();
+
+            menu.style.left = `${rect.left}px`;
+            menu.style.top = `${rect.bottom + 5}px`;
+
+            setTimeout(() => {
+                const close = (e) => {
+                    if (!menu.contains(e.target)) {
+                        menu.remove();
+                        document.removeEventListener("click", close);
+                    }
+                };
+
+                document.addEventListener("click", close);
+            }, 0);
         },
 
         // Sidekick project icon — sized 28px inside a constrained 38×38 button

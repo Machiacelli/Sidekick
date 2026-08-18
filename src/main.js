@@ -51,6 +51,13 @@
                 console.warn("⚠️ Core module init not available");
             }
 
+            // Initialize Christmas Helper Module
+            console.log("🎄 Sidekick: Initializing Christmas Helper...");
+            if (window.SidekickModules.ChristmasHelper?.init) {
+                await window.SidekickModules.ChristmasHelper.init();
+                console.log("✅ Sidekick: Christmas Helper initialized");
+            }
+
             // Initialize Settings Module
             console.log("⚙️ Sidekick: Initializing Settings...");
             if (window.SidekickModules.Settings?.init) {
