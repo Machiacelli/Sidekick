@@ -180,6 +180,81 @@ const BazaarFillerModule = (() => {
         });
     }
 
+    function setControlledInputValue(
+        input,
+        value
+    ) {
+        if (!input) return;
+
+        const prototype =
+            Object.getPrototypeOf(input);
+
+        const valueSetter =
+            Object.getOwnPropertyDescriptor(
+                prototype,
+                'value'
+            )?.set;
+
+        if (valueSetter) {
+            valueSetter.call(
+                input,
+                String(value)
+            );
+        } else {
+            input.value = String(value);
+        }
+
+        triggerReact(
+            input,
+            'input',
+            'change',
+            'keyup'
+        );
+    }
+
+    function setCheckboxState(
+        checkbox,
+        checked
+    ) {
+        if (
+            !checkbox ||
+            checkbox.disabled ||
+            checkbox.checked === checked
+        ) {
+            return;
+        }
+
+        checkbox.click();
+
+        if (checkbox.checked === checked) {
+            return;
+        }
+
+        const prototype =
+            Object.getPrototypeOf(checkbox);
+
+        const checkedSetter =
+            Object.getOwnPropertyDescriptor(
+                prototype,
+                'checked'
+            )?.set;
+
+        if (checkedSetter) {
+            checkedSetter.call(
+                checkbox,
+                checked
+            );
+        } else {
+            checkbox.checked = checked;
+        }
+
+        triggerReact(
+            checkbox,
+            'input',
+            'change'
+        );
+    }
+
     function injectStyles() {
         if (
             document.getElementById(
@@ -727,7 +802,8 @@ const BazaarFillerModule = (() => {
         event,
         itemId,
         getPriceInputs,
-        getQuantityInputs
+        getQuantityInputs,
+        getSelectionInputs
     ) {
         event.preventDefault();
         event.stopPropagation();
@@ -747,25 +823,35 @@ const BazaarFillerModule = (() => {
 
             button.textContent = 'Fill';
 
-            const inputs =
-                getPriceInputs();
+            const quantityInputs =
+                getQuantityInputs?.() || [];
 
-            inputs.forEach(input => {
-                input.value = '';
+            quantityInputs.forEach(input => {
+                setControlledInputValue(
+                    input,
+                    ''
+                );
             });
 
-            if (inputs[0]) {
-                triggerReact(
-                    inputs[0],
-                    'input',
-                    'keyup'
-                );
-            }
+            const priceInputs =
+                getPriceInputs();
 
-            getQuantityInputs?.()
-                ?.forEach(input => {
-                    input.value = '';
-                });
+            priceInputs.forEach(input => {
+                setControlledInputValue(
+                    input,
+                    ''
+                );
+            });
+
+            const selectionInputs =
+                getSelectionInputs?.() || [];
+
+            selectionInputs.forEach(input => {
+                setCheckboxState(
+                    input,
+                    false
+                );
+            });
 
             return;
         }
@@ -788,20 +874,25 @@ const BazaarFillerModule = (() => {
             price !== null &&
             price > 0
         ) {
-            const inputs =
+            const priceInputs =
                 getPriceInputs();
 
-            inputs.forEach(input => {
-                input.value = price;
+            priceInputs.forEach(input => {
+                setControlledInputValue(
+                    input,
+                    price
+                );
             });
 
-            if (inputs[0]) {
-                triggerReact(
-                    inputs[0],
-                    'input',
-                    'keyup'
+            const selectionInputs =
+                getSelectionInputs?.() || [];
+
+            selectionInputs.forEach(input => {
+                setCheckboxState(
+                    input,
+                    true
                 );
-            }
+            });
 
             const quantityInputs =
                 getQuantityInputs?.() || [];
@@ -809,17 +900,12 @@ const BazaarFillerModule = (() => {
             if (
                 quantityInputs.length > 0
             ) {
-                quantityInputs.forEach(
-                    input => {
-                        input.value = 9999999;
-                    }
-                );
-
-                triggerReact(
-                    quantityInputs[0],
-                    'input',
-                    'keyup'
-                );
+                quantityInputs.forEach(input => {
+                    setControlledInputValue(
+                        input,
+                        9999999
+                    );
+                });
             }
         } else if (listings === null) {
             button.title =
@@ -908,26 +994,19 @@ const BazaarFillerModule = (() => {
                         )
                     ],
                     () => {
-                        const checkbox =
-                            row.querySelector(
-                                'div.amount.choice-container ' +
-                                'input[type="checkbox"]'
-                            );
-
-                        if (checkbox) {
-                            if (!checkbox.checked) {
-                                checkbox.click();
-                            }
-
-                            return [];
-                        }
-
                         return [
                             ...row.querySelectorAll(
-                                'div.amount input'
+                                'div.amount input' +
+                                ':not([type="checkbox"])'
                             )
                         ];
-                    }
+                    },
+                    () => [
+                        ...row.querySelectorAll(
+                            'div.amount.choice-container ' +
+                            'input[type="checkbox"]'
+                        )
+                    ]
                 )
         );
 
@@ -1168,25 +1247,7 @@ const BazaarFillerModule = (() => {
                             return [];
                         }
 
-                        const quantityValue =
-                            row.querySelector(
-                                'span.t-hide ' +
-                                'span:last-child'
-                            )
-                                ?.textContent
-                                ?.trim() ||
-                            '9999999';
-
-                        quantity.value =
-                            quantityValue;
-
-                        triggerReact(
-                            quantity,
-                            'input',
-                            'keyup'
-                        );
-
-                        return [];
+                        return [quantity];
                     }
                 );
             }

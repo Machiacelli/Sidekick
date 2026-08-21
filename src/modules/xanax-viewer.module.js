@@ -166,7 +166,7 @@
 
                 // Check if extension context is valid first
                 if (!window.SidekickModules?.Core?.SafeMessageSender?.isExtensionContextValid()) {
-                    console.warn('💊 Extension context invalidated, cannot fetch user stats');
+                    console.debug('💊 Extension context invalidated, cannot fetch user stats');
                     window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                     return;
                 }
@@ -196,7 +196,7 @@
 
             } catch (error) {
                 if (error.message.includes('Extension context invalidated')) {
-                    console.warn('💊 Extension context lost during stats fetch');
+                    console.debug('💊 Extension context lost during stats fetch');
                     window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                 } else {
                     console.error("❌ Xanax Viewer: Failed to fetch own stats:", error);
@@ -441,7 +441,7 @@
 
                 // Check if extension context is valid first
                 if (!window.SidekickModules?.Core?.SafeMessageSender?.isExtensionContextValid()) {
-                    console.warn('💊 Extension context invalidated, cannot fetch user stats');
+                    console.debug('💊 Extension context invalidated, cannot fetch user stats');
                     window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                     throw new Error('Extension context invalidated');
                 }
@@ -477,7 +477,7 @@
 
             } catch (error) {
                 if (error.message.includes('Extension context invalidated')) {
-                    console.warn(`💊 Extension context lost during user ${uid} stats fetch`);
+                    console.debug(`💊 Extension context lost during user ${uid} stats fetch`);
                     window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                 } else {
                     console.error(`❌ Xanax Viewer: Error fetching stats for user ${uid}:`, error);

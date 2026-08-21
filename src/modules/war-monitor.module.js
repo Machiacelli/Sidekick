@@ -194,7 +194,9 @@ const WarMonitorModule = {
                         console.log(`[WarMonitor] Extracted ${this.memberLis.size} member rows after ${memberAttempts} attempt(s)`);
                         this.updateStatuses();
                     } else {
-                        console.warn('[WarMonitor] No member rows found after 9s');
+                        // A generic war container can exist on pages without a
+                        // rendered member list. This is expected, not an error.
+                        console.debug('[WarMonitor] No member rows available on this view');
                     }
                 }
             }, 300);

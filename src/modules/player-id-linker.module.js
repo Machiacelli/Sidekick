@@ -78,8 +78,11 @@ const PlayerIdLinkerModule = (() => {
             // Allow if inside a chat element
             let el = node.parentElement;
             while (el && el !== document.body) {
-                const cls = (el.className || '').toLowerCase();
-                const id = (el.id || '').toLowerCase();
+                // SVG elements expose className as an SVGAnimatedString instead
+                // of a normal string. Reading the attributes works consistently
+                // for both HTML and SVG elements on Torn's React pages.
+                const cls = (el.getAttribute?.('class') || '').toLowerCase();
+                const id = (el.getAttribute?.('id') || '').toLowerCase();
                 if (cls.includes('chat') || id.includes('chat')) return false; // allow
                 el = el.parentElement;
             }

@@ -89,7 +89,7 @@
             try {
                 // Check if extension context is valid first
                 if (!window.SidekickModules?.Core?.SafeMessageSender?.isExtensionContextValid()) {
-                    console.warn('📦 Extension context invalidated, cannot fetch item values');
+                    console.debug('📦 Extension context invalidated, cannot fetch item values');
                     return;
                 }
 

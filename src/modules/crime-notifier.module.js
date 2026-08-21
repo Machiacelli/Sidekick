@@ -500,39 +500,6 @@ if (typeof window.SidekickModules === 'undefined') {
 }
 window.SidekickModules.CrimeNotifier = CrimeNotifierModule;
 
-// Inject test functions into page context (so console can access them)
-const crimeNotifierScript = document.createElement('script');
-crimeNotifierScript.textContent = `
-    window.testCrimeNotifier = function() {
-        const event = new CustomEvent('sidekick-test-crime-notifier');
-        document.dispatchEvent(event);
-        console.log('🚨 Test notification triggered!');
-    };
-    window.getCrimeState = function() {
-        const event = new CustomEvent('sidekick-get-crime-state');
-        document.dispatchEvent(event);
-    };
-    window.clearCrimeData = function() {
-        const event = new CustomEvent('sidekick-clear-crime-data');
-        document.dispatchEvent(event);
-        console.log('🚨 Crime data cleared!');
-    };
-    console.log('🚨 Crime Notifier console functions ready!');
-`;
-document.documentElement.appendChild(crimeNotifierScript);
-crimeNotifierScript.remove();
-
-// Listen for events from page context
-document.addEventListener('sidekick-test-crime-notifier', () => {
-    CrimeNotifierModule.testNotifications();
-});
-document.addEventListener('sidekick-get-crime-state', () => {
-    CrimeNotifierModule.getCurrentState();
-});
-document.addEventListener('sidekick-clear-crime-data', () => {
-    CrimeNotifierModule.clearPreviousData();
-});
-
 console.log('🚨 Crime Notifier module registered');
 
 

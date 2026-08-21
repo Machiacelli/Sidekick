@@ -536,7 +536,7 @@
                         }
                     } catch (bgError) {
                         if (bgError.message.includes('Extension context invalidated')) {
-                            console.warn('📋 Extension context invalidated, showing notification');
+                            console.debug('📋 Extension context invalidated, showing notification');
                             window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                             return;
                         } else {
@@ -572,7 +572,7 @@
 
             } catch (error) {
                 if (error.message.includes('Extension context invalidated')) {
-                    console.warn('📋 Extension context lost during API call');
+                    console.debug('📋 Extension context lost during API call');
                     window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                 }
                 throw error;

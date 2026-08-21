@@ -199,7 +199,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Create native Chrome notifications
             chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icons/icon48.png',
+                iconUrl: 'assets/icons/swissknife-48.png',
                 title: request.title || 'Sidekick',
                 message: request.message || 'Notification from Sidekick'
             });
@@ -781,7 +781,7 @@ async function handleCrimeNotifierAlert(alertData) {
         if (windowsNotifEnabled) {
             await chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icons/icon48.png',
+                iconUrl: 'assets/icons/swissknife-48.png',
                 title: title || '🚨 Crime Notifier',
                 message: message || 'Alert from Crime Notifier',
                 priority: 2,

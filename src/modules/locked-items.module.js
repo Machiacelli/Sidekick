@@ -279,7 +279,11 @@ const LockedItemsManagerModule = {
      */
     getItemIdentifiers(element) {
         const uniqueIds = new Set();
+        const explicitUniqueIds = new Set();
+        const reactUniqueIds = new Set();
         const baseIds = new Set();
+        const reactCategories = new Set();
+        const itemCategories = new Set();
 
         if (!element) {
             return {
@@ -298,39 +302,59 @@ const LockedItemsManagerModule = {
             }
         };
 
+        const addExplicitUnique = value => {
+            addNumeric(uniqueIds, value);
+            addNumeric(explicitUniqueIds, value);
+        };
+
+        const addCategory = value => {
+            const normalized =
+                String(value || '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[_-]+/g, ' ')
+                    .replace(/\s+/g, ' ');
+
+            if (normalized) {
+                itemCategories.add(normalized);
+            }
+        };
+
         const nodes = [
             element,
             ...element.querySelectorAll('*')
         ];
 
         nodes.forEach(node => {
-            addNumeric(
-                uniqueIds,
+            addCategory(
+                node.getAttribute?.('data-category')
+            );
+
+            addCategory(
+                node.getAttribute?.('data-type2')
+            );
+
+            addExplicitUnique(
                 node.getAttribute?.('data-armoryid')
             );
 
-            addNumeric(
-                uniqueIds,
+            addExplicitUnique(
                 node.getAttribute?.('data-armory')
             );
 
-            addNumeric(
-                uniqueIds,
+            addExplicitUnique(
                 node.getAttribute?.('data-uid')
             );
 
-            addNumeric(
-                uniqueIds,
+            addExplicitUnique(
                 node.getAttribute?.('data-itemuid')
             );
 
-            addNumeric(
-                uniqueIds,
+            addExplicitUnique(
                 node.getAttribute?.('data-item-uid')
             );
 
-            addNumeric(
-                uniqueIds,
+            addExplicitUnique(
                 node.getAttribute?.('xid')
             );
 
@@ -344,7 +368,7 @@ const LockedItemsManagerModule = {
 
             if (/^\d+$/.test(String(dataId || ''))) {
                 if (String(dataId).length >= 7) {
-                    addNumeric(uniqueIds, dataId);
+                    addExplicitUnique(dataId);
                 } else {
                     addNumeric(baseIds, dataId);
                 }
@@ -359,10 +383,7 @@ const LockedItemsManagerModule = {
                 );
 
             if (rowKeyMatch) {
-                addNumeric(
-                    uniqueIds,
-                    rowKeyMatch[1]
-                );
+                addExplicitUnique(rowKeyMatch[1]);
             }
 
             const reactId =
@@ -378,6 +399,28 @@ const LockedItemsManagerModule = {
                     uniqueIds,
                     match[1]
                 );
+
+                addNumeric(
+                    reactUniqueIds,
+                    match[1]
+                );
+            }
+
+            const reactCategoryMatches =
+                String(reactId || '').matchAll(
+                    /\$([^.$:]+)\.\$(\d{7,})(?=$|[^\d])/g
+                );
+
+            for (const match of reactCategoryMatches) {
+                const category =
+                    String(match[1] || '')
+                        .trim()
+                        .toLowerCase();
+
+                if (category) {
+                    reactCategories.add(category);
+                    itemCategories.add(category);
+                }
             }
 
             const ariaControls =
@@ -389,10 +432,7 @@ const LockedItemsManagerModule = {
                 );
 
             if (controlsMatch) {
-                addNumeric(
-                    uniqueIds,
-                    controlsMatch[1]
-                );
+                addExplicitUnique(controlsMatch[1]);
             }
 
             const source =
@@ -424,6 +464,20 @@ const LockedItemsManagerModule = {
                     hrefMatch[1]
                 );
             }
+
+            const armoryHrefMatch =
+                String(href || '').match(
+                    /[?&#]armoryID=(\d+)/i
+                );
+
+            if (
+                armoryHrefMatch &&
+                armoryHrefMatch[1] !== '0'
+            ) {
+                addExplicitUnique(
+                    armoryHrefMatch[1]
+                );
+            }
         });
 
         const armoryInput =
@@ -432,10 +486,11 @@ const LockedItemsManagerModule = {
             );
 
         if (armoryInput?.value) {
-            addNumeric(
-                uniqueIds,
-                armoryInput.value
-            );
+            if (String(armoryInput.value) !== '0') {
+                addExplicitUnique(
+                    armoryInput.value
+                );
+            }
         }
 
         const idInput =
@@ -447,10 +502,7 @@ const LockedItemsManagerModule = {
             if (
                 String(idInput.value).length >= 7
             ) {
-                addNumeric(
-                    uniqueIds,
-                    idInput.value
-                );
+                addExplicitUnique(idInput.value);
             } else {
                 addNumeric(
                     baseIds,
@@ -518,24 +570,61 @@ const LockedItemsManagerModule = {
                 .split(/\s+/)
                 .includes('no-mods');
 
+        const uniqueItemCategories =
+            new Set([
+                'primary',
+                'secondary',
+                'melee',
+                'defensive',
+                'armor',
+                'armour',
+                'weapon',
+                'weapons',
+                'car',
+                'cars'
+            ]);
+
+        const hasUniqueItemCategory =
+            [...itemCategories].some(category =>
+                uniqueItemCategories.has(category)
+            );
+
+        const hasStackableItemCategory =
+            itemCategories.size > 0 &&
+            !hasUniqueItemCategory;
+
         /*
-         * On Bazaar, no-mods is the authoritative distinction:
+         * Torn's Bazaar React ID is ambiguous: its final long number is
+         * a real armory ID for unique equipment, but only a temporary row
+         * ID for stackable items. Some stackable categories do not receive
+         * Torn's no-mods class, so no-mods cannot be the sole test.
          *
-         * no-mods present  = stackable/base item lock
-         * no-mods missing  = unique equipment instance lock
-         *
-         * This takes priority over quantity inputs because Torn keeps
-         * internal quantity inputs inside some unique weapon rows.
+         * Torn also assigns long armory-like row IDs to stacks on the normal
+         * Items page. Category data therefore has to win over the presence of
+         * a long ID: known unique equipment stays instance-locked, while any
+         * identified non-unique category uses the base item ID on both pages.
+         * Quantity controls and no-mods remain fallbacks when no category is
+         * available.
          */
         const isStackable =
-            isBazaarItemRow
-                ? hasNoModsClass
-                : hasUsableQuantityInput;
+            !hasUniqueItemCategory &&
+            (
+                hasStackableItemCategory ||
+                hasUsableQuantityInput ||
+                (
+                    isBazaarItemRow &&
+                    hasNoModsClass
+                )
+            );
 
         return {
             uniqueIds: [...uniqueIds],
             baseIds: [...baseIds],
-            isStackable
+            isStackable,
+            explicitUniqueIds: [...explicitUniqueIds],
+            reactUniqueIds: [...reactUniqueIds],
+            reactCategories: [...reactCategories],
+            itemCategories: [...itemCategories]
         };
     },
 
@@ -548,6 +637,16 @@ const LockedItemsManagerModule = {
         ) {
             identifiers.baseIds.forEach(id => {
                 keys.push(id);
+            });
+
+            /*
+             * Include legacy long stack keys so an existing lock works before
+             * the Items-page migration has had a chance to save its base ID.
+             * Unique equipment never enters this branch.
+             */
+            identifiers.uniqueIds.forEach(id => {
+                keys.push(id);
+                keys.push(`armory_${id}`);
             });
         } else if (
             identifiers.uniqueIds.length > 0
@@ -645,6 +744,8 @@ const LockedItemsManagerModule = {
                 'li[data-armoryid], li[data-item]'
             );
 
+        let migratedStackLocks = false;
+
         items.forEach(element => {
             if (
                 element.getAttribute(
@@ -670,6 +771,49 @@ const LockedItemsManagerModule = {
                 this.getItemID(element);
 
             if (!itemId) return;
+
+            if (
+                identifiers.isStackable &&
+                identifiers.baseIds.length > 0
+            ) {
+                const baseId =
+                    identifiers.baseIds[0];
+
+                const legacyKeys = [];
+
+                identifiers.uniqueIds.forEach(id => {
+                    legacyKeys.push(id);
+                    legacyKeys.push(`armory_${id}`);
+                });
+
+                const hasLegacyStackLock =
+                    legacyKeys.some(
+                        key =>
+                            this.lockedItems[key] === true
+                    );
+
+                if (hasLegacyStackLock) {
+                    if (
+                        this.lockedItems[baseId] !== true
+                    ) {
+                        this.lockedItems[baseId] = true;
+                        migratedStackLocks = true;
+                    }
+
+                    legacyKeys.forEach(key => {
+                        if (
+                            Object.prototype
+                                .hasOwnProperty.call(
+                                    this.lockedItems,
+                                    key
+                                )
+                        ) {
+                            delete this.lockedItems[key];
+                            migratedStackLocks = true;
+                        }
+                    });
+                }
+            }
 
             const isLocked =
                 this.isItemLocked(
@@ -736,6 +880,14 @@ const LockedItemsManagerModule = {
                     isLocked ? 'none' : '';
             });
         });
+
+        if (migratedStackLocks) {
+            this.saveLockedItems();
+
+            console.log(
+                '🔒 Migrated stackable locks to base item IDs'
+            );
+        }
 
         this.addUnlockAllButton();
     },

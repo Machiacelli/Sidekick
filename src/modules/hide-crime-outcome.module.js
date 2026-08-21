@@ -276,64 +276,8 @@ const HideCrimeOutcomeModule = {
     // ─── Fetch Intercept (toast mode) ────────────────────────────────────────
 
     _injectFetchIntercept() {
-        // Inject once per page load — injects into MAIN world via script tag
-        if (document.getElementById('sk-crime-fetch-hook')) return;
-
-        const script = document.createElement('script');
-        script.id = 'sk-crime-fetch-hook';
-        const code = `
-            (function() {
-                if (window.__skCrimeFetchHooked) return;
-                window.__skCrimeFetchHooked = true;
-                const _orig = window.fetch;
-                window.fetch = function(...args) {
-                    return _orig.apply(this, args).then(function(r) {
-                        try {
-                            const u = new URL(r.url.startsWith('http') ? r.url : window.location.origin + '/' + r.url);
-                            const isCrimeAttempt = (
-                                (u.pathname === '/page.php' && u.searchParams.get('sid') === 'crimesData' && u.searchParams.get('step') === 'attempt') ||
-                                (u.pathname === '/loader.php' && u.searchParams.get('sid') === 'crimes' && u.searchParams.get('step') === 'attempt') ||
-                                (u.pathname.includes('/loader.php') && u.searchParams.get('sid') === 'crimes')
-                            );
-                            if (isCrimeAttempt) {
-                                r.clone().json().then(function(data) {
-                                    var outcome = data && (data.DB && data.DB.outcome || data.outcome);
-                                    if (!outcome) return;
-                                    var result = outcome.result || '';
-                                    var rewards = (outcome.rewards || []).map(function(rw) {
-                                        var t = (rw.type || '').toLowerCase();
-                                        if (t === 'money') return rw.value ? '$' + Number(rw.value).toLocaleString() : 'Money';
-                                        if (t === 'items' && Array.isArray(rw.value)) return rw.value.map(function(v) { return (v.amount || 1) + 'x ' + (v.name || 'Item'); }).join(', ');
-                                        if (t === 'jail') return 'Jailed';
-                                        if (t === 'hospital') return 'Hospitalized';
-                                        return rw.type || '';
-                                    }).filter(Boolean).join(' · ') || '';
-                                    document.dispatchEvent(new CustomEvent('sk-crime-outcome', { detail: { result: result, reward: rewards } }));
-                                }).catch(function() {});
-                            }
-                        } catch(e) {}
-                        return r;
-                    });
-                };
-            })();
-        `;
-        
-        try {
-            const blob = new Blob([code], { type: 'application/javascript' });
-            script.src = URL.createObjectURL(blob);
-            document.head.appendChild(script);
-            setTimeout(() => {
-                script.remove();
-                URL.revokeObjectURL(script.src);
-            }, 1000);
-        } catch (err) {
-            // Fallback
-            script.textContent = code;
-            document.head.appendChild(script);
-            script.remove();
-        }
-
-        // Listen for the dispatched event from the MAIN world
+        // The MAIN-world fetch hook is loaded by manifest.json. Content scripts
+        // only need to listen for its sanitized outcome event.
         if (!this._toastListenerAttached) {
             this._toastListenerAttached = true;
             document.addEventListener('sk-crime-outcome', (e) => {

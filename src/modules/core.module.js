@@ -501,7 +501,7 @@
                             // Check if extension context is valid
                             if (!chrome?.runtime?.id) {
                                 const error = new Error('Extension context invalidated');
-                                console.warn(`🔄 Extension context check failed (attempt ${attempt + 1}/${retryCount}):`, message.action);
+                                console.debug(`🔄 Extension context check failed (attempt ${attempt + 1}/${retryCount}):`, message.action);
                                 reject(error);
                                 return;
                             }
@@ -537,7 +537,7 @@
                     lastError = error;
 
                     if (error.message.includes('Extension context invalidated')) {
-                        console.warn(`🔄 Extension context lost on attempt ${attempt + 1}/${retryCount}`);
+                        console.debug(`🔄 Extension context lost on attempt ${attempt + 1}/${retryCount}`);
 
                         // Wait a bit before retrying
                         if (attempt < retryCount - 1) {
@@ -626,45 +626,9 @@
 
         // Re-expose global functions after context recovery
         reExposeGlobalFunctions() {
-            try {
-                console.log('🔧 Re-exposing global functions after context recovery...');
-
-                // Re-inject debug functions into page context
-                const script = document.createElement('script');
-                script.textContent = `
-                    // Re-expose Sidekick debug functions after context recovery
-                    window.testExtensionConnection = function() {
-                        console.log('🔗 Extension Connection Test (Post-Recovery)');
-                        console.log('✅ Extension context recovered');
-                        console.log('📦 Available modules:', Object.keys(window.SidekickModules || {}));
-                        return { status: 'recovered', modules: Object.keys(window.SidekickModules || {}) };
-                    };
-                    
-                    window.checkExtensionContext = function() {
-                        console.log('🔍 Extension Context Check (Post-Recovery)');
-                        return {
-                            status: 'recovered',
-                            url: window.location.href,
-                            modulesLoaded: !!window.SidekickModules,
-                            moduleCount: Object.keys(window.SidekickModules || {}).length
-                        };
-                    };
-                    
-                    window.forceContextRecovery = function() {
-                        console.log('🔄 Force Context Recovery (Manual)');
-                        window.location.reload();
-                        return 'Reloading page...';
-                    };
-                    
-                    console.log('✅ Global functions re-exposed after context recovery');
-                `;
-
-                (document.head || document.documentElement).appendChild(script);
-                setTimeout(() => script.remove(), 100);
-
-            } catch (e) {
-                console.error('❌ Failed to re-expose global functions:', e.message);
-            }
+            // MV3 blocks inline page scripts. The recovery itself is complete at
+            // this point; these console-only helpers are not required by Sidekick.
+            console.debug('🔧 Extension context recovered; no page injection required');
         },
 
         // Show reload prompt
@@ -679,7 +643,7 @@
                 );
             } else {
                 // Fallback notification if NotificationSystem isn't available
-                console.warn('🔄 Extension context lost - please refresh the page');
+                console.debug('🔄 Extension context lost - please refresh the page');
                 if (confirm('Extension connection lost. Refresh the page to restore functionality?')) {
                     window.location.reload();
                 }

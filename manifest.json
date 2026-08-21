@@ -33,9 +33,9 @@
             "js": [
                 "src/core/notification-center.js",
                 "src/core/notification-preferences.js",
-                "src/core/test-notifications.js",
                 "src/modules/core.module.js",
                 "src/modules/settings.module.js",
+                "src/modules/trade-assistant.module.js",
                 "src/modules/notepad.module.js",
                 "src/modules/timer.module.js",
                 "src/modules/clock.module.js",
@@ -112,6 +112,7 @@
                 "https://www.torn.com/loader.php?sid=crimes*"
             ],
             "js": [
+                "src/modules/hide-crime-outcome-inject.js",
                 "src/modules/scamming.module.js"
             ],
             "world": "MAIN",
@@ -181,7 +182,6 @@
                 "assets/images/*.svg",
                 "assets/icons/sidekick-logo.png",
                 "assets/sounds/NotificationSound1.mp3",
-                "icons/*.png",
                 "src/core/notification-bridge-page.js",
                 "src/modules/auto-gym-switch-inject.js",
                 "src/modules/christmas-helper-inject.js"

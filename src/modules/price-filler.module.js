@@ -199,35 +199,92 @@ const PriceFillerModule = (() => {
         events.forEach(evt => el.dispatchEvent(new Event(evt, { bubbles: true })));
     }
 
+    function setControlledInputValue(input, value) {
+        if (!input) return;
+
+        const prototype = Object.getPrototypeOf(input);
+        const valueSetter = Object.getOwnPropertyDescriptor(
+            prototype,
+            'value'
+        )?.set;
+
+        if (valueSetter) {
+            valueSetter.call(input, String(value));
+        } else {
+            input.value = String(value);
+        }
+
+        triggerEvents(input, 'input', 'change', 'keyup');
+    }
+
+    function setCheckboxState(checkbox, checked) {
+        if (
+            !checkbox ||
+            checkbox.disabled ||
+            checkbox.checked === checked
+        ) {
+            return;
+        }
+
+        checkbox.click();
+
+        if (checkbox.checked === checked) return;
+
+        const prototype = Object.getPrototypeOf(checkbox);
+        const checkedSetter = Object.getOwnPropertyDescriptor(
+            prototype,
+            'checked'
+        )?.set;
+
+        if (checkedSetter) {
+            checkedSetter.call(checkbox, checked);
+        } else {
+            checkbox.checked = checked;
+        }
+
+        triggerEvents(checkbox, 'input', 'change');
+    }
+
+    function getRowSelectionInputs(row) {
+        return [
+            ...row.querySelectorAll(
+                'input[type="checkbox"]'
+            )
+        ].filter(input =>
+            !input.classList.contains('sk-pf-check') &&
+            !input.disabled
+        );
+    }
+
     // -------------------------------------------------------------------------
     // BAZAAR – Add page (#/add)
     // -------------------------------------------------------------------------
     async function fillAddRow(row, checked) {
-        const qtyInput = row.querySelector('.amount input');
+        const qtyInput = row.querySelector(
+            '.amount input:not([type="checkbox"])'
+        );
         const priceInput = row.querySelector('.price input');
-        const choiceCheckbox = row.querySelector('div.amount.choice-container input');
+        const choiceCheckbox = row.querySelector(
+            'div.amount.choice-container ' +
+            'input[type="checkbox"]'
+        );
 
         if (!checked) {
-            if (choiceCheckbox?.checked) choiceCheckbox.click();
-            qtyInput.value = '';
-            triggerEvents(qtyInput, 'keyup');
-            priceInput.value = '';
+            setControlledInputValue(qtyInput, '');
+            setControlledInputValue(priceInput, '');
             priceInput.style.color = '';
-            triggerEvents(priceInput, 'input', 'keyup');
+            setCheckboxState(choiceCheckbox, false);
             return;
         }
 
-        if (choiceCheckbox) {
-            if (!choiceCheckbox.checked) choiceCheckbox.click();
-        } else {
+        if (!choiceCheckbox) {
             const qty = row.querySelector('.item-amount.qty')?.textContent.trim() || '';
-            qtyInput.value = qty;
-            triggerEvents(qtyInput, 'keyup');
+            setControlledInputValue(qtyInput, qty);
         }
 
         if (prefs.blackFridayMode) {
-            priceInput.value = '1';
-            triggerEvents(priceInput, 'input', 'keyup');
+            setControlledInputValue(priceInput, '1');
+            setCheckboxState(choiceCheckbox, true);
             return;
         }
 
@@ -240,9 +297,9 @@ const PriceFillerModule = (() => {
         const result = await calculatePrice(itemName, itemId, matchedItem).catch(() => null);
         if (!result) return;
 
-        priceInput.value = fmt(result.price);
+        setControlledInputValue(priceInput, fmt(result.price));
         priceInput.style.color = result.marketValue ? getPriceColor(result.price, result.marketValue) : '';
-        triggerEvents(priceInput, 'input', 'keyup');
+        setCheckboxState(choiceCheckbox, true);
     }
 
     // -------------------------------------------------------------------------
@@ -252,16 +309,39 @@ const PriceFillerModule = (() => {
         const priceInput = row.querySelector('.price___DoKP7 input.input-money') || row.querySelector('[class*="priceInputWrapper"] input.input-money') || row.querySelector('input.input-money[placeholder="Price"]');
         if (!priceInput) return;
 
+        const quantityInputs = [
+            ...row.querySelectorAll(
+                'div.amount input:not([type="checkbox"]), ' +
+                '[class*=amount___] input:not([type="checkbox"]), ' +
+                'input.input-money[placeholder="Qty"]'
+            )
+        ].filter(input => input.type !== 'hidden');
+
+        const selectionInputs =
+            getRowSelectionInputs(row);
+
         if (!checked) {
-            priceInput.value = '';
+            quantityInputs.forEach(input => {
+                setControlledInputValue(input, '');
+            });
+
+            setControlledInputValue(priceInput, '');
             priceInput.style.color = '';
-            triggerEvents(priceInput, 'input');
+
+            selectionInputs.forEach(input => {
+                setCheckboxState(input, false);
+            });
+
             return;
         }
 
         if (prefs.blackFridayMode) {
-            priceInput.value = '1';
-            triggerEvents(priceInput, 'input');
+            setControlledInputValue(priceInput, '1');
+
+            selectionInputs.forEach(input => {
+                setCheckboxState(input, true);
+            });
+
             return;
         }
 
@@ -287,17 +367,23 @@ const PriceFillerModule = (() => {
         const result = await calculatePrice(matchedItem?.name || '', itemId, matchedItem).catch(() => null);
         if (!result) return;
 
-        priceInput.value = fmt(result.price);
+        setControlledInputValue(priceInput, fmt(result.price));
         priceInput.style.color = result.marketValue ? getPriceColor(result.price, result.marketValue) : '';
-        triggerEvents(priceInput, 'input');
         
         // Fill quantity
-        const qty = row.querySelector('div.amount input, [class*=amount___] input, input.input-money[placeholder="Qty"]');
-        if (qty) {
-            const qtyVal = row.querySelector('span.t-hide span:last-child')?.textContent?.trim() || '9999999';
-            qty.value = qtyVal;
-            triggerEvents(qty, 'input', 'keyup');
-        }
+        const qtyValue =
+            row.querySelector(
+                'span.t-hide span:last-child'
+            )?.textContent?.trim() ||
+            '9999999';
+
+        quantityInputs.forEach(input => {
+            setControlledInputValue(input, qtyValue);
+        });
+
+        selectionInputs.forEach(input => {
+            setCheckboxState(input, true);
+        });
     }
 
     // -------------------------------------------------------------------------

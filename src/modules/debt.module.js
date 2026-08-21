@@ -173,7 +173,7 @@
 
             } catch (error) {
                 if (error.message.includes('Extension context invalidated')) {
-                    console.warn('💰 Extension context invalidated during test');
+                    console.debug('💰 Extension context invalidated during test');
                     window.SidekickModules?.Core?.SafeMessageSender?.showExtensionReloadNotification();
                 } else {
                     console.error('💰 Background script test failed:', error);
@@ -640,6 +640,11 @@
                             console.log('⚠️ Background script failed or returned no logs:', backgroundResult);
                         }
                     } catch (bgError) {
+                        const expectedReload = /Extension context|Module disabled due to extension context/i.test(bgError?.message || '');
+                        if (expectedReload) {
+                            console.debug('💰 Payment check stopped because the extension was reloaded');
+                            return;
+                        }
                         console.error('❌ Background script logs API failed:', bgError);
                     }
                 } else {
@@ -684,7 +689,7 @@
 
                     // Only log once
                     if (!this.contextInvalidatedLogged) {
-                        console.warn('💰 Extension context invalidated - Debt module disabled until page refresh');
+                        console.debug('💰 Extension context invalidated - Debt module paused until page refresh');
                         this.contextInvalidatedLogged = true;
                     }
                     throw new Error('Extension context invalidated - please refresh page');
@@ -708,7 +713,7 @@
 
                     // Only log once
                     if (!this.contextErrorLogged) {
-                        console.warn('💰 Extension context lost - Debt module disabled');
+                        console.debug('💰 Extension context lost - Debt module paused');
                         this.contextErrorLogged = true;
                     }
 

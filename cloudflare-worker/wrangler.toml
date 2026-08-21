@@ -1,6 +1,0 @@
-name = "sidekick-mug-data"
-main = "mug-data-worker.js"
-compatibility_date = "2024-01-01"
-
-# No KV or Durable Objects needed — this worker is stateless
-# Deploy with: wrangler deploy
