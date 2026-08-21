@@ -4,6 +4,9 @@
  * Version: 1.0.0
  */
 
+// Remove the retired secondary-key setting from existing installations.
+chrome.storage.local.remove('sidekick_secondary_api_key');
+
 // API Cache Manager - Prevents rate limiting by caching responses and deduplicating requests
 const apiCache = {
     cache: new Map(),
@@ -199,7 +202,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Create native Chrome notifications
             chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'assets/icons/swissknife-48.png',
+                iconUrl: 'icons/icon48.png',
                 title: request.title || 'Sidekick',
                 message: request.message || 'Notification from Sidekick'
             });
@@ -207,99 +210,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
 
         case 'proxyFetch':
-            // Cross-origin fetch proxy for content scripts.
-            // Existing callers receive JSON; Cracking requests plain text.
-            (async () => {
-                const controller = new AbortController();
-
-                const timeoutId = setTimeout(
-                    () => controller.abort(),
-                    request.timeout || 30000
-                );
-
-                try {
-                    const method =
-                        request.method || 'GET';
-
-                    const fetchOptions = {
-                        method,
-                        headers:
-                            request.headers || {},
-                        signal:
-                            controller.signal
-                    };
-
-                    if (
-                        request.body &&
-                        method !== 'GET' &&
-                        method !== 'HEAD'
-                    ) {
-                        fetchOptions.body =
-                            request.body;
-                    }
-
-                    const response =
-                        await fetch(
-                            request.url,
-                            fetchOptions
-                        );
-
-                    const responseText =
-                        await response.text();
-
-                    if (!response.ok) {
-                        throw new Error(
-                            `Request failed: ${response.status} ${response.statusText}`
-                        );
-                    }
-
-                    if (
-                        request.responseType ===
-                        'text'
-                    ) {
-                        sendResponse({
-                            success: true,
-                            data: responseText,
-                            status:
-                                response.status,
-                            statusText:
-                                response.statusText,
-                            responseHeaders:
-                                [...response.headers]
-                                    .map(
-                                        ([key, value]) =>
-                                            `${key}: ${value}`
-                                    )
-                                    .join('\r\n')
-                        });
-                    } else {
-                        sendResponse({
-                            success: true,
-                            data:
-                                JSON.parse(
-                                    responseText
-                                ),
-                            status:
-                                response.status,
-                            statusText:
-                                response.statusText
-                        });
-                    }
-                } catch (error) {
-                    sendResponse({
-                        success: false,
-                        error:
-                            error.name ===
-                                'AbortError'
-                                ? 'Request timed out'
-                                : error.message
-                    });
-                } finally {
-                    clearTimeout(timeoutId);
-                }
-            })();
-
-            return true;
+            // Generic fetch proxy for content scripts that hit fetch issues
+            fetch(request.url)
+                .then(r => r.json())
+                .then(data => sendResponse({ success: true, data }))
+                .catch(err => sendResponse({ success: false, error: err.message }));
+            return true; // Keep channel open for async response
 
         case 'crimeNotifierAlert':
             // Handle Crime Notifier alerts with browser notifications and badge
@@ -317,18 +233,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Bug reporting is handled securely through Cloudflare Worker
 // No API keys stored in the extension code
 
-// ── Torn API error codes that should trigger secondary key fallback ───────────
-// Code 5 = "Too many requests" (rate limit / overload)
-// Code 8 = "IP temporarily blocked"
-const SECONDARY_FALLBACK_CODES = new Set([5, 8]);
-
-// Read a value from chrome.storage.local (background context helper)
-function storagGet(key) {
-    return new Promise(resolve => {
-        chrome.storage.local.get(key, result => resolve(result[key] ?? null));
-    });
-}
-
 // Handle Torn API calls from content scripts (avoids CORS issues)
 async function handleTornApiCall(request) {
     const { apiKey, selections, userId, endpoint: requestEndpoint } = request;
@@ -340,62 +244,25 @@ async function handleTornApiCall(request) {
     // Determine the API endpoint
     const endpoint = requestEndpoint || (userId ? `user/${userId}` : 'user');
 
-    // ── Primary attempt ───────────────────────────────────────────────────────
     const cacheKey = apiCache.getCacheKey(apiKey, selections, endpoint);
     const cached = apiCache.get(cacheKey);
     if (cached) return cached;
 
     const result = await apiCache.deduplicate(cacheKey, async () => {
-        console.log('🔍 Background: Making fresh API call (primary):', { endpoint, selections });
+        console.log('🔍 Background: Making fresh API call:', { endpoint, selections });
         const r = await makeActualApiCall(apiKey, selections, endpoint);
         if (r.success) apiCache.set(cacheKey, r, selections);
         return r;
     });
 
-    // ── Check if we need to fall back to the secondary key ───────────────────
-    // A primary failure is signalled by success:false AND an apiErrorCode field,
-    // or by Torn error code 5/8 embedded in the error message.
-    const needsFallback = !result.success && (
-        SECONDARY_FALLBACK_CODES.has(result.apiErrorCode) ||
-        /too many requests|overloaded|rate.?limit|code[:\s]*[58]\b/i.test(result.error || '')
-    );
-
-    if (!needsFallback) return result;
-
-    // ── Secondary key retry ───────────────────────────────────────────────────
-    const secondaryKey = await storagGet('sidekick_secondary_api_key');
-    if (!secondaryKey) {
-        console.warn('⚠️ Background: Primary API rate-limited but no secondary key configured');
-        return result; // return original error
-    }
-
-    console.log('🔄 Background: Primary key rate-limited — retrying with secondary key');
-
-    const secCacheKey = apiCache.getCacheKey(secondaryKey, selections, endpoint);
-    const secCached = apiCache.get(secCacheKey);
-    if (secCached) return secCached;
-
-    const secResult = await apiCache.deduplicate(secCacheKey, async () => {
-        const r = await makeActualApiCall(secondaryKey, selections, endpoint);
-        if (r.success) apiCache.set(secCacheKey, r, selections);
-        return r;
-    });
-
-    if (secResult.success) {
-        console.log('✅ Background: Secondary key succeeded');
-        return { ...secResult, usedSecondaryKey: true };
-    }
-
-    console.warn('⚠️ Background: Both primary and secondary keys failed');
-    return secResult;
+    return result;
 }
 
 
 // Actual API call implementation (extracted from handleTornApiCall)
 async function makeActualApiCall(apiKey, selections, endpoint) {
 
-    // Helper: throw an Error that carries the Torn numeric error code so the
-    // outer handler can detect rate-limit codes and trigger secondary key retry.
+    // Helper: throw an Error that carries Torn's numeric API error code.
     function throwTornError(msg, code) {
         const err = new Error(msg);
         err.apiErrorCode = code ?? null;
@@ -868,7 +735,7 @@ async function handleCrimeNotifierAlert(alertData) {
         if (windowsNotifEnabled) {
             await chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'assets/icons/swissknife-48.png',
+                iconUrl: 'icons/icon48.png',
                 title: title || '🚨 Crime Notifier',
                 message: message || 'Alert from Crime Notifier',
                 priority: 2,

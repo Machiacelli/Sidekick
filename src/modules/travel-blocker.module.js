@@ -13,28 +13,18 @@
 
     let settings = null;
     let apiKeyPrimary = '';
-    let apiKeySecondary = '';
     let enemyLocations = {};
     const appliedChanges = new Map();
 
     const fetchJson = async (url) => {
-        // Try primary key
-        let activeKey = apiKeyPrimary;
-        if (!activeKey) return null;
+        if (!apiKeyPrimary) return null;
 
-        let apiUrl = url.includes('?') ? `${url}&key=${activeKey}` : `${url}?key=${activeKey}`;
+        const apiUrl = url.includes('?')
+            ? `${url}&key=${apiKeyPrimary}`
+            : `${url}?key=${apiKeyPrimary}`;
         try {
-            let resp = await fetch(apiUrl);
-            let data = await resp.json();
-            
-            // If error is code 5 (Too many requests) or 2 (Incorrect key) and we have a secondary key, try fallback
-            if (data && data.error && (data.error.code === 5 || data.error.code === 2) && apiKeySecondary) {
-                console.warn("[Travel Blocker] Primary API key failed, using secondary fallback...");
-                apiUrl = url.includes('?') ? `${url}&key=${apiKeySecondary}` : `${url}?key=${apiKeySecondary}`;
-                resp = await fetch(apiUrl);
-                data = await resp.json();
-            }
-            return data;
+            const resp = await fetch(apiUrl);
+            return await resp.json();
         } catch (e) {
             return null;
         }
@@ -42,7 +32,7 @@
 
     async function loadSettings() {
         return new Promise(resolve => {
-            chrome.storage.local.get(['sidekick_travel_blocker', 'sidekick_api_key', 'sidekick_secondary_api_key', 'sidekick_enemy_locations'], result => {
+            chrome.storage.local.get(['sidekick_travel_blocker', 'sidekick_api_key', 'sidekick_enemy_locations'], result => {
                 settings = result?.sidekick_travel_blocker || {
                     isEnabled: true,
                     oc_watcher: true,
@@ -50,7 +40,6 @@
                     war_watch: true
                 };
                 apiKeyPrimary = result?.sidekick_api_key || '';
-                apiKeySecondary = result?.sidekick_secondary_api_key || '';
                 enemyLocations = result?.sidekick_enemy_locations || {};
                 resolve(settings);
             });
@@ -73,7 +62,7 @@
     function getDrugCooldownSeconds() {
         const sidebarRoot = document.getElementById('sidebarroot');
         if (!sidebarRoot) return 0;
-        
+
         // icon49 to 53 represent drug cooldown timers.
         // We'll read the text from the tooltips or assume it's active.
         // But exact seconds is hard from sidebar unless we hover. 
@@ -85,7 +74,7 @@
     let cachedMyId = null;
     let cachedFactionCrimes = null;
     let cachedUserCooldowns = null;
-    
+
     const modules = [
         {
             id: 'oc_watcher',
@@ -103,7 +92,7 @@
 
                 // Then check API for timing
                 if (!ctx || !ctx.flightTimeSeconds) return null; // We need flight time
-                
+
                 if (!cachedMyId) {
                     const profile = await fetchJson(`https://api.torn.com/v2/user/profile`);
                     if (profile && profile.id) cachedMyId = profile.id;
@@ -117,11 +106,11 @@
                 if (!cachedFactionCrimes) return null;
 
                 const now = Math.floor(Date.now() / 1000);
-                const roundTripTime = (ctx.flightTimeSeconds * 2) + 300; 
+                const roundTripTime = (ctx.flightTimeSeconds * 2) + 300;
 
                 for (const [id, crime] of Object.entries(cachedFactionCrimes)) {
                     if (crime.status !== "Ready" && crime.status !== "Preparing") continue;
-                    
+
                     const participants = crime.participants || [];
                     const isParticipant = participants.some(p => p.id === cachedMyId);
 
@@ -146,16 +135,16 @@
             label: 'Drug Cooldown',
             evaluate: async (ctx) => {
                 if (!ctx || !ctx.flightTimeSeconds) return null;
-                
+
                 if (!cachedUserCooldowns) {
                     const userCooldowns = await fetchJson(`https://api.torn.com/user/?selections=cooldowns`);
                     if (userCooldowns && userCooldowns.cooldowns) {
                         cachedUserCooldowns = userCooldowns.cooldowns;
                     }
                 }
-                
+
                 if (!cachedUserCooldowns) return null;
-                
+
                 const drugCd = cachedUserCooldowns.drug || 0;
                 if (drugCd === 0) {
                     return { reason: 'Drug cooldown finished — take a drug!' };
@@ -210,7 +199,7 @@
         for (const target of targets) {
             const nameEl = target.querySelector('.name');
             if (!nameEl) continue;
-            
+
             const country = nameEl.textContent.trim();
             const locs = enemyLocations[country];
             if (!locs) continue;
@@ -223,9 +212,9 @@
                 target.style.position = 'relative';
                 target.appendChild(badgeWrap);
             }
-            
+
             badgeWrap.innerHTML = '';
-            
+
             if (locs.going > 0) {
                 badgeWrap.innerHTML += `<div title="${locs.going} enemies traveling here" style="background:rgba(224,152,32,0.8);color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">${locs.going}</div>`;
             }
@@ -257,11 +246,11 @@
 
     async function enforceRules() {
         if (!settings || !settings.isEnabled) return;
-        
+
         injectWarBadges();
 
         const targets = Array.from(document.querySelectorAll('.travel-agency .destination'));
-        
+
         for (const target of targets) {
             const nameEl = target.querySelector('.name');
             if (!nameEl) continue;
@@ -278,7 +267,7 @@
             if (!buttons.length) continue;
 
             const ctx = { country, flightTimeSeconds };
-            
+
             const blockers = [];
             for (const mod of modules) {
                 if (settings[mod.id]) { // true if switch is ON
@@ -300,13 +289,13 @@
 
                 for (const btn of buttons) {
                     if (btn.textContent.trim() !== 'Travel' && btn.textContent.trim() !== 'Standard' && btn.textContent.trim() !== 'Airstrip') continue;
-                    
+
                     btn.disabled = true;
                     btn.textContent = 'BLOCKED';
                     btn.title = blockers.map(r => `[${r.module}] ${r.reason}`).join('\\n');
                     btn.classList.add('script-disabled-button');
                     btn.style.pointerEvents = 'none';
-                    
+
                     for (const r of blockers) {
                         recordApplied(r._moduleId, btn, visualX);
                     }

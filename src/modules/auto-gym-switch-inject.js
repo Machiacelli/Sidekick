@@ -2,8 +2,9 @@
 // Runs in MAIN world at document_start so it can override window.fetch
 // before Torn's own scripts load. Enabled flag is read from localStorage
 // (set by the isolated-world content script auto-gym-switch.module.js).
-// Key fix: gym switching uses a proper POST to changeGym (not a DOM click),
-// which prevents Torn navigating to the gym profile page.
+// Gym switching deliberately uses Torn's own getAction helper, matching the
+// original userscript. That helper supplies Torn's current request format and
+// anti-CSRF data before this interceptor returns the switch result to the UI.
 // Forked from Auto gym switch by Stephen Lynx
 (function () {
     'use strict';
@@ -66,6 +67,10 @@
             if (!gyms[gymClass]) continue;
             for (const gym of gyms[gymClass]) {
                 const gymId = Number(gym.id); // Normalise to Number
+                if (gymInfo[gymId]) {
+                    gymInfo[gymId].name = gym.name;
+                    gymInfo[gymId].cost = gym.energyCost;
+                }
                 if (gym.status === 'active') currentGym = gymId;
                 if (gym.status === 'available' || gym.status === 'active') {
                     for (const stat of ['str', 'def', 'spe', 'dex']) {
@@ -95,53 +100,29 @@
         return null;
     }
 
-    // Uses native DOM clicking to switch gym, letting Torn's React handle the API call
-    async function changeGymViaDOM(gymId) {
-        // Look for the specific gym icon (e.g. gym-25___abcd)
-        const icon = document.querySelector(`[class*="gym-${gymId}_"], [class*="gym-${gymId} "]`);
-        if (!icon) return false;
-        
-        const btn = icon.closest('button, [class*="gymButton"]');
-        if (!btn) return false;
-        
-        console.log(`💪 [AutoGym] Clicking native gym button for Gym ${gymId}`);
-        btn.click();
-        
-        // Wait up to 3 seconds for the fetch interceptor to register the change
-        for (let i = 0; i < 30; i++) {
-            if (currentGym === gymId) return true;
-            await new Promise(r => setTimeout(r, 100));
-        }
-        return false;
-    }
-
-    // Fallback API POST to changeGym
+    // Match the original userscript exactly: Torn's page helper performs the
+    // changeGym action, then the intercepted train request receives that action's
+    // message instead of training. The next Train click proceeds in the new gym.
     async function swapGyms(gymId) {
-        let changeResult;
-        
-        // Attempt 1: JSON payload with step in URL (Torn's modern standard)
-        try {
-            const resp = await originalFetch('/gym.php?step=changeGym', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ step: 'changeGym', gymID: gymId })
-            });
-            changeResult = await resp.json();
-        } catch(e) {}
+        const tornGetAction = typeof getAction === 'function' ? getAction : window.getAction;
+        if (typeof tornGetAction !== 'function') {
+            console.error('💪 [AutoGym] Torn getAction helper is unavailable');
+            return null;
+        }
 
-        // Attempt 2: Form payload with step in body
-        if (!changeResult || !changeResult.success) {
-            const params = new URLSearchParams({ step: 'changeGym', gymID: gymId });
-            try {
-                const resp = await originalFetch('/gym.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: params
-                });
-                changeResult = await resp.json();
-            } catch (e) {
-                console.error('💪 [AutoGym] changeGym fallback request failed:', e);
-            }
+        let changeResult;
+        try {
+            changeResult = await tornGetAction({
+                type: 'post',
+                action: 'gym.php',
+                data: {
+                    step: 'changeGym',
+                    gymID: gymId
+                }
+            });
+        } catch (error) {
+            console.error('💪 [AutoGym] Torn changeGym action failed:', error);
+            return null;
         }
 
         if (changeResult && changeResult.success) {
@@ -150,14 +131,26 @@
         }
 
         return new Response(JSON.stringify({
-            success: changeResult ? changeResult.success : false,
-            message: (changeResult && changeResult.message) || `Switched to gym ${gymId}. Click Train again.`
-        }));
+            message: changeResult?.message || 'Unable to switch gyms.'
+        }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     function updateGymUI(gymId) {
         const info = gymInfo[gymId];
         if (!info) return;
+
+        const notificationName = document.querySelector('[class^="notificationText"] b');
+        if (notificationName && info.name) notificationName.textContent = info.name;
+
+        if (info.cost !== undefined) {
+            for (const description of document.querySelectorAll('[class^="description"]')) {
+                const paragraphs = description.getElementsByTagName('p');
+                if (paragraphs[1]) paragraphs[1].textContent = `${info.cost} energy per train`;
+            }
+        }
 
         // Swap active button class
         const activeButton = document.querySelector('[class*="active"][class^="gymButton"]');
@@ -195,7 +188,7 @@
             if (args[1]?.body) {
                 const b = args[1].body;
                 if (b instanceof FormData || b instanceof URLSearchParams) {
-                    bodyText = Array.from(b.entries()).map(([k,v]) => `${k}=${v}`).join('&');
+                    bodyText = Array.from(b.entries()).map(([k, v]) => `${k}=${v}`).join('&');
                 } else {
                     bodyText = String(b);
                 }
@@ -229,7 +222,7 @@
                     } else if (typeof args[1]?.body === 'string') {
                         try {
                             gymID = JSON.parse(args[1].body).gymID;
-                        } catch(e) {
+                        } catch (e) {
                             gymID = new URLSearchParams(args[1].body).get('gymID');
                         }
                     }
@@ -255,7 +248,7 @@
                 // the current nice-number target and stores it in localStorage.
                 // We use that gym instead of the normal max-gain selection.
                 const niceActive = localStorage.getItem('sidekick_merit_active') === 'true';
-                const niceGymId  = niceActive ? parseInt(localStorage.getItem('sidekick_merit_target_gym') || '0') : 0;
+                const niceGymId = niceActive ? parseInt(localStorage.getItem('sidekick_merit_target_gym') || '0') : 0;
 
                 const gymToUse = (niceActive && niceGymId) ? niceGymId : getBestGym(stat);
 
@@ -272,99 +265,6 @@
 
         return originalFetch(...args);
     };
-
-    // ── DOM Interception (Fallback for XHR/React) ─────────────────────────────
-    let isProgrammaticAction = false;
-
-    // Intercepts clicks on the "Train" button BEFORE Torn's scripts process it.
-    document.addEventListener('click', async (e) => {
-        if (!isEnabled() || isProgrammaticAction) return;
-        
-        const btn = e.target.closest('button');
-        if (!btn) return;
-        
-        const btnText = btn.textContent.trim().toLowerCase();
-        if (btnText === 'train' || btnText.includes('train')) {
-            const container = btn.closest('[class*="stat___"], [class*="gym-property"], li, .stat-wrapper, [class*="statItem___"]');
-            if (!container) return;
-            
-            const containerText = container.textContent.toLowerCase();
-            let stat = '';
-            
-            if (containerText.includes('strength')) stat = 'str';
-            else if (containerText.includes('defense')) stat = 'def';
-            else if (containerText.includes('speed')) stat = 'spe';
-            else if (containerText.includes('dexterity')) stat = 'dex';
-            
-            if (stat) {
-                const bestGym = getBestGym(stat);
-                if (bestGym !== null && bestGym !== currentGym) {
-                    console.log(`💪 [AutoGym] DOM Click intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
-                    
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    
-                    const originalText = btn.textContent;
-                    btn.textContent = 'Switching...';
-                    btn.disabled = true;
-                    
-                    isProgrammaticAction = true;
-                    const domSuccess = await changeGymViaDOM(bestGym);
-                    if (!domSuccess) await swapGyms(bestGym);
-                    
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                    
-                    // We DO NOT simulate the second click to comply with Torn's 1-click-1-action rule.
-                    // The user must click train again.
-                    setTimeout(() => { isProgrammaticAction = false; }, 100);
-                    
-                    return false;
-                }
-            }
-        }
-    }, true);
-
-    // Intercepts hitting "Enter" in the energy input field
-    document.addEventListener('keydown', async (e) => {
-        if (!isEnabled() || isProgrammaticAction) return;
-        if (e.key !== 'Enter') return;
-        
-        const input = e.target.closest('input[type="text"], input[type="number"]');
-        if (!input) return;
-        
-        const container = input.closest('[class*="stat___"], [class*="gym-property"], li, .stat-wrapper, [class*="statItem___"]');
-        if (!container) return;
-        
-        const containerText = container.textContent.toLowerCase();
-        let stat = '';
-        
-        if (containerText.includes('strength')) stat = 'str';
-        else if (containerText.includes('defense')) stat = 'def';
-        else if (containerText.includes('speed')) stat = 'spe';
-        else if (containerText.includes('dexterity')) stat = 'dex';
-        
-        if (stat) {
-            const bestGym = getBestGym(stat);
-            if (bestGym !== null && bestGym !== currentGym) {
-                console.log(`💪 [AutoGym] DOM Enter intercepted — stat:${stat} best:${bestGym} current:${currentGym}`);
-                
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                
-                isProgrammaticAction = true;
-                const domSuccess = await changeGymViaDOM(bestGym);
-                if (!domSuccess) await swapGyms(bestGym);
-                
-                // We DO NOT simulate the second enter to comply with Torn's 1-click-1-action rule.
-                setTimeout(() => { isProgrammaticAction = false; }, 100);
-                
-                return false;
-            }
-        }
-    }, true);
 
     console.log('💪 [AutoGym] Fetch interceptor ready (enabled:', isEnabled(), ')');
 })();
