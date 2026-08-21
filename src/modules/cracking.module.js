@@ -31,20 +31,34 @@
         async loadSettings() {
             try {
                 if (window.SidekickModules?.Core?.ChromeStorage?.get) {
-                    const settings = await window.SidekickModules.Core.ChromeStorage.get('sidekick_settings');
-                    if (settings && settings['crime-cracking']) {
-                        return settings['crime-cracking'].isEnabled !== false;
+                    const settings =
+                        await window.SidekickModules.Core.ChromeStorage.get(
+                            'sidekick_settings'
+                        );
+
+                    if (
+                        settings &&
+                        settings['crime-cracking']
+                    ) {
+                        return (
+                            settings['crime-cracking'].isEnabled !== false
+                        );
                     }
                 }
+
                 return false;
             } catch (error) {
-                console.error('Error loading Cracking settings:', error);
+                console.error(
+                    'Error loading Cracking settings:',
+                    error
+                );
                 return false;
             }
         },
 
         enable() {
             if (this._enabledInternal) return;
+
             this._enabledInternal = true;
             console.log('💻 Enabling Cracking Module');
             this.startModule();
@@ -52,6 +66,7 @@
 
         disable() {
             if (!this._enabledInternal) return;
+
             this._enabledInternal = false;
             console.log('💻 Disabling Cracking Module');
             this.stopModule();
@@ -73,12 +88,18 @@
             this.dictLoading = false;
             this.prevRowStates = new Map();
             this.panelUpdateTimers = new Map();
-            this.LAST_INPUT = { key: null, time: 0 };
+            this.LAST_INPUT = {
+                key: null,
+                time: 0
+            };
 
             this.MIN_LENGTH = 4;
             this.MAX_LENGTH = 10;
+
             this.WORDLIST_URL =
                 'https://gitlab.com/kalilinux/packages/seclists/-/raw/kali/master/Passwords/Common-Credentials/Pwdb_top-1000000.txt?ref_type=heads';
+
+            this.DOWNLOAD_MIN_DELTA = 20;
 
             this.DB_NAME = 'crack';
             this.STORE_NAME = 'dictionary';
@@ -92,7 +113,14 @@
             );
 
             this.keydownHandler = event => {
-                if (event.metaKey || event.ctrlKey || event.altKey) return;
+                if (
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.altKey
+                ) {
+                    return;
+                }
+
                 this.captureKey(event.key);
             };
 
@@ -123,7 +151,6 @@
                     this.keydownHandler,
                     true
                 );
-
                 this.keydownHandler = null;
             }
 
@@ -131,27 +158,44 @@
                 'sidekick-cracking-badge'
             );
 
-            if (badge) badge.remove();
+            if (badge) {
+                badge.remove();
+            }
 
-            document
-                .querySelectorAll('.__crackhelp_panel')
-                .forEach(panel => panel.remove());
+            const panels = document.querySelectorAll(
+                '.__crackhelp_panel'
+            );
+
+            panels.forEach(panel => panel.remove());
         },
 
         setStatus(message) {
-            if (this.debug && message) {
-                console.log('[Crack] Status:', message);
+            if (
+                this.debug &&
+                message
+            ) {
+                console.log(
+                    '[Crack] Status:',
+                    message
+                );
             }
         },
 
         crackLog(...args) {
             if (this.debug) {
-                console.log('[Crack]', ...args);
+                console.log(
+                    '[Crack]',
+                    ...args
+                );
             }
         },
 
         injectHeaderBadge() {
-            if (window.location.hash !== '#/cracking') return;
+            if (
+                window.location.hash !== '#/cracking'
+            ) {
+                return;
+            }
 
             if (
                 document.getElementById(
@@ -199,16 +243,20 @@
             let lastUrl = window.location.href;
 
             this._navWatcher = setInterval(() => {
-                const currentUrl = window.location.href;
+                const currentUrl =
+                    window.location.href;
 
                 if (currentUrl !== lastUrl) {
                     lastUrl = currentUrl;
 
-                    const oldBadge = document.getElementById(
-                        'sidekick-cracking-badge'
-                    );
+                    const oldBadge =
+                        document.getElementById(
+                            'sidekick-cracking-badge'
+                        );
 
-                    if (oldBadge) oldBadge.remove();
+                    if (oldBadge) {
+                        oldBadge.remove();
+                    }
                 }
 
                 this.injectHeaderBadge();
@@ -222,7 +270,7 @@
                 uiBg: '#222',
                 uiText: '#fff',
                 uiBorder: 'rgba(255,255,255,0.2)',
-                sugBg: 'rgba(30,32,36,0.95)',
+                sugBg: 'rgba(30, 32, 36, 0.95)',
                 sugText: '#4fa854',
                 sugFontPx: 12
             };
@@ -235,7 +283,8 @@
             span.style.margin = '0 2px';
             span.style.display = 'inline-block';
             span.style.borderRadius = '3px';
-            span.style.fontSize = `${theme.sugFontPx}px`;
+            span.style.fontSize =
+                `${theme.sugFontPx}px`;
             span.style.color = theme.sugText;
             span.style.fontWeight = 'bold';
         },
@@ -245,193 +294,363 @@
 
             if (!panel) return;
 
-            panel.style.background = theme.sugBg;
-            panel.style.color = theme.sugText;
-            panel.style.fontSize = `${theme.sugFontPx}px`;
-            panel.style.textAlign = 'center';
-            panel.style.position = 'absolute';
-            panel.style.zIndex = '9999';
+            panel.style.background =
+                theme.sugBg;
+            panel.style.color =
+                theme.sugText;
+            panel.style.fontSize =
+                `${theme.sugFontPx}px`;
+            panel.style.textAlign =
+                'center';
+            panel.style.position =
+                'absolute';
+            panel.style.zIndex =
+                '9999';
 
-            const list = panel.querySelector(':scope > div');
+            const listDiv = panel.querySelector(
+                ':scope > div'
+            );
 
-            if (!list) return;
+            if (!listDiv) return;
 
-            for (const child of Array.from(list.children)) {
-                if (child.dataset?.kind === 'sug') {
+            for (
+                const child of
+                Array.from(listDiv.children)
+            ) {
+                if (
+                    child.dataset &&
+                    child.dataset.kind === 'sug'
+                ) {
                     this.styleSugSpan(child);
                 }
             }
         },
 
-        gmRequest(options) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const method = options.method || 'GET';
+        gmRequest(opts) {
+            return new Promise(
+                (resolve, reject) => {
+                    const timeout =
+                        opts.timeout || 30000;
 
-                    const headers = options.headers || {
-                        Accept: 'application/json, text/plain, */*; q=0.1'
-                    };
+                    let finished = false;
 
-                    const requestOptions = {
-                        method,
-                        headers
-                    };
+                    const timeoutId =
+                        setTimeout(() => {
+                            if (finished) return;
 
-                    if (options.data) {
-                        requestOptions.body = options.data;
-                    }
+                            finished = true;
 
-                    const controller = new AbortController();
+                            reject(
+                                new Error(
+                                    'Dictionary request timed out'
+                                )
+                            );
+                        }, timeout + 1000);
 
-                    const timeoutId = setTimeout(
-                        () => controller.abort(),
-                        options.timeout || 30000
+                    chrome.runtime.sendMessage(
+                        {
+                            action:
+                                'proxyFetch',
+                            url:
+                                opts.url,
+                            method:
+                                opts.method ||
+                                'GET',
+                            headers:
+                                opts.headers || {
+                                    Accept:
+                                        'text/plain, */*; q=0.1'
+                                },
+                            body:
+                                opts.data ||
+                                null,
+                            responseType:
+                                'text',
+                            timeout
+                        },
+                        result => {
+                            if (finished) return;
+
+                            finished = true;
+                            clearTimeout(
+                                timeoutId
+                            );
+
+                            if (
+                                chrome.runtime
+                                    .lastError
+                            ) {
+                                reject(
+                                    new Error(
+                                        chrome.runtime
+                                            .lastError
+                                            .message
+                                    )
+                                );
+                                return;
+                            }
+
+                            if (
+                                !result?.success
+                            ) {
+                                reject(
+                                    new Error(
+                                        result?.error ||
+                                        'Background dictionary request failed'
+                                    )
+                                );
+                                return;
+                            }
+
+                            resolve({
+                                status:
+                                    result.status,
+                                statusText:
+                                    result.statusText ||
+                                    '',
+                                responseText:
+                                    typeof result.data ===
+                                        'string'
+                                        ? result.data
+                                        : '',
+                                response: null,
+                                responseHeaders:
+                                    result.responseHeaders ||
+                                    ''
+                            });
+                        }
                     );
-
-                    requestOptions.signal = controller.signal;
-
-                    const response = await fetch(
-                        options.url,
-                        requestOptions
-                    );
-
-                    clearTimeout(timeoutId);
-
-                    let responseText = '';
-                    let responseData = null;
-
-                    if (options.responseType === 'arraybuffer') {
-                        responseData = await response.arrayBuffer();
-                    } else {
-                        responseText = await response.text();
-                    }
-
-                    resolve({
-                        status: response.status,
-                        statusText: response.statusText,
-                        responseText,
-                        response: responseData,
-                        responseHeaders: [...response.headers]
-                            .map(([key, value]) => `${key}: ${value}`)
-                            .join('\r\n')
-                    });
-                } catch (error) {
-                    reject(error);
                 }
-            });
+            );
+        },
+
+        isGzipPath(pathOrUrl) {
+            try {
+                const path = String(
+                    pathOrUrl || ''
+                );
+
+                const cleanPath =
+                    path.split('?')[0];
+
+                return /\.gz$/i.test(
+                    cleanPath
+                );
+            } catch (_) {
+                return false;
+            }
+        },
+
+        async gunzipArrayBufferToText(
+            arrayBuffer
+        ) {
+            if (!arrayBuffer) return '';
+
+            if (
+                typeof DecompressionStream !==
+                'function'
+            ) {
+                throw new Error(
+                    'Your browser does not support DecompressionStream(gzip).'
+                );
+            }
+
+            const decompressionStream =
+                new DecompressionStream('gzip');
+
+            const stream =
+                new Blob([arrayBuffer])
+                    .stream()
+                    .pipeThrough(
+                        decompressionStream
+                    );
+
+            return await new Response(
+                stream
+            ).text();
+        },
+
+        async responseToText(
+            response,
+            pathOrUrl
+        ) {
+            if (
+                this.isGzipPath(pathOrUrl)
+            ) {
+                return await this.gunzipArrayBufferToText(
+                    response.response
+                );
+            }
+
+            return (
+                response.responseText || ''
+            );
         },
 
         openDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(
-                    this.DB_NAME,
-                    1
-                );
-
-                request.onupgradeneeded = () => {
-                    const database = request.result;
-
-                    if (
-                        !database.objectStoreNames.contains(
-                            this.STORE_NAME
-                        )
-                    ) {
-                        database.createObjectStore(
-                            this.STORE_NAME
+            return new Promise(
+                (resolve, reject) => {
+                    const request =
+                        indexedDB.open(
+                            this.DB_NAME,
+                            1
                         );
-                    }
-                };
 
-                request.onsuccess = () =>
-                    resolve(request.result);
+                    request.onupgradeneeded =
+                        () => {
+                            const database =
+                                request.result;
 
-                request.onerror = () =>
-                    reject(request.error);
-            });
+                            if (
+                                !database.objectStoreNames.contains(
+                                    this.STORE_NAME
+                                )
+                            ) {
+                                database.createObjectStore(
+                                    this.STORE_NAME
+                                );
+                            }
+                        };
+
+                    request.onsuccess = () =>
+                        resolve(
+                            request.result
+                        );
+
+                    request.onerror = () =>
+                        reject(
+                            request.error
+                        );
+                }
+            );
         },
 
         async idbSet(key, value) {
-            const database = await this.openDB();
+            const database =
+                await this.openDB();
 
-            return new Promise((resolve, reject) => {
-                const transaction = database.transaction(
-                    this.STORE_NAME,
-                    'readwrite'
-                );
+            return new Promise(
+                (resolve, reject) => {
+                    const transaction =
+                        database.transaction(
+                            this.STORE_NAME,
+                            'readwrite'
+                        );
 
-                transaction
-                    .objectStore(this.STORE_NAME)
-                    .put(value, key);
+                    transaction
+                        .objectStore(
+                            this.STORE_NAME
+                        )
+                        .put(value, key);
 
-                transaction.oncomplete = resolve;
-                transaction.onerror = () =>
-                    reject(transaction.error);
-            });
+                    transaction.oncomplete =
+                        resolve;
+
+                    transaction.onerror =
+                        () =>
+                            reject(
+                                transaction.error
+                            );
+                }
+            );
         },
 
         async idbGet(key) {
-            const database = await this.openDB();
+            const database =
+                await this.openDB();
 
-            return new Promise((resolve, reject) => {
-                const transaction = database.transaction(
-                    this.STORE_NAME,
-                    'readonly'
-                );
+            return new Promise(
+                (resolve, reject) => {
+                    const transaction =
+                        database.transaction(
+                            this.STORE_NAME,
+                            'readonly'
+                        );
 
-                const request = transaction
-                    .objectStore(this.STORE_NAME)
-                    .get(key);
+                    const request =
+                        transaction
+                            .objectStore(
+                                this.STORE_NAME
+                            )
+                            .get(key);
 
-                request.onsuccess = () =>
-                    resolve(request.result);
+                    request.onsuccess =
+                        () =>
+                            resolve(
+                                request.result
+                            );
 
-                request.onerror = () =>
-                    reject(request.error);
-            });
+                    request.onerror =
+                        () =>
+                            reject(
+                                request.error
+                            );
+                }
+            );
         },
 
         captureKey(key) {
             if (!key) return;
 
-            const match = String(key).match(
-                /^[A-Za-z0-9._]$/
-            );
+            const match =
+                String(key).match(
+                    /^[A-Za-z0-9._]$/
+                );
 
             if (!match) return;
 
-            this.LAST_INPUT.key = key.toUpperCase();
-            this.LAST_INPUT.time = performance.now();
+            this.LAST_INPUT.key =
+                key.toUpperCase();
+
+            this.LAST_INPUT.time =
+                performance.now();
         },
 
-        async commitBucketsToIDB(buckets) {
-            for (const lengthString of Object.keys(buckets)) {
-                const length = Number(lengthString);
-                const newWords = Array.from(
-                    buckets[lengthString]
-                );
+        async commitBucketsToIDB(
+            buckets
+        ) {
+            for (
+                const lengthString of
+                Object.keys(buckets)
+            ) {
+                const length =
+                    Number(lengthString);
 
-                let existingWords = await this.idbGet(
-                    `len_${length}`
-                );
+                const newWords =
+                    Array.from(
+                        buckets[
+                        lengthString
+                        ]
+                    );
 
-                if (!existingWords) {
-                    existingWords = [];
+                let existing =
+                    await this.idbGet(
+                        `len_${length}`
+                    );
+
+                if (!existing) {
+                    existing = [];
                 }
 
-                const mergedWords = Array.from(
-                    new Set([
-                        ...existingWords,
-                        ...newWords
-                    ])
-                );
+                const merged =
+                    Array.from(
+                        new Set([
+                            ...existing,
+                            ...newWords
+                        ])
+                    );
 
                 await this.idbSet(
                     `len_${length}`,
-                    mergedWords
+                    merged
                 );
 
-                this.dict[length] = mergedWords;
-                this._buildIndex(length);
+                this.dict[length] =
+                    merged;
+
+                this._buildIndex(
+                    length
+                );
             }
         },
 
@@ -442,47 +661,72 @@
 
             const index = {};
 
-            for (const word of this.dict[length] || []) {
-                const firstCharacter = word[0];
+            for (
+                const word of
+                this.dict[length] || []
+            ) {
+                const character =
+                    word[0];
 
-                if (!index[firstCharacter]) {
-                    index[firstCharacter] = [];
+                if (!index[character]) {
+                    index[character] =
+                        [];
                 }
 
-                index[firstCharacter].push(word);
+                index[character].push(
+                    word
+                );
             }
 
-            this.dictIndex[length] = index;
+            this.dictIndex[length] =
+                index;
         },
 
-        async fetchAndIndex(url, onProgress) {
-            this.setStatus('Downloading base wordlist…');
+        async fetchAndIndex(
+            url,
+            onProgress
+        ) {
+            this.setStatus(
+                'Downloading base wordlist…'
+            );
 
-            const response = await this.gmRequest({
-                method: 'GET',
-                url,
-                timeout: 90000,
-                responseType: 'text'
-            });
+            let response;
+
+            try {
+                response =
+                    await this.gmRequest({
+                        method: 'GET',
+                        url,
+                        timeout: 90000,
+                        responseType: 'text'
+                    });
+            } catch (error) {
+                throw error;
+            }
 
             if (
                 response.status < 200 ||
                 response.status >= 300 ||
                 !response.responseText
             ) {
-                const error = new Error(
-                    `Bad response from base wordlist: ${response.status}`
-                );
+                const error =
+                    new Error(
+                        `Bad response from base wordlist: ${response.status}`
+                    );
 
-                error.status = response.status;
+                error.status =
+                    response.status;
+
                 throw error;
             }
 
             this.setStatus('Indexing…');
 
-            const lines = response.responseText.split(
-                /\r?\n/
-            );
+            const lines =
+                (
+                    response.responseText ||
+                    ''
+                ).split(/\r?\n/);
 
             const buckets = {};
             let processed = 0;
@@ -490,49 +734,78 @@
             for (const rawLine of lines) {
                 processed += 1;
 
-                const word = String(rawLine || '')
-                    .trim()
-                    .toUpperCase();
+                const word =
+                    (rawLine || '')
+                        .trim()
+                        .toUpperCase();
 
                 if (!word) continue;
-                if (!/^[A-Z0-9_.]+$/.test(word)) continue;
-
-                const length = word.length;
 
                 if (
-                    length < this.MIN_LENGTH ||
-                    length > this.MAX_LENGTH
+                    !/^[A-Z0-9_.]+$/.test(
+                        word
+                    )
                 ) {
                     continue;
                 }
 
-                if (!buckets[length]) {
-                    buckets[length] = new Set();
-                }
-
-                buckets[length].add(word);
+                const length =
+                    word.length;
 
                 if (
-                    processed % 5000 === 0 &&
-                    typeof onProgress === 'function'
+                    length <
+                    this.MIN_LENGTH ||
+                    length >
+                    this.MAX_LENGTH
+                ) {
+                    continue;
+                }
+
+                if (
+                    !buckets[length]
+                ) {
+                    buckets[length] =
+                        new Set();
+                }
+
+                buckets[length].add(
+                    word
+                );
+
+                if (
+                    processed % 5000 ===
+                    0 &&
+                    typeof onProgress ===
+                    'function'
                 ) {
                     onProgress({
-                        phase: '1M-index',
+                        phase:
+                            '1M-index',
                         processed,
                         pct: null
                     });
 
-                    await new Promise(resolve =>
-                        setTimeout(resolve, 0)
+                    await new Promise(
+                        resolve =>
+                            setTimeout(
+                                resolve,
+                                0
+                            )
                     );
                 }
             }
 
-            await this.commitBucketsToIDB(buckets);
-            this.setStatus('1M cached');
+            await this.commitBucketsToIDB(
+                buckets
+            );
+
+            this.setStatus(
+                '1M cached'
+            );
 
             return {
-                totalProcessed: processed
+                totalProcessed:
+                    processed
             };
         },
 
@@ -545,22 +818,31 @@
             }
 
             this.dictLoading = true;
-            this.setStatus('Loading from cache…');
+            this.setStatus(
+                'Loading from cache…'
+            );
 
             let hasData = false;
             this.dict = [];
 
             for (
-                let length = this.MIN_LENGTH;
-                length <= this.MAX_LENGTH;
+                let length =
+                    this.MIN_LENGTH;
+                length <=
+                this.MAX_LENGTH;
                 length += 1
             ) {
-                const words = await this.idbGet(
-                    `len_${length}`
-                );
+                const words =
+                    await this.idbGet(
+                        `len_${length}`
+                    );
 
-                if (words?.length) {
-                    this.dict[length] = words;
+                if (
+                    words &&
+                    words.length
+                ) {
+                    this.dict[length] =
+                        words;
                     hasData = true;
                 }
             }
@@ -583,7 +865,8 @@
 
                 for (
                     let attempt = 0;
-                    attempt < maximumAttempts;
+                    attempt <
+                    maximumAttempts;
                     attempt += 1
                 ) {
                     try {
@@ -606,12 +889,14 @@
                     } catch (error) {
                         lastError = error;
 
-                        const wait = delays[
+                        const wait =
+                            delays[
                             Math.min(
                                 attempt,
-                                delays.length - 1
+                                delays.length -
+                                1
                             )
-                        ];
+                            ];
 
                         this.crackLog(
                             `Base download failed (try ${attempt + 1}/${maximumAttempts})`,
@@ -623,8 +908,12 @@
                         );
 
                         if (wait) {
-                            await new Promise(resolve =>
-                                setTimeout(resolve, wait)
+                            await new Promise(
+                                resolve =>
+                                    setTimeout(
+                                        resolve,
+                                        wait
+                                    )
                             );
                         }
                     }
@@ -636,11 +925,16 @@
                         lastError
                     );
 
-                    this.dictLoading = false;
-                    this.dictLoaded = false;
+                    this.dictLoading =
+                        false;
+
+                    this.dictLoaded =
+                        false;
 
                     setTimeout(() => {
-                        this.loadDict().catch(() => {});
+                        this.loadDict().catch(
+                            () => { }
+                        );
                     }, 60000);
 
                     this.setStatus(
@@ -663,12 +957,18 @@
             }
 
             for (
-                let length = this.MIN_LENGTH;
-                length <= this.MAX_LENGTH;
+                let length =
+                    this.MIN_LENGTH;
+                length <=
+                this.MAX_LENGTH;
                 length += 1
             ) {
-                if (this.dict[length]) {
-                    this._buildIndex(length);
+                if (
+                    this.dict[length]
+                ) {
+                    this._buildIndex(
+                        length
+                    );
                 }
             }
 
@@ -676,87 +976,107 @@
         },
 
         loadExclusions(rowKey, length) {
-            const storageKey =
-                this.EXCL_STORAGE_PREFIX +
-                rowKey +
-                '_' +
-                length;
+            const raw =
+                sessionStorage.getItem(
+                    this.EXCL_STORAGE_PREFIX +
+                    rowKey +
+                    '_' +
+                    length
+                );
 
-            const rawValue =
-                sessionStorage.getItem(storageKey);
+            let saved = [];
 
-            let storedValues = [];
-
-            if (rawValue) {
+            if (raw) {
                 try {
-                    storedValues = JSON.parse(rawValue);
-                } catch (_) {}
+                    saved =
+                        JSON.parse(raw);
+                } catch (_) {
+                    saved = [];
+                }
             }
 
-            const exclusions = new Array(length);
+            const exclusions =
+                new Array(length);
 
             for (
                 let position = 0;
                 position < length;
                 position += 1
             ) {
-                const storedPosition =
-                    storedValues[position];
+                const savedPosition =
+                    Array.isArray(
+                        saved[position]
+                    )
+                        ? saved[position]
+                        : typeof saved[
+                            position
+                        ] === 'string'
+                            ? saved[
+                                position
+                            ].split('')
+                            : [];
 
-                const letters = Array.isArray(
-                    storedPosition
-                )
-                    ? storedPosition
-                    : typeof storedPosition === 'string'
-                        ? storedPosition.split('')
-                        : [];
-
-                exclusions[position] = new Set(
-                    letters
-                        .map(letter =>
-                            String(letter || '')
-                                .toUpperCase()
-                        )
-                        .filter(Boolean)
-                );
+                exclusions[position] =
+                    new Set(
+                        savedPosition
+                            .map(character =>
+                                String(
+                                    character ||
+                                    ''
+                                ).toUpperCase()
+                            )
+                            .filter(Boolean)
+                    );
             }
 
             return exclusions;
         },
 
-        saveExclusions(rowKey, length, exclusions) {
-            const values = new Array(length);
+        saveExclusions(
+            rowKey,
+            length,
+            exclusions
+        ) {
+            const saved =
+                new Array(length);
 
             for (
                 let position = 0;
                 position < length;
                 position += 1
             ) {
-                values[position] = Array.from(
-                    exclusions[position] ||
-                    new Set()
-                );
+                saved[position] =
+                    Array.from(
+                        exclusions[
+                        position
+                        ] || new Set()
+                    );
             }
 
             sessionStorage.setItem(
                 this.EXCL_STORAGE_PREFIX +
-                    rowKey +
-                    '_' +
-                    length,
-                JSON.stringify(values)
+                rowKey +
+                '_' +
+                length,
+                JSON.stringify(saved)
             );
         },
 
         schedulePanelUpdate(panel) {
             if (!panel) return;
 
-            const rowKey = panel.dataset.rowkey;
+            const rowKey =
+                panel.dataset.rowkey;
 
             if (
-                this.panelUpdateTimers.has(rowKey)
+                this.panelUpdateTimers.has(
+                    rowKey
+                )
             ) {
                 clearTimeout(
-                    this.panelUpdateTimers.get(rowKey)
+                    this.panelUpdateTimers.get(
+                        rowKey
+                    )
                 );
             }
 
@@ -764,7 +1084,10 @@
                 rowKey,
                 setTimeout(() => {
                     panel.updateSuggestions();
-                    this.panelUpdateTimers.delete(rowKey);
+
+                    this.panelUpdateTimers.delete(
+                        rowKey
+                    );
                 }, 0)
             );
         },
@@ -775,31 +1098,37 @@
             letter,
             length
         ) {
-            const normalizedLetter = String(
-                letter || ''
-            ).toUpperCase();
+            const normalizedLetter =
+                String(letter || '')
+                    .toUpperCase();
 
             if (!normalizedLetter) return;
 
-            const exclusions = this.loadExclusions(
-                rowKey,
-                length
-            );
+            const exclusions =
+                this.loadExclusions(
+                    rowKey,
+                    length
+                );
 
-            if (!exclusions[position]) {
-                exclusions[position] = new Set();
+            if (
+                !exclusions[position]
+            ) {
+                exclusions[position] =
+                    new Set();
             }
 
             const previousSize =
-                exclusions[position].size;
+                exclusions[
+                    position
+                ].size;
 
             exclusions[position].add(
                 normalizedLetter
             );
 
             if (
-                exclusions[position].size !==
-                previousSize
+                exclusions[position]
+                    .size !== previousSize
             ) {
                 this.saveExclusions(
                     rowKey,
@@ -812,16 +1141,21 @@
                         `.__crackhelp_panel[data-rowkey="${rowKey}"]`
                     );
 
-                this.schedulePanelUpdate(panel);
+                this.schedulePanelUpdate(
+                    panel
+                );
             }
         },
 
         suggest(pattern, rowKey) {
-            const length = pattern.length;
+            const length =
+                pattern.length;
 
             if (
-                length < this.MIN_LENGTH ||
-                length > this.MAX_LENGTH
+                length <
+                this.MIN_LENGTH ||
+                length >
+                this.MAX_LENGTH
             ) {
                 return [];
             }
@@ -831,99 +1165,115 @@
             }
 
             const maximumSuggestions = 5;
+
             const normalizedPattern =
-                pattern.toUpperCase();
+                Array.from(
+                    pattern.toUpperCase(),
+                    character =>
+                        /^[A-Z0-9.]$/.test(
+                            character
+                        )
+                            ? character
+                            : '*'
+                ).join('');
 
             const index =
-                this.dictIndex?.[length];
+                this.dictIndex &&
+                this.dictIndex[length];
 
             let candidates;
 
             if (
                 index &&
-                normalizedPattern[0] !== '*'
+                normalizedPattern[0] !==
+                '*'
             ) {
                 candidates =
-                    index[normalizedPattern[0]] || [];
+                    index[
+                    normalizedPattern[0]
+                    ] || [];
             } else {
-                candidates = this.dict[length];
+                candidates =
+                    this.dict[length];
             }
 
-            const exclusions = this.loadExclusions(
-                rowKey,
-                length
-            );
+            const exclusions =
+                this.loadExclusions(
+                    rowKey,
+                    length
+                );
 
-            const collectMatches = applyExclusions => {
-                const results = [];
+            const collectMatches =
+                applyExclusions => {
+                    const matches = [];
 
-                outer:
-                for (const word of candidates) {
+                    outer:
                     for (
-                        let position = 0;
-                        position < length;
-                        position += 1
+                        const word of
+                        candidates
                     ) {
-                        const patternCharacter =
-                            normalizedPattern[position];
-
-                        if (
-                            patternCharacter !== '*' &&
-                            patternCharacter !==
-                                word[position]
+                        for (
+                            let position = 0;
+                            position <
+                            length;
+                            position += 1
                         ) {
-                            continue outer;
-                        }
-
-                        if (applyExclusions) {
-                            const positionExclusions =
-                                exclusions[position];
+                            const patternCharacter =
+                                normalizedPattern[
+                                position
+                                ];
 
                             if (
-                                positionExclusions?.has(
-                                    word[position]
-                                )
+                                patternCharacter !==
+                                '*' &&
+                                patternCharacter !==
+                                word[position]
                             ) {
                                 continue outer;
                             }
+
+                            if (
+                                applyExclusions
+                            ) {
+                                const rejected =
+                                    exclusions[
+                                    position
+                                    ];
+
+                                if (
+                                    rejected &&
+                                    rejected.has(
+                                        word[
+                                        position
+                                        ]
+                                    )
+                                ) {
+                                    continue outer;
+                                }
+                            }
+                        }
+
+                        matches.push(word);
+
+                        if (
+                            matches.length >=
+                            maximumSuggestions
+                        ) {
+                            break;
                         }
                     }
 
-                    results.push(word);
+                    return matches;
+                };
 
-                    if (
-                        results.length >=
-                        maximumSuggestions
-                    ) {
-                        break;
-                    }
-                }
-
-                return results;
-            };
-
-            const strictResults =
+            const strictMatches =
                 collectMatches(true);
 
-            if (strictResults.length) {
-                return strictResults;
+            if (strictMatches.length) {
+                return strictMatches;
             }
 
-            /*
-             * Torn virtualizes and reuses cracking rows.
-             * Older listeners could attach rejected letters
-             * to the next password rendered in the same node.
-             *
-             * If exclusions remove every possible match,
-             * retry using the visible pattern alone.
-             */
-            const hasExclusions = exclusions.some(
-                set => set && set.size > 0
-            );
-
-            return hasExclusions
-                ? collectMatches(false)
-                : strictResults;
+            return collectMatches(false);
         },
 
         prependPanelToRow(
@@ -931,18 +1281,26 @@
             pattern,
             rowKey
         ) {
-            let panel = row.querySelector(
-                '.__crackhelp_panel'
-            );
+            let panel =
+                row.querySelector(
+                    '.__crackhelp_panel'
+                );
 
             if (!panel) {
-                panel = document.createElement('div');
+                panel =
+                    document.createElement(
+                        'div'
+                    );
 
                 panel.className =
                     '__crackhelp_panel';
 
-                panel.dataset.rowkey = rowKey;
-                panel.dataset.pattern = pattern;
+                panel.dataset.rowkey =
+                    rowKey;
+
+                panel.dataset.pattern =
+                    pattern;
+
                 panel._seq = 0;
 
                 panel.style.cssText =
@@ -951,196 +1309,236 @@
                 panel.style.border =
                     `1px solid ${this.getTheme().uiBorder}`;
 
-                panel.style.borderRadius = '4px';
+                panel.style.borderRadius =
+                    '4px';
 
-                const list =
-                    document.createElement('div');
+                const listDiv =
+                    document.createElement(
+                        'div'
+                    );
 
-                list.style.cssText =
+                listDiv.style.cssText =
                     'margin-top:2px;';
 
-                panel.appendChild(list);
+                panel.appendChild(
+                    listDiv
+                );
 
-                panel.updateSuggestions = () => {
-                    const currentPattern =
-                        panel.dataset.pattern || '';
+                panel.updateSuggestions =
+                    () => {
+                        const currentPattern =
+                            panel.dataset
+                                .pattern || '';
 
-                    const currentRowKey =
-                        panel.dataset.rowkey;
+                        const currentRowKey =
+                            panel.dataset
+                                .rowkey;
 
-                    this.applyPanelTheme(panel);
+                        this.applyPanelTheme(
+                            panel
+                        );
 
-                    if (
-                        !this.dictLoaded &&
-                        this.dictLoading
-                    ) {
                         if (
-                            !list.firstChild ||
-                            list.firstChild.textContent !==
+                            !this.dictLoaded &&
+                            this.dictLoading
+                        ) {
+                            if (
+                                !listDiv.firstChild ||
+                                listDiv
+                                    .firstChild
+                                    .textContent !==
                                 '(loading dictionary…)'
-                        ) {
-                            list.innerHTML =
-                                '<span style="padding:2px;color:#ff0;">(loading dictionary…)</span>';
+                            ) {
+                                listDiv.innerHTML =
+                                    '<span style="padding:2px;color:#ff0;">(loading dictionary…)</span>';
+                            }
+
+                            return;
                         }
 
-                        return;
-                    }
+                        const suggestions =
+                            this.suggest(
+                                currentPattern,
+                                currentRowKey
+                            );
 
-                    const suggestions =
-                        this.suggest(
-                            currentPattern,
-                            currentRowKey
-                        );
+                        let index = 0;
 
-                    let index = 0;
+                        for (
+                            ;
+                            index <
+                            suggestions.length;
+                            index += 1
+                        ) {
+                            let span =
+                                listDiv
+                                    .children[
+                                index
+                                ];
 
-                    for (
-                        ;
-                        index < suggestions.length;
-                        index += 1
-                    ) {
-                        let span =
-                            list.children[index];
+                            if (!span) {
+                                span =
+                                    document.createElement(
+                                        'span'
+                                    );
 
-                        if (!span) {
-                            span =
-                                document.createElement(
-                                    'span'
+                                span.dataset.kind =
+                                    'sug';
+
+                                listDiv.appendChild(
+                                    span
                                 );
+                            }
 
-                            span.dataset.kind = 'sug';
-                            list.appendChild(span);
+                            if (
+                                span.textContent !==
+                                suggestions[
+                                index
+                                ]
+                            ) {
+                                span.textContent =
+                                    suggestions[
+                                    index
+                                    ];
+                            }
+
+                            this.styleSugSpan(
+                                span
+                            );
+                        }
+
+                        while (
+                            listDiv.children
+                                .length >
+                            suggestions.length
+                        ) {
+                            listDiv.removeChild(
+                                listDiv.lastChild
+                            );
                         }
 
                         if (
-                            span.textContent !==
-                            suggestions[index]
+                            suggestions.length ===
+                            0
                         ) {
-                            span.textContent =
-                                suggestions[index];
-                        }
+                            if (
+                                !listDiv.firstChild
+                            ) {
+                                const span =
+                                    document.createElement(
+                                        'span'
+                                    );
 
-                        this.styleSugSpan(span);
-                    }
+                                span.dataset.kind =
+                                    'msg';
 
-                    while (
-                        list.children.length >
-                        suggestions.length
-                    ) {
-                        list.removeChild(
-                            list.lastChild
-                        );
-                    }
+                                span.textContent =
+                                    this.dictLoaded
+                                        ? '(no matches)'
+                                        : '(loading dictionary…)';
 
-                    if (
-                        suggestions.length === 0
-                    ) {
-                        const text =
-                            this.dictLoaded
-                                ? '(no matches)'
-                                : '(loading dictionary…)';
+                                span.style.padding =
+                                    '2px 4px';
 
-                        let span = list.firstChild;
+                                span.style.color =
+                                    this.dictLoaded
+                                        ? '#a00'
+                                        : '#ff0';
 
-                        if (!span) {
-                            span =
-                                document.createElement(
-                                    'span'
+                                span.style.background =
+                                    'transparent';
+
+                                span.style.fontSize =
+                                    `${this.getTheme().sugFontPx}px`;
+
+                                listDiv.appendChild(
+                                    span
                                 );
+                            } else {
+                                const span =
+                                    listDiv.firstChild;
 
-                            span.dataset.kind = 'msg';
-                            list.appendChild(span);
+                                const message =
+                                    this.dictLoaded
+                                        ? '(no matches)'
+                                        : '(loading dictionary…)';
+
+                                if (
+                                    span.textContent !==
+                                    message
+                                ) {
+                                    span.textContent =
+                                        message;
+                                }
+
+                                span.style.color =
+                                    this.dictLoaded
+                                        ? '#a00'
+                                        : '#ff0';
+
+                                span.style.background =
+                                    'transparent';
+
+                                span.style.fontSize =
+                                    `${this.getTheme().sugFontPx}px`;
+                            }
                         }
-
-                        span.textContent = text;
-                        span.style.padding = '2px 4px';
-                        span.style.color =
-                            this.dictLoaded
-                                ? '#a00'
-                                : '#ff0';
-
-                        span.style.background =
-                            'transparent';
-
-                        span.style.fontSize =
-                            `${this.getTheme().sugFontPx}px`;
-                    }
-                };
+                    };
 
                 row.prepend(panel);
                 this.applyPanelTheme(panel);
             } else {
-                if (
-                    panel.dataset.rowkey !== rowKey
-                ) {
-                    const previousRowKey =
-                        panel.dataset.rowkey;
+                panel.dataset.pattern =
+                    pattern;
 
-                    if (
-                        previousRowKey &&
-                        this.panelUpdateTimers.has(
-                            previousRowKey
-                        )
-                    ) {
-                        clearTimeout(
-                            this.panelUpdateTimers.get(
-                                previousRowKey
-                            )
-                        );
-
-                        this.panelUpdateTimers.delete(
-                            previousRowKey
-                        );
-                    }
-
-                    panel.dataset.rowkey = rowKey;
-
-                    const list =
-                        panel.querySelector(
-                            ':scope > div'
-                        );
-
-                    if (list) {
-                        list.replaceChildren();
-                    }
-                }
-
-                panel.dataset.pattern = pattern;
                 this.applyPanelTheme(panel);
             }
 
             this.schedulePanelUpdate(panel);
+
             return panel;
         },
 
         async isWordInLocalDict(word) {
-            const length = word.length;
+            const length =
+                word.length;
 
             if (!this.dict[length]) {
-                const words = await this.idbGet(
-                    `len_${length}`
-                );
+                const words =
+                    await this.idbGet(
+                        `len_${length}`
+                    );
 
                 if (!words) return false;
-                this.dict[length] = words;
+
+                this.dict[length] =
+                    words;
             }
 
-            return this.dict[length].includes(word);
+            return this.dict[
+                length
+            ].includes(word);
         },
 
-        async addWordToLocalCache(word) {
-            const length = word.length;
+        async addWordToLocalCache(
+            word
+        ) {
+            const length =
+                word.length;
 
             if (
-                length < this.MIN_LENGTH ||
-                length > this.MAX_LENGTH
+                length <
+                this.MIN_LENGTH ||
+                length >
+                this.MAX_LENGTH
             ) {
                 return;
             }
 
-            let words = await this.idbGet(
-                `len_${length}`
-            );
+            let words =
+                await this.idbGet(
+                    `len_${length}`
+                );
 
             if (!words) {
                 words = [];
@@ -1154,14 +1552,21 @@
                     words
                 );
 
-                if (!this.dict[length]) {
-                    this.dict[length] = [];
+                if (
+                    !this.dict[length]
+                ) {
+                    this.dict[length] =
+                        [];
                 }
 
                 if (
-                    !this.dict[length].includes(word)
+                    !this.dict[
+                        length
+                    ].includes(word)
                 ) {
-                    this.dict[length].push(word);
+                    this.dict[
+                        length
+                    ].push(word);
                 }
 
                 this._buildIndex(length);
@@ -1173,125 +1578,38 @@
             }
         },
 
-        getVirtualRowIdentity(crimeOption) {
-            const identityAttributes = [
-                'data-index',
-                'data-row-index',
-                'aria-rowindex',
-                'data-key'
-            ];
-
-            let element = crimeOption;
-
-            for (
-                let depth = 0;
-                element && depth < 6;
-                depth += 1,
-                element = element.parentElement
-            ) {
-                for (
-                    const attribute of
-                    identityAttributes
-                ) {
-                    const value =
-                        element.getAttribute?.(
-                            attribute
-                        );
-
-                    if (
-                        value !== null &&
-                        value !== ''
-                    ) {
-                        return `${attribute}:${value}`;
-                    }
-                }
-            }
-
-            return null;
-        },
-
-        hashRowIdentity(identity) {
-            let hash = 2166136261;
-
-            for (
-                let index = 0;
-                index < identity.length;
-                index += 1
-            ) {
-                hash ^= identity.charCodeAt(index);
-                hash = Math.imul(
-                    hash,
-                    16777619
-                );
-            }
-
-            return (hash >>> 0).toString(36);
-        },
-
         getRowKey(crimeOption) {
-            const identity =
-                this.getVirtualRowIdentity(
-                    crimeOption
-                );
-
             if (
-                identity &&
-                crimeOption.dataset.crackIdentity !==
-                    identity
+                !crimeOption.dataset
+                    .crackKey
             ) {
-                const previousRowKey =
-                    crimeOption.dataset.crackKey;
-
-                if (previousRowKey) {
-                    this.prevRowStates.delete(
-                        previousRowKey
-                    );
-
-                    if (
-                        this.panelUpdateTimers.has(
-                            previousRowKey
-                        )
-                    ) {
-                        clearTimeout(
-                            this.panelUpdateTimers.get(
-                                previousRowKey
-                            )
-                        );
-
-                        this.panelUpdateTimers.delete(
-                            previousRowKey
-                        );
-                    }
-                }
-
-                crimeOption.dataset.crackIdentity =
-                    identity;
-
-                crimeOption.dataset.crackKey =
-                    `row-${this.hashRowIdentity(identity)}`;
-            }
-
-            if (!crimeOption.dataset.crackKey) {
-                crimeOption.dataset.crackKey =
+                crimeOption.dataset
+                    .crackKey =
                     String(Date.now()) +
                     '-' +
                     Math.floor(
-                        Math.random() * 100000
+                        Math.random() *
+                        100000
                     );
             }
 
-            return crimeOption.dataset.crackKey;
+            return crimeOption.dataset
+                .crackKey;
         },
 
-        attachSlotSensors(crimeOption) {
+        attachSlotSensors(
+            crimeOption,
+            rowKey
+        ) {
             if (
-                crimeOption.dataset.crackDelegated ===
-                '1'
+                crimeOption.dataset
+                    .crackDelegated === '1'
             ) {
                 return;
             }
 
-            crimeOption.dataset.crackDelegated = '1';
+            crimeOption.dataset
+                .crackDelegated = '1';
 
             const slotSelector =
                 '[class^="charSlot"]:not([class*="charSlotDummy"])';
@@ -1300,17 +1618,20 @@
                 '[class*="incorrectGuessLine"]';
 
             const onVisualCue = event => {
-                const rowKey =
-                    this.getRowKey(crimeOption);
-
-                const target = event.target;
+                const target =
+                    event.target;
 
                 const slot =
-                    target.closest?.(slotSelector);
+                    target.closest &&
+                    target.closest(
+                        slotSelector
+                    );
 
                 if (
                     !slot ||
-                    !crimeOption.contains(slot)
+                    !crimeOption.contains(
+                        slot
+                    )
                 ) {
                     return;
                 }
@@ -1329,75 +1650,92 @@
                 if (position < 0) return;
 
                 if (
-                    getComputedStyle(slot)
-                        .borderColor ===
+                    getComputedStyle(
+                        slot
+                    ).borderColor ===
                     'rgb(130, 201, 30)'
                 ) {
                     return;
                 }
 
-                const now = performance.now();
+                const now =
+                    performance.now();
 
-                const shownCharacter =
-                    String(
-                        slot.textContent || ''
+                const shown =
+                    (
+                        slot.textContent ||
+                        ''
                     ).trim();
 
                 if (
-                    shownCharacter &&
+                    shown &&
                     /^[A-Za-z0-9._]$/.test(
-                        shownCharacter
+                        shown
                     )
                 ) {
                     return;
                 }
 
-                const previousState =
-                    this.prevRowStates.get(rowKey) ||
-                    null;
+                const previous =
+                    this.prevRowStates.get(
+                        rowKey
+                    ) || null;
 
-                const hasRowInput = Boolean(
-                    previousState?.lastInput &&
-                    now -
-                        previousState.lastInput.time <=
+                const hasRowLastInput =
+                    Boolean(
+                        previous &&
+                        previous.lastInput &&
+                        now -
+                        previous
+                            .lastInput
+                            .time <=
                         1800 &&
-                    previousState.lastInput.i ===
-                        position
-                );
+                        previous.lastInput
+                            .i === position
+                    );
 
-                const isIncorrectLineEvent =
-                    target.matches?.(
+                const isIncorrectEvent =
+                    target.matches &&
+                    target.matches(
                         incorrectLineSelector
                     );
 
-                const hasFreshGlobalInput =
+                const freshGlobalInput =
                     now -
-                        (this.LAST_INPUT.time || 0) <=
+                    (
+                        this.LAST_INPUT
+                            .time || 0
+                    ) <=
                     1800;
 
                 let letter = null;
 
-                if (hasRowInput) {
+                if (hasRowLastInput) {
                     letter =
-                        previousState.lastInput.letter;
+                        previous.lastInput
+                            .letter;
                 } else if (
-                    isIncorrectLineEvent &&
-                    hasFreshGlobalInput &&
+                    isIncorrectEvent &&
+                    freshGlobalInput &&
                     this.LAST_INPUT.key
                 ) {
                     letter =
-                        this.LAST_INPUT.key.toUpperCase();
+                        this.LAST_INPUT.key
+                            .toUpperCase();
                 } else {
                     return;
                 }
 
                 if (
-                    !/^[A-Za-z0-9._]$/.test(letter)
+                    !/^[A-Za-z0-9._]$/.test(
+                        letter
+                    )
                 ) {
                     return;
                 }
 
-                const length = slots.length;
+                const length =
+                    slots.length;
 
                 this.addExclusion(
                     rowKey,
@@ -1412,9 +1750,12 @@
                     );
 
                 if (
-                    panel?.updateSuggestions
+                    panel &&
+                    panel.updateSuggestions
                 ) {
-                    this.schedulePanelUpdate(panel);
+                    this.schedulePanelUpdate(
+                        panel
+                    );
                 }
             };
 
@@ -1433,7 +1774,8 @@
 
         scanCrimePage() {
             if (
-                location.hash !== '#/cracking'
+                location.hash !==
+                '#/cracking'
             ) {
                 return;
             }
@@ -1458,45 +1800,71 @@
                 );
 
             for (
-                const crimeOption of crimeOptions
+                const crimeOption of
+                crimeOptions
             ) {
                 const rowKey =
-                    this.getRowKey(crimeOption);
+                    this.getRowKey(
+                        crimeOption
+                    );
 
-                this.attachSlotSensors(crimeOption);
+                this.attachSlotSensors(
+                    crimeOption,
+                    rowKey
+                );
 
                 const characterSlots =
                     crimeOption.querySelectorAll(
                         '[class^="charSlot"]:not([class*="charSlotDummy"])'
                     );
 
-                const currentCharacters = [];
+                const currentCharacters =
+                    [];
 
                 for (
-                    const slot of characterSlots
+                    const characterSlot of
+                    characterSlots
                 ) {
-                    const character = String(
-                        slot.textContent || ''
-                    )
-                        .trim()
-                        .toUpperCase();
+                    const rawCharacter =
+                        (
+                            characterSlot
+                                .textContent ||
+                            ''
+                        )
+                            .trim()
+                            .toUpperCase();
+
+                    const revealedCharacter =
+                        /^[A-Z0-9.]$/.test(
+                            rawCharacter
+                        )
+                            ? rawCharacter
+                            : '*';
 
                     currentCharacters.push(
-                        character || '*'
+                        revealedCharacter
                     );
                 }
 
                 const pattern =
-                    currentCharacters.join('');
+                    currentCharacters.join(
+                        ''
+                    );
 
-                const now = performance.now();
+                const now =
+                    performance.now();
+
                 const length =
                     currentCharacters.length;
 
-                const previousState =
-                    this.prevRowStates.get(rowKey) || {
+                const previous =
+                    this.prevRowStates.get(
+                        rowKey
+                    ) || {
                         chars:
-                            Array(length).fill('*')
+                            Array(
+                                length
+                            ).fill('*')
                     };
 
                 for (
@@ -1504,74 +1872,95 @@
                     position < length;
                     position += 1
                 ) {
-                    const previousCharacter =
-                        previousState.chars[position];
+                    const oldCharacter =
+                        previous.chars[
+                        position
+                        ];
 
-                    const currentCharacter =
-                        currentCharacters[position];
+                    const newCharacter =
+                        currentCharacters[
+                        position
+                        ];
 
                     if (
-                        previousCharacter === '*' &&
-                        currentCharacter !== '*'
+                        oldCharacter ===
+                        '*' &&
+                        newCharacter !==
+                        '*'
                     ) {
-                        previousState.lastInput = {
+                        previous.lastInput = {
                             i: position,
-                            letter: currentCharacter,
+                            letter:
+                                newCharacter,
                             time: now
                         };
                     }
 
                     if (
-                        previousCharacter !== '*' &&
-                        currentCharacter === '*'
+                        oldCharacter !==
+                        '*' &&
+                        newCharacter ===
+                        '*'
                     ) {
                         if (
-                            previousState.lastInput &&
-                            previousState.lastInput.i ===
-                                position &&
-                            previousState.lastInput
+                            previous.lastInput &&
+                            previous
+                                .lastInput
+                                .i ===
+                            position &&
+                            previous
+                                .lastInput
                                 .letter ===
-                                previousCharacter &&
+                            oldCharacter &&
                             now -
-                                previousState.lastInput
-                                    .time <=
-                                1800
+                            previous
+                                .lastInput
+                                .time <=
+                            1800
                         ) {
                             this.addExclusion(
                                 rowKey,
                                 position,
-                                previousCharacter,
+                                oldCharacter,
                                 length
                             );
                         }
                     }
                 }
 
-                this.prevRowStates.set(rowKey, {
-                    chars: currentCharacters,
-                    lastInput:
-                        previousState.lastInput,
-                    time: now
-                });
+                this.prevRowStates.set(
+                    rowKey,
+                    {
+                        chars:
+                            currentCharacters,
+                        lastInput:
+                            previous.lastInput,
+                        time: now
+                    }
+                );
 
-                if (!/[*]/.test(pattern)) {
-                    const completedWord =
+                if (
+                    !/[*]/.test(
+                        pattern
+                    )
+                ) {
+                    const newWord =
                         pattern.toUpperCase();
 
                     if (
                         /^[A-Z0-9_.]+$/.test(
-                            completedWord
+                            newWord
                         )
                     ) {
                         (async () => {
                             const exists =
                                 await this.isWordInLocalDict(
-                                    completedWord
+                                    newWord
                                 );
 
                             if (!exists) {
                                 await this.addWordToLocalCache(
-                                    completedWord
+                                    newWord
                                 );
                             }
                         })();
@@ -1579,7 +1968,9 @@
                 }
 
                 if (
-                    !/^[*]+$/.test(pattern)
+                    !/^[*]+$/.test(
+                        pattern
+                    )
                 ) {
                     this.prependPanelToRow(
                         crimeOption,

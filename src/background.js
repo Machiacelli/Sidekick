@@ -207,12 +207,99 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
 
         case 'proxyFetch':
-            // Generic fetch proxy for content scripts that hit fetch issues
-            fetch(request.url)
-                .then(r => r.json())
-                .then(data => sendResponse({ success: true, data }))
-                .catch(err => sendResponse({ success: false, error: err.message }));
-            return true; // Keep channel open for async response
+            // Cross-origin fetch proxy for content scripts.
+            // Existing callers receive JSON; Cracking requests plain text.
+            (async () => {
+                const controller = new AbortController();
+
+                const timeoutId = setTimeout(
+                    () => controller.abort(),
+                    request.timeout || 30000
+                );
+
+                try {
+                    const method =
+                        request.method || 'GET';
+
+                    const fetchOptions = {
+                        method,
+                        headers:
+                            request.headers || {},
+                        signal:
+                            controller.signal
+                    };
+
+                    if (
+                        request.body &&
+                        method !== 'GET' &&
+                        method !== 'HEAD'
+                    ) {
+                        fetchOptions.body =
+                            request.body;
+                    }
+
+                    const response =
+                        await fetch(
+                            request.url,
+                            fetchOptions
+                        );
+
+                    const responseText =
+                        await response.text();
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `Request failed: ${response.status} ${response.statusText}`
+                        );
+                    }
+
+                    if (
+                        request.responseType ===
+                        'text'
+                    ) {
+                        sendResponse({
+                            success: true,
+                            data: responseText,
+                            status:
+                                response.status,
+                            statusText:
+                                response.statusText,
+                            responseHeaders:
+                                [...response.headers]
+                                    .map(
+                                        ([key, value]) =>
+                                            `${key}: ${value}`
+                                    )
+                                    .join('\r\n')
+                        });
+                    } else {
+                        sendResponse({
+                            success: true,
+                            data:
+                                JSON.parse(
+                                    responseText
+                                ),
+                            status:
+                                response.status,
+                            statusText:
+                                response.statusText
+                        });
+                    }
+                } catch (error) {
+                    sendResponse({
+                        success: false,
+                        error:
+                            error.name ===
+                                'AbortError'
+                                ? 'Request timed out'
+                                : error.message
+                    });
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            })();
+
+            return true;
 
         case 'crimeNotifierAlert':
             // Handle Crime Notifier alerts with browser notifications and badge
