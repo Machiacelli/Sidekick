@@ -13,6 +13,7 @@
         isInitialized: false,
         isEnabled: false,
         observer: null,
+        scanTimer: null,
         _settings: null, // Assigned in init() once Core is ready
 
         bunkerBuckTable: {
@@ -118,33 +119,13 @@
 
         },
 
-        // Watch for new item popups (Item Market and Auction House)
+        // Item details use different hashed wrappers in the Item Market,
+        // Auction House, and Inventory. Watch the page, then identify the
+        // shared information fields by their labels instead of wrapper names.
         startObserver() {
             if (this.observer) return;
 
-            this.observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const node of mutation.addedNodes) {
-                        if (!(node instanceof HTMLElement)) continue;
-
-                        // Item Market: properties list popup
-                        const propertiesList = node.matches('ul[class*="properties"]')
-                            ? node
-                            : node.querySelector('ul[class*="properties"]');
-                        if (propertiesList) {
-                            this.addBunkerBucks(propertiesList);
-                        }
-
-                        // Auction House: item expanded row (li inside ul.items-list)
-                        const auctionItem = node.matches('li[class*="Auction"], li[class*="item"]')
-                            ? node
-                            : node.querySelector('li[class*="Auction"], li[class*="item"]');
-                        if (auctionItem) {
-                            this.addBunkerBucksToAuction(auctionItem);
-                        }
-                    }
-                }
-            });
+            this.observer = new MutationObserver(() => this.queueScan());
 
             this.observer.observe(document.body, {
                 childList: true,
@@ -162,35 +143,51 @@
                 this.observer.disconnect();
                 this.observer = null;
             }
+            clearTimeout(this.scanTimer);
+            this.scanTimer = null;
+            document.querySelectorAll('.sidekick-bb-value, .sidekick-bb-auction').forEach(el => el.remove());
+            document.querySelectorAll('[data-sidekick-bb-original-height]').forEach(element => {
+                element.style.height = element.dataset.sidekickBbOriginalHeight;
+                delete element.dataset.sidekickBbOriginalHeight;
+            });
         },
 
         // Get item name from the popup
         getItemName(itemInfo) {
-            const descriptionElement = itemInfo.querySelector('.description___xJ1N5');
-            if (descriptionElement) {
-                const boldElement = descriptionElement.querySelector('.bold');
-                if (boldElement) return boldElement.textContent.trim();
-            }
+            const text = (itemInfo?.textContent || '').replace(/\s+/g, ' ').trim();
+            const sentence = text.match(/\bThe\s+(.+?)\s+is\s+(?:an?\s+)?[^.]{0,100}\b(?:Weapon|Armou?r)\b/i);
+            if (sentence?.[1]) return sentence[1].trim();
+            const firstSentence = text.match(/\bThe\s+(.+?)\s+is\s+(?:an?\s+)?[^.]{1,160}\./i);
+            if (firstSentence?.[1]) return firstSentence[1].trim();
+
+            const descriptionElement = itemInfo?.querySelector('[class*="description" i]');
+            const boldElement = descriptionElement?.querySelector('.bold, b, strong');
+            if (boldElement) return boldElement.textContent.trim();
+
+            const heading = itemInfo?.querySelector('h1, h2, h3, [class*="itemName" i], [class*="item-name" i]');
+            if (heading) return heading.textContent.trim();
             return '';
         },
 
         // Extract weapon type from item name
-        getWeaponType(itemName) {
-            if (!itemName) return null;
-            const name = itemName.trim();
+        getWeaponType(itemName, itemInfo = null) {
+            const name = (itemName || '').trim();
 
             // Check hardcoded weapon lists first
-            for (const [category, weapons] of Object.entries(this.weaponLists)) {
-                if (weapons.includes(name) || weapons.some(weapon => name.includes(weapon) || weapon.includes(name))) {
-                    return category;
+            if (name) {
+                for (const [category, weapons] of Object.entries(this.weaponLists)) {
+                    if (weapons.includes(name) || weapons.some(weapon => name.includes(weapon) || weapon.includes(name))) {
+                        return category;
+                    }
                 }
             }
 
             // Fallback text-based detection
-            const text = itemName.toLowerCase();
+            const text = `${itemName || ''} ${itemInfo?.textContent || ''}`.toLowerCase();
+            if (/\b(armor|armour)\b/.test(text)) return 'Armour';
             if (text.includes('pistol') || text.includes('smg') || text.includes('uzi') || text.includes('glock') || text.includes('beretta')) return 'Pistol / SMG';
             if (text.includes('shotgun') || text.includes('rifle') || text.includes('ak-') || text.includes('m4')) return 'Shotgun/rifle';
-            if (text.includes('armor') || text.includes('armour') || text.includes('vest')) return 'Armour';
+            if (text.includes('vest') || text.includes('helmet') || text.includes('boots') || text.includes('gloves')) return 'Armour';
             if (text.includes('heavy') || text.includes('minigun') || text.includes('flamethrower')) return 'Heavies';
             if (text.includes('melee') || text.includes('knife') || text.includes('sword') || text.includes('bat')) return 'Melee';
             return null;
@@ -198,8 +195,10 @@
 
         // Extract rarity from quality section
         getRarity(itemInfo) {
-            let qualityElement = itemInfo.querySelector('.rarity___bDCDD');
-            if (!qualityElement) qualityElement = itemInfo.querySelector('[class*="rarity"]');
+            const textMatch = (itemInfo?.textContent || '').match(/Quality:\s*[\d.,]+%\s*(Yellow|Orange|Red)\b/i);
+            if (textMatch) return textMatch[1][0].toUpperCase() + textMatch[1].slice(1).toLowerCase();
+
+            let qualityElement = itemInfo?.querySelector('[class*="rarity" i]');
 
             if (qualityElement) {
                 if (qualityElement.className.includes('yellow')) return 'Yellow';
@@ -211,11 +210,9 @@
 
         // Count bonuses
         countBonuses(itemInfo) {
-            let bonusCount = 0;
-            itemInfo.querySelectorAll('.title___DbORn').forEach(element => {
-                if (element.textContent.trim() === 'Bonus:') bonusCount++;
-            });
-            return bonusCount;
+            const labels = Array.from(itemInfo?.querySelectorAll('span, dt, th, div') || [])
+                .filter(element => this.getDirectText(element).toLowerCase() === 'bonus:');
+            return Math.max(labels.length, ((itemInfo?.textContent || '').match(/\bBonus:/gi) || []).length);
         },
 
         // Calculate bunker bucks
@@ -237,101 +234,127 @@
             return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         },
 
-        // Add bunker bucks to item popup
-        addBunkerBucks(propertiesList) {
-            console.log("Bunker Bucks: addBunkerBucks()", propertiesList);
+        getDirectText(element) {
+            return Array.from(element?.childNodes || [])
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .map(node => node.textContent)
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        },
 
-            if (!this.isEnabled) return;
-            if (!propertiesList) return;
+        queueScan() {
+            clearTimeout(this.scanTimer);
+            this.scanTimer = setTimeout(() => this.processExistingPopups(), 120);
+        },
 
-            if (propertiesList.dataset.bunkerBucksAdded) return;
-            propertiesList.dataset.bunkerBucksAdded = "true";
+        findDetailsRoot(qualityLabel) {
+            let current = qualityLabel;
+            let fallback = null;
+            while (current && current !== document.body) {
+                const text = (current.textContent || '').replace(/\s+/g, ' ');
+                if (/\bQuality\b/i.test(text) && /\b(?:Bonus|Damage|Armor|Armour|Defense|Defence)\b/i.test(text)) {
+                    if (!fallback) fallback = current;
+                    if (/\bThe\s+.+?\s+is\s+(?:an?\s+)?[^.]{1,160}\./i.test(text)) return current;
+                }
+                current = current.parentElement;
+            }
+            return fallback;
+        },
 
-            const popup = propertiesList.parentElement;
-            if (!popup) return;
+        findFieldLabel(root, fieldName) {
+            const matcher = new RegExp(`^${fieldName}\\s*:?$`, 'i');
+            return Array.from(root?.querySelectorAll('span, div, dt, th, b, strong') || [])
+                .find(element => matcher.test(this.getDirectText(element))) || null;
+        },
 
-            const itemName = this.getItemName(popup);
-            const weaponType = this.getWeaponType(itemName);
-            const rarity = this.getRarity(popup);
-            const bonusCount = this.countBonuses(popup);
+        findPropertyCell(label) {
+            const listItem = label.closest('li, tr, td');
+            if (listItem) return listItem;
+            let current = label.parentElement;
+            while (current?.parentElement && current.parentElement !== document.body) {
+                const text = (current.textContent || '').replace(/\s+/g, ' ').trim();
+                if (/^Quality:/i.test(text) && text.length < 120) return current;
+                current = current.parentElement;
+            }
+            return label.parentElement;
+        },
 
-            if (!weaponType || !rarity) return;
+        injectValue(detailsRoot, qualityLabel, bunkerBucks) {
+            if (detailsRoot.querySelector('.sidekick-bb-value')) return true;
+            const qualityCell = this.findPropertyCell(qualityLabel);
+            const host = qualityCell?.parentElement;
+            if (!qualityCell || !host) return false;
 
-            const bunkerBucks = this.calculateBunkerBucks(rarity, weaponType, bonusCount);
-            if (bunkerBucks == null) return;
+            const cell = qualityCell.cloneNode(true);
+            cell.classList.add('sidekick-bb-value');
+            cell.removeAttribute('id');
+            cell.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
 
-            // Increase popup height slightly
-            const currentHeight = parseInt(popup.style.height || "237", 10);
-            popup.style.height = (currentHeight + 36) + "px";
-
-            // Reuse empty property row if one exists
-            let emptyRow = [...propertiesList.children].find(li => {
-                const div = li.firstElementChild;
-                return div && div.children.length === 0;
-            });
-
-            if (!emptyRow) {
-                emptyRow = document.createElement("li");
-                propertiesList.appendChild(emptyRow);
+            const elements = [cell, ...cell.querySelectorAll('*')];
+            const label = elements.find(element => /^Quality\s*:?$/i.test(this.getDirectText(element)));
+            if (label) {
+                const textNode = Array.from(label.childNodes).find(node => node.nodeType === Node.TEXT_NODE && /Quality:/i.test(node.textContent));
+                if (textNode) textNode.textContent = textNode.textContent.replace(/Quality\s*:?/i, 'Bunker Bucks:');
             }
 
-            emptyRow.innerHTML = `
-        <div class="property___gpda9">
-            <span class="title___HudCE">Bunker Bucks:</span>
-            <div class="valueWrapper___yV0l4 t-overflow">
-                <span class="t-overflow">${this.formatNumber(bunkerBucks)} BB</span>
-            </div>
-        </div>
-    `;
-        },
-        // Process existing popups on page (Item Market + Auction House)
-        processExistingPopups() {
-            // Item Market properties lists
-            document.querySelectorAll('ul[class*="properties"]').forEach((popup) => {
-                setTimeout(() => this.addBunkerBucks(popup), 100);
+            const value = elements.find(element => {
+                const direct = this.getDirectText(element);
+                return /(?:Yellow|Orange|Red)/i.test(direct) || /\d[\d.,]*%/.test(direct);
             });
-            // Auction House items already expanded
-            document.querySelectorAll('ul.items-list li').forEach((li) => {
-                setTimeout(() => this.addBunkerBucksToAuction(li), 100);
+            if (value) {
+                value.textContent = `${this.formatNumber(bunkerBucks)} BB`;
+            } else {
+                const fallback = document.createElement('span');
+                fallback.textContent = `${this.formatNumber(bunkerBucks)} BB`;
+                cell.appendChild(fallback);
+            }
+            cell.title = 'Ranked War item value in Bunker Bucks';
+            cell.style.setProperty('color', '#f0c040');
+            cell.querySelectorAll('span, div').forEach(element => {
+                if (/Bunker Bucks|\bBB\b/i.test(element.textContent || '')) {
+                    element.style.setProperty('color', '#f0c040', 'important');
+                }
             });
+            host.appendChild(cell);
+            const fixedHeight = parseFloat(detailsRoot.style.height || '');
+            if (Number.isFinite(fixedHeight) && fixedHeight > 0 && detailsRoot.dataset.sidekickBbOriginalHeight === undefined) {
+                detailsRoot.dataset.sidekickBbOriginalHeight = detailsRoot.style.height;
+                detailsRoot.style.height = `${fixedHeight + 34}px`;
+            }
+            return true;
         },
 
-        // Get item name from an Auction House list item
-        getItemNameFromAuction(li) {
-            // The item name is usually in a .t-blue or .bold .title-black anchor or div
-            const title = li.querySelector('[class*="title"] a, [class*="name"] a, .bold a, .item-name');
-            if (title) return title.textContent.trim();
-            const boldEl = li.querySelector('.bold, b');
-            if (boldEl) return boldEl.textContent.trim();
-            return '';
-        },
+        processQualityLabel(qualityLabel) {
+            if (!this.isEnabled || !qualityLabel?.isConnected) return;
+            const detailsRoot = this.findDetailsRoot(qualityLabel);
+            if (!detailsRoot || detailsRoot.querySelector('.sidekick-bb-value')) return;
 
-        // Add Bunker Bucks to an Auction House expanded item row
-        addBunkerBucksToAuction(li) {
-            if (!this.isEnabled) return;
-            if (!li || li.dataset.bunkerBucksAdded) return;
-
-            // Only process li items that have expanded detail (description visible)
-            const descEl = li.querySelector('[class*="description"], [class*="detail"], [class*="info"]');
-            if (!descEl) return;
-
-            li.dataset.bunkerBucksAdded = 'true';
-
-            const itemName = this.getItemNameFromAuction(li);
-            const weaponType = this.getWeaponType(itemName);
-            const rarity = this.getRarity(li);
-            const bonusCount = this.countBonuses(li);
-
+            const itemName = this.getItemName(detailsRoot);
+            const weaponType = this.getWeaponType(itemName, detailsRoot);
+            const rarity = this.getRarity(detailsRoot);
+            const bonusCount = this.countBonuses(detailsRoot);
             if (!weaponType || !rarity) return;
 
             const bunkerBucks = this.calculateBunkerBucks(rarity, weaponType, bonusCount);
             if (bunkerBucks == null) return;
+            this.injectValue(detailsRoot, qualityLabel, bunkerBucks);
+        },
 
-            const bbDiv = document.createElement('div');
-            bbDiv.className = 'sidekick-bb-auction';
-            bbDiv.style.cssText = 'margin-top:4px; font-size:12px; color:#f0c040; font-weight:bold;';
-            bbDiv.textContent = `💰 Bunker Bucks: ${this.formatNumber(bunkerBucks)} BB`;
-            descEl.appendChild(bbDiv);
+        processPropertiesList(propertiesList) {
+            if (!propertiesList || propertiesList.querySelector('.sidekick-bb-value')) return;
+            const qualityLabel = this.findFieldLabel(propertiesList, 'Quality');
+            if (qualityLabel) this.processQualityLabel(qualityLabel);
+        },
+
+        // Process all currently open item-information panels.
+        processExistingPopups() {
+            if (!this.isEnabled) return;
+            document.querySelectorAll('ul[class*="properties" i]').forEach(list => this.processPropertiesList(list));
+            const elements = Array.from(document.querySelectorAll('span, dt, th, div'));
+            elements
+                .filter(element => /^Quality\s*:?$/i.test(this.getDirectText(element)))
+                .forEach(element => this.processQualityLabel(element));
         },
 
 

@@ -96,6 +96,11 @@ const PlayerIdLinkerModule = (() => {
     }
 
     function wrapIdsInText(textNode) {
+        // Torn's React render can detach a queued text node before the
+        // MutationObserver callback reaches it. Replacing a detached node
+        // throws and used to flood the console on every subsequent render.
+        if (!textNode?.parentNode || !textNode.isConnected) return;
+
         const text = textNode.nodeValue;
         if (!text || text.length < 5) return;
 
@@ -133,7 +138,9 @@ const PlayerIdLinkerModule = (() => {
         if (lastIndex === 0) return; // nothing matched after test
         frag.appendChild(document.createTextNode(text.slice(lastIndex)));
 
-        textNode.parentNode.replaceChild(frag, textNode);
+        const parent = textNode.parentNode;
+        if (!parent || !textNode.isConnected) return;
+        parent.replaceChild(frag, textNode);
     }
 
     function processNode(root) {

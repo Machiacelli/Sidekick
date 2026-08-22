@@ -15,7 +15,7 @@
     const LS_SELECTED = 'silmaril-loadout-switcher-selected-loadouts';
     const rfcvArg = 'rfcv=';
     const SET_LOADOUT_URL = '/page.php?sid=itemsLoadouts&step=changeLoadout&setID={loadoutId}&rfcv={rfcv}';
-    const GET_EQUIPPED_URL = '/page.php?sid=itemsLoadouts&step=getEquippedItems';
+    const PAGE_DATA_EVENT = 'sidekick:loadout-data';
 
     const LoadoutSwitcherModule = {
         isInitialized: false,
@@ -27,6 +27,7 @@
         _selectedLoadouts: '1,2,3',
         _selectedLoadoutsArray: ['1', '2', '3'],
         _observer: null,
+        _pageDataListener: null,
 
         async init() {
             if (this.isInitialized) return;
@@ -79,13 +80,12 @@
             } catch { this._loadoutTitles = {}; }
 
             this._injectStyles();
+            this._startPageDataListener();
             this._startRfcvCapture();
 
             // Poll until the loadouts title element exists, then attach UI
             this._intervalId = setInterval(() => this._tryAttach(), 50);
 
-            // Fetch titles after a short delay (rfcv might not be ready yet)
-            setTimeout(() => this._fetchTitlesManually(), 1500);
         },
 
         async disable() {
@@ -94,6 +94,10 @@
             await this.saveSettings(false);
             if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
             if (this._observer) { this._observer.disconnect(); this._observer = null; }
+            if (this._pageDataListener) {
+                document.removeEventListener(PAGE_DATA_EVENT, this._pageDataListener);
+                this._pageDataListener = null;
+            }
             document.querySelectorAll('.silmaril-torn-loadout-switcher-container').forEach(el => el.remove());
             const style = document.getElementById(STYLE_ID);
             if (style) style.remove();
@@ -117,7 +121,24 @@
             document.querySelectorAll('.silmaril-torn-loadout-switcher-container button')
                 .forEach(b => b.classList.remove('disabled'));
             this._rfcvUpdatedThisSession = true;
-            this._fetchTitlesManually();
+        },
+
+        _startPageDataListener() {
+            if (this._pageDataListener) return;
+            this._pageDataListener = event => {
+                try {
+                    const payload = JSON.parse(event.detail || '{}');
+                    if (payload.rfcv) this._captureRfcvFromUrl(`/?rfcv=${payload.rfcv}`);
+                    if (payload.titles && typeof payload.titles === 'object') {
+                        this._loadoutTitles = { ...this._loadoutTitles, ...payload.titles };
+                        this._persistTitles();
+                        this._refreshButtonText();
+                    }
+                } catch (error) {
+                    console.warn('[LoadoutSwitcher] Ignored invalid page loadout data:', error);
+                }
+            };
+            document.addEventListener(PAGE_DATA_EVENT, this._pageDataListener);
         },
 
         _startRfcvCapture() {
@@ -217,25 +238,6 @@
             wave.style.animation = 'none';
             void wave.offsetHeight;
             wave.style.animation = null;
-        },
-
-        // ── Title fetching ────────────────────────────────────────────────────
-
-        async _fetchTitlesManually() {
-            if (!this._rfcv) return;
-            try {
-                const res = await fetch(`${GET_EQUIPPED_URL}&rfcv=${this._rfcv}`);
-                const data = await res.json();
-                if (data?.currentLoadouts) {
-                    for (const key of Object.keys(data.currentLoadouts)) {
-                        this._loadoutTitles[key] = data.currentLoadouts[key].title;
-                    }
-                    this._persistTitles();
-                    this._refreshButtonText();
-                }
-            } catch (e) {
-                console.warn('[LoadoutSwitcher] Title fetch failed:', e);
-            }
         },
 
         _persistTitles() {

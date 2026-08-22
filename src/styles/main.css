@@ -205,11 +205,12 @@
     display: none;
     flex: 1;
     position: relative;
-    overflow: visible;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 .sidekick-page.active {
-    display: flex;
-    flex-direction: column;
+    display: block;
 }
 
 #sidekick-sidebar.hidden {

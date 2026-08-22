@@ -6,7 +6,7 @@
 
 const BookNotifierModule = {
     name: 'Book Notifier',
-    version: '1.0.0',
+    version: '1.1.0',
     STORAGE_KEY: 'book-notifier',
 
     ICON_ID: 'sk-book-notifier-icon',
@@ -17,6 +17,7 @@ const BookNotifierModule = {
     checkIntervalMinutes: 5,
 
     pollTimer: null,
+    countdownTimer: null,
     observer: null,
     activeBooks: null,
 
@@ -126,7 +127,13 @@ const BookNotifierModule = {
             const rewards = data.missions?.rewards || [];
 
             // Look for any reward that is a Book
-            const books = rewards.filter(r => r.details && r.details.type === 'Book');
+            const books = rewards
+                .filter(r => r.details && r.details.type === 'Book')
+                .sort((a, b) => {
+                    const aExpiry = Number(a.expires_at) || Number.MAX_SAFE_INTEGER;
+                    const bExpiry = Number(b.expires_at) || Number.MAX_SAFE_INTEGER;
+                    return aExpiry - bExpiry;
+                });
 
             if (books.length > 0) {
                 this.activeBooks = books;
@@ -141,6 +148,73 @@ const BookNotifierModule = {
     },
 
     // ─── Status Line ─────────────────────────────────────────────────────────
+
+    escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    },
+
+    formatRemaining(expiresAt, nowSeconds = Math.floor(Date.now() / 1000)) {
+        const total = Math.max(0, Math.ceil(Number(expiresAt) - nowSeconds));
+        const days = Math.floor(total / 86400);
+        const hours = Math.floor((total % 86400) / 3600);
+        const totalHours = Math.floor(total / 3600);
+        const minutes = Math.ceil(total / 60);
+
+        if (days > 0) return `${days}d ${hours}h`;
+        if (totalHours > 0) return `${totalHours}h`;
+        if (total < 60) return '<1m';
+        if (minutes > 0) return `${minutes}m`;
+        return 'Expired';
+    },
+
+    startCountdown() {
+        if (this.countdownTimer) return;
+        this.updateCountdown();
+        this.countdownTimer = setInterval(() => this.updateCountdown(), 30000);
+    },
+
+    stopCountdown() {
+        if (this.countdownTimer) {
+            clearInterval(this.countdownTimer);
+            this.countdownTimer = null;
+        }
+    },
+
+    updateCountdown() {
+        if (!Array.isArray(this.activeBooks) || this.activeBooks.length === 0) {
+            this.stopCountdown();
+            return;
+        }
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const availableBooks = this.activeBooks.filter(book => {
+            const expiresAt = Number(book.expires_at);
+            return !Number.isFinite(expiresAt) || expiresAt <= 0 || expiresAt > nowSeconds;
+        });
+
+        if (availableBooks.length !== this.activeBooks.length) {
+            this.activeBooks = availableBooks;
+            this.showStatusLine(availableBooks.length > 0 ? availableBooks : null);
+            return;
+        }
+
+        const countdown = document.getElementById('sk-book-notifier-countdown');
+        if (!countdown) return;
+
+        const expiresAt = Number(availableBooks[0]?.expires_at);
+        if (!Number.isFinite(expiresAt) || expiresAt <= 0) {
+            countdown.textContent = 'No expiry';
+            return;
+        }
+
+        countdown.textContent = this.formatRemaining(expiresAt, nowSeconds);
+        countdown.title = `Removed from rewards at ${new Date(expiresAt * 1000).toLocaleString()}`;
+    },
 
     insertStatusLine() {
         if (document.getElementById(this.ICON_ID)) return;
@@ -174,9 +248,14 @@ const BookNotifierModule = {
 
         if (count > 0) {
             const firstName = books[0]?.details?.name?.replace(/^Book\s*:\s*/i, '') || 'Book Available';
-            section.innerHTML = `<a class="title" href="/page.php?sid=missions">Book: </a><span><a href="/page.php?sid=missions" style="color:#4CAF50;font-weight:bold;text-decoration:none;">${firstName}</a></span>`;
+            const moreBooks = count > 1 ? ` +${count - 1}` : '';
+            const target = this.openInNewTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+            section.innerHTML = `<a class="title" href="/page.php?sid=missions"${target}>Book: </a><span><a href="/page.php?sid=missions"${target} style="color:#4CAF50;font-weight:bold;text-decoration:none;">${this.escapeHtml(firstName)}${moreBooks}</a> <span style="color:#aaa;white-space:nowrap;">· <span id="sk-book-notifier-countdown">--</span></span></span>`;
+            this.startCountdown();
+            this.updateCountdown();
         } else {
             section.innerHTML = `<a class="title" href="/page.php?sid=missions">Book: </a><span style="color:#777;">None</span>`;
+            this.stopCountdown();
         }
     },
 
@@ -221,6 +300,7 @@ const BookNotifierModule = {
         this.isEnabled = false;
         this.saveSettings();
         this.stopPolling();
+        this.stopCountdown();
         this.removeIcon();
     },
 };

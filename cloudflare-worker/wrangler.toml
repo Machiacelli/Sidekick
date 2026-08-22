@@ -1,0 +1,10 @@
+name = "notion-bug-proxy"
+main = "notion-bug-proxy.js"
+compatibility_date = "2026-08-01"
+
+# Configure before deployment:
+#   wrangler secret put NOTION_API_KEY
+#   wrangler secret put NOTION_DATABASE_ID
+#
+# Deploy from this directory with:
+#   wrangler deploy

@@ -2302,9 +2302,10 @@
             //     document.addEventListener('click', closeOnClickOutside);
             // }, 100);
 
-            // Amount input: M/K shorthand — auto-expand on blur or Enter
+            // Amount input: expand a completed K/M/B shorthand immediately.
             const amountInput = dialog.querySelector('#amount');
             const expandAmount = () => {
+                if (!amountInput) return;
                 const val = amountInput.value.trim();
                 if (!val) return;
                 const parsed = this.parseShorthand(val);
@@ -2312,6 +2313,9 @@
                     amountInput.value = Math.round(parsed).toString();
                 }
             };
+            amountInput?.addEventListener('input', () => {
+                if (/^[\d.]+\s*[kmb]$/i.test(amountInput.value.trim())) expandAmount();
+            });
             amountInput?.addEventListener('blur', expandAmount);
             amountInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') expandAmount(); });
 

@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sidekick",
-    "version": "1.2.24",
+    "version": "1.2.29",
     "description": "Enhanced sidebar and tools for Torn.com",
     "permissions": [
         "storage",
@@ -31,6 +31,7 @@
                 "https://*.torn.com/*"
             ],
             "js": [
+                "src/modules/chat-popout.module.js",
                 "src/core/notification-center.js",
                 "src/core/notification-preferences.js",
                 "src/modules/core.module.js",
@@ -44,6 +45,7 @@
                 "src/modules/todolist.module.js",
                 "src/modules/attack-button-mover.module.js",
                 "src/modules/attack-options.module.js",
+                "src/modules/attack-online-status.module.js",
                 "src/modules/xanax-viewer.module.js",
                 "src/modules/blocktraining.module.js",
                 "src/modules/timeontab.module.js",
@@ -87,7 +89,7 @@
                 "src/modules/mission-tracker.module.js",
                 "src/modules/book-notifier.module.js",
                 "src/modules/hide-crime-outcome.module.js",
-                "src/modules/holiday.module.js",
+                "src/modules/egg-helper.module.js",
                 "src/modules/special-gym-ratios.module.js",
                 "src/modules/player-id-linker.module.js",
                 "src/modules/loadout-switcher.module.js",
@@ -104,6 +106,17 @@
                 "src/styles/main.css"
             ],
             "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/item.php*",
+                "https://*.torn.com/item.php*"
+            ],
+            "js": [
+                "src/modules/loadout-switcher-inject.js"
+            ],
+            "world": "MAIN",
+            "run_at": "document_start"
         },
         {
             "matches": [

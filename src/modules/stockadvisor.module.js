@@ -1279,7 +1279,7 @@
             // Remove old listeners by cloning and replacing (prevents duplicates)
             if (sortSelect) {
                 const newSortSelect = sortSelect.cloneNode(true);
-                sortSelect.parentNode.replaceChild(newSortSelect, sortSelect);
+                if (sortSelect.parentNode) sortSelect.parentNode.replaceChild(newSortSelect, sortSelect);
 
                 // Set current value
                 newSortSelect.value = this.currentSort || 'daily';
@@ -1293,7 +1293,7 @@
 
             if (filterSelect) {
                 const newFilterSelect = filterSelect.cloneNode(true);
-                filterSelect.parentNode.replaceChild(newFilterSelect, filterSelect);
+                if (filterSelect.parentNode) filterSelect.parentNode.replaceChild(newFilterSelect, filterSelect);
 
                 // Set current value
                 newFilterSelect.value = this.currentFilter || 'all';
@@ -1307,7 +1307,7 @@
 
             if (utilityToggle) {
                 const newUtilityToggle = utilityToggle.cloneNode(true);
-                utilityToggle.parentNode.replaceChild(newUtilityToggle, utilityToggle);
+                if (utilityToggle.parentNode) utilityToggle.parentNode.replaceChild(newUtilityToggle, utilityToggle);
 
                 // Set current value
                 newUtilityToggle.checked = this.showUtilityStocks || false;

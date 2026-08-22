@@ -346,6 +346,7 @@
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Time on Tab</div><div class="sk-row-desc">Display remaining travel time, hospital time, raceway time, and time left for chain on tab title.</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-time-on-tab" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Legible Player Names</div><div class="sk-row-desc">Improves readability of player names by formatting them with better spacing and styling</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-legible-names" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Random Target</div><div class="sk-row-desc">Adds a floater that opens a random level 1 profile</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-random-target" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Chat Popout</div><div class="sk-row-desc">Adds a button that opens Torn Chat in its own resizable window</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chat-popout"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Refill Blocker</div><div class="sk-row-desc">Prevents accidental nerve and energy refills by showing a confirmation before using refill items</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-refill-blocker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Xanax Viewer</div><div class="sk-row-desc">View individual Xanax usage</div></div><label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-xanax-viewer" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Auction Weapon Bonus</div><div class="sk-row-desc">Displays weapon bonuses & stats next to weapon name in auction house</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-auction-bonus" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -470,6 +471,7 @@
         <div class="sk-subtab-panel active" id="skp-tab-personal">
           <div class="sk-sh">Combat &amp; Loadout</div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Fast Attack</div><div class="sk-row-desc">Moves Start Fight button directly over your equipped weapon for faster attacking</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-fast-attack" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Attack Online Status</div><div class="sk-row-desc">Shows a small Online, Idle, or Offline indicator beside the target on attack pages</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-attack-online" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Loadout Switcher</div><div class="sk-row-desc">Adds quick loadout change buttons on the Items page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-loadout" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-sh" style="margin-top:18px;">Inventory</div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Locked Items Manager</div><div class="sk-row-desc">Lock inventory items to prevent accidental trading or selling</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-locked-items"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -546,7 +548,7 @@
             <button class="sk-btn sk-btn-danger" style="width:100%;">Clear Ghost Trade ID</button>
           </div>
           <div class="sk-sh" style="margin-top:18px;">Bunker</div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Bunker Bucks</div><div class="sk-row-desc">Shows the Bunker Buck (BB) value of weapons &amp; armor on item listings — visible in Item Market, Auction House, and Inventory</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-bunker-bucks" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Bunker Bucks</div><div class="sk-row-desc">Shows the Bunker Buck (BB) value of weapons &amp; armor on item listings</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-bunker-bucks" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
       </div>
     </div>
@@ -1033,6 +1035,7 @@
                 ['#sidekick-api-key', 'sidekick_api_key', null, ''],
                 // Personal
                 ['#skp-tog-fast-attack', 'sidekick_attack_button_mover', null, true],
+                ['#skp-tog-attack-online', 'sidekick_settings', 'attack-online-status', true],
                 ['#skp-tog-loadout', 'sidekick_settings', 'loadout-switcher', false],
                 ['#skp-tog-locked-items', 'sidekick_settings', 'locked-items', false],
                 ['#skp-tog-wxp', 'sidekick_weapon_xp_tracker', null, false],
@@ -1049,6 +1052,7 @@
                 // Utility
                 ['#skp-tog-time-on-tab', 'sidekick_time_on_tab', null, false],
                 ['#skp-tog-random-target', 'sidekick_random_target', null, false],
+                ['#skp-tog-chat-popout', 'sidekick_settings', 'chat-popout', false],
                 ['#skp-tog-legible-names', 'sidekick_settings', 'legible-names', false],
                 ['#skp-tog-xanax-viewer', 'sidekick_xanax_viewer', null, false],
                 ['#skp-tog-refill-blocker', 'sidekick_refill_blocker', null, false],
@@ -1081,9 +1085,10 @@
                 // Missions
 
                 ['#skp-tog-mission-tracker', 'sidekick_settings', 'mission-tracker', false],
+                ['#skp-tog-book-notifier', 'sidekick_settings', 'book-notifier', false],
                 // Events
                 ['#skp-tog-event-calendar', 'sidekick_settings', 'event-calendar', false],
-                ['#skp-tog-easter', 'sidekick_holiday', null, false],
+                ['#skp-tog-easter', 'sidekick_egg_helper', null, false],
                 ['#skp-tog-halloween', 'sidekick_halloween', null, false],
                 ['#skp-tog-christmas-zoom', 'sidekick_settings', 'christmas_zoom', false],
                 ['#skp-tog-christmas-beers', 'sidekick_settings', 'christmas_beers', false],
@@ -1156,35 +1161,11 @@
                             }
                         }
 
-                        // J1: update hustling active badge
-                        if (sel === '#skp-tog-hustling') {
-                            const badge = overlay.querySelector('#sk-hustling-active-badge');
-                            if (badge) badge.style.display = inp.checked ? 'inline' : 'none';
-                        }
                     } catch (e) {
                         console.error(e);
                     }
                 });
             }
-
-            // J1: Hustling "Active" badge — inject into the row title and show if enabled
-            (() => {
-                const hustlingRow = overlay.querySelector('#skp-tog-hustling')?.closest('.sk-row');
-                if (hustlingRow) {
-                    const titleEl = hustlingRow.querySelector('.sk-row-title');
-                    if (titleEl && !titleEl.querySelector('#sk-hustling-active-badge')) {
-                        const badge = document.createElement('span');
-                        badge.id = 'sk-hustling-active-badge';
-                        badge.textContent = ' ✅ Active';
-                        badge.style.cssText = 'font-size:11px;color:#8BC34A;font-weight:normal;margin-left:4px;';
-                        badge.style.display = 'none';
-                        titleEl.appendChild(badge);
-                        // Set initial visibility from module state
-                        const isOn = window.SidekickModules?.HustlingHelper?.isEnabled === true;
-                        badge.style.display = isOn ? 'inline' : 'none';
-                    }
-                }
-            })();
 
             // ─── Medical settings: load and wire dropdowns ─────────────────
             const medItemSrc = overlay.querySelector('#skp-med-item-source');
@@ -1513,17 +1494,18 @@
             this.attachGeneralTabListeners(overlay);
             this.attachModulesTabListeners(overlay);
             this.attachXanaxTabListeners(overlay);
-            this.attachChainTimerTabListeners(overlay);
-            this.attachNotificationsTabListeners(overlay);
-
-            this.attachBloodBagTabListeners(overlay);
-            this.attachQuickDepositTabListeners(overlay);
-            this.attachCrimeNotifierTabListeners(overlay);
+            // These are legacy-tab listener sets. Only attach them when their
+            // old controls are actually present in the current settings UI.
+            if (overlay.querySelector('#sidekick-chain-threshold')) this.attachChainTimerTabListeners(overlay);
+            if (overlay.querySelector('.toggle-switch[data-module="notification-sound"]')) this.attachNotificationsTabListeners(overlay);
+            if (overlay.querySelector('#bloodbag-count')) this.attachBloodBagTabListeners(overlay);
+            if (overlay.querySelector('#quickdeposit-target')) this.attachQuickDepositTabListeners(overlay);
+            if (overlay.querySelector('#crime-notifier-interval')) this.attachCrimeNotifierTabListeners(overlay);
             this.attachCrimesTabListeners(overlay);
             this.attachMugWarningTabListeners(overlay);
             this.attachMissionTrackerTabListeners(overlay);
             this.attachHideCrimeTabListeners(overlay);
-            this.attachHolidayTabListeners(overlay);
+            this.attachEggHelperTabListeners(overlay);
             this.attachWarTargetCallerTabListeners(overlay);
 
         },
@@ -2068,7 +2050,6 @@
                 !chainPopupCheckbox ||
                 !chainFlashCheckbox
             ) {
-                console.warn('Chain Timer controls not found - skipping listeners.');
                 return;
             }
 
@@ -2202,8 +2183,6 @@
                     // Auto-save after toggle
                     await autoSaveNotifSettings();
                 });
-            } else {
-                console.error('🔊 Notification sound toggle not found!');
             }
 
             // Load other notification settings
@@ -2311,7 +2290,6 @@
             const statusDiv = panel.querySelector('#sidekick-bloodbag-status');
 
             if (!bagsInput || !destinationSelect || !newTabCheckbox) {
-                console.warn('Blood Bag settings elements not found');
                 return;
             }
 
@@ -2367,7 +2345,6 @@
             const statusDiv = panel.querySelector('#sidekick-quickdeposit-status');
 
             if (!targetSelect) {
-                console.warn('Quick Deposit settings elements not found');
                 return;
             }
 
@@ -2465,7 +2442,6 @@
             const statusDiv = panel.querySelector('#sidekick-crime-notifier-status');
 
             if (!intervalInput) {
-                console.warn('Crime Notifier settings elements not found');
                 return;
             }
 
@@ -2543,7 +2519,6 @@
             const searchNoneBtn = panel.querySelector('#crime-search-none');
 
             if (!intervalInput) {
-                console.warn('Crime Notifier settings elements not found');
                 return;
             }
 
@@ -3067,7 +3042,7 @@
             }
         },
 
-        attachHolidayTabListeners(panel) {
+        attachEggHelperTabListeners(panel) {
             const toggle = panel.querySelector('#holiday-egghunt-toggle');
             const resetBtn = panel.querySelector('#holiday-egghunt-reset');
             const statusDiv = panel.querySelector('#sidekick-holiday-status');
@@ -3077,12 +3052,12 @@
                 const thumb = toggle.querySelector('.toggle-thumb');
 
                 toggle.addEventListener('click', async () => {
-                    if (!window.SidekickModules.Holiday) return;
-                    window.SidekickModules.Holiday.eggHuntEnabled = !window.SidekickModules.Holiday.eggHuntEnabled;
-                    const on = window.SidekickModules.Holiday.eggHuntEnabled;
+                    if (!window.SidekickModules.EggHelper) return;
+                    window.SidekickModules.EggHelper.eggHuntEnabled = !window.SidekickModules.EggHelper.eggHuntEnabled;
+                    const on = window.SidekickModules.EggHelper.eggHuntEnabled;
                     track.style.backgroundColor = on ? 'rgba(76,175,80,0.8)' : 'rgba(255,255,255,0.2)';
                     thumb.style.transform = on ? 'translateX(26px)' : 'translateX(0)';
-                    await window.SidekickModules.Holiday.saveSettings();
+                    await window.SidekickModules.EggHelper.saveSettings();
                     this.showAutoSaveStatus(statusDiv, on ? 'Egg Hunt enabled \u2713' : 'Egg Hunt disabled \u2713');
                     setTimeout(() => window.location.reload(), 700);
                 });
@@ -3092,7 +3067,7 @@
                 resetBtn.addEventListener('click', async () => {
                     if (!confirm('Reset all Easter Egg Hunt progress (visited pages and egg count)?')) return;
                     try {
-                        await window.SidekickModules.Core.ChromeStorage.set('sidekick_holiday_eggHunt', {});
+                        await window.SidekickModules.Core.ChromeStorage.set('sidekick_egg_helper_eggHunt', {});
                         this.showAutoSaveStatus(statusDiv, 'Hunt progress reset ✓');
                     } catch (e) {
                         console.error('Failed to reset egg hunt:', e);
@@ -3103,19 +3078,19 @@
                 resetBtn.addEventListener('mouseleave', () => { resetBtn.style.background = 'rgba(239,83,80,0.15)'; });
             }
 
-            this.loadHolidaySettings(panel);
+            this.loadEggHelperSettings(panel);
         },
 
-        async loadHolidaySettings(panel) {
+        async loadEggHelperSettings(panel) {
             try {
-                const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_holiday');
+                const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_egg_helper');
                 const on = data?.eggHuntEnabled || false;
                 const track = panel.querySelector('#holiday-egghunt-toggle .toggle-track');
                 const thumb = panel.querySelector('#holiday-egghunt-toggle .toggle-thumb');
                 if (track) track.style.backgroundColor = on ? 'rgba(76,175,80,0.8)' : 'rgba(255,255,255,0.2)';
                 if (thumb) thumb.style.transform = on ? 'translateX(26px)' : 'translateX(0)';
             } catch (e) {
-                console.error('Failed to load Holiday settings:', e);
+                console.error('Failed to load Egg Helper settings:', e);
             }
         },
 

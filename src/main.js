@@ -16,6 +16,11 @@
     // Main initialization function
     async function initializeSidekick() {
         try {
+            if (window.__SIDEKICK_CHAT_POPOUT__) {
+                console.log('💬 Sidekick: Chat popout mode active; regular modules skipped in this window.');
+                return;
+            }
+
             console.log("⏳ Sidekick: Waiting for modules to load...");
 
             console.log("🔍 Sidekick: Checking for Core and UI modules...");
@@ -128,13 +133,13 @@
                 console.warn("⚠️ Attack Button Mover module not available");
             }
 
-            // Initialize Attack Options Module
-            console.log("⚔️ Sidekick: Initializing Attack Options...");
-            if (window.SidekickModules.AttackOptions?.init) {
-                await window.SidekickModules.AttackOptions.init();
-                console.log("✅ Sidekick: Attack Options initialized");
+            // Initialize attack target online-status indicator
+            console.log('🟢 Sidekick: Initializing Attack Online Status...');
+            if (window.SidekickModules.AttackOnlineStatus?.init) {
+                await window.SidekickModules.AttackOnlineStatus.init();
+                console.log('✅ Sidekick: Attack Online Status initialized');
             } else {
-                console.warn("⚠️ Attack Options module not available");
+                console.warn('⚠️ Attack Online Status module not available');
             }
 
             // Initialize Xanax Viewer Module
@@ -420,6 +425,15 @@
                 console.warn("⚠️ Chat Alert module not available");
             }
 
+            // Initialize Chat Popout Module
+            console.log('↗️ Sidekick: Initializing Chat Popout...');
+            if (window.SidekickModules.ChatPopout?.init) {
+                await window.SidekickModules.ChatPopout.init();
+                console.log('✅ Sidekick: Chat Popout initialized');
+            } else {
+                console.warn('⚠️ Chat Popout module not available');
+            }
+
             // Initialize Mug Warning Module
             console.log("⚠️ Sidekick: Initializing Mug Warning...");
             if (window.SidekickModules.MugWarning?.init) {
@@ -550,11 +564,20 @@
                 console.warn('⚠️ Search for Cash module not available');
             }
 
+            // Initialize Hustling Helper Module
+            console.log('🎪 Sidekick: Initializing Hustling Helper...');
+            if (window.SidekickModules.HustlingHelper?.init) {
+                await window.SidekickModules.HustlingHelper.init();
+                console.log('✅ Sidekick: Hustling Helper initialized');
+            } else {
+                console.warn('⚠️ Hustling Helper module not available');
+            }
+
 
             // Initialize Egg Helper Module
             console.log('🎉 Sidekick: Initializing Egg Helper Module...');
-            if (window.SidekickModules.Holiday?.init) {
-                await window.SidekickModules.Holiday.init();
+            if (window.SidekickModules.EggHelper?.init) {
+                await window.SidekickModules.EggHelper.init();
                 console.log('✅ Sidekick: Egg Helper Module initialized');
             } else {
                 console.warn('⚠️ Egg Helper Module not available');

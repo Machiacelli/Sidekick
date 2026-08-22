@@ -114,6 +114,12 @@ const apiCache = {
     }
 };
 
+// Target activity is deliberately cached for one minute. This keeps attack
+// page navigation responsive without spending repeated Torn API requests.
+const attackOnlineStatusCache = new Map();
+const attackOnlineStatusPending = new Map();
+const ATTACK_ONLINE_STATUS_TTL = 60_000;
+
 // Extension installation/update handler
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('🚀 Sidekick Extension installed/updated:', details.reason);
@@ -149,7 +155,8 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Handle messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('📨 Background received message:', request);
+    const safeRequest = request?.apiKey ? { ...request, apiKey: '[redacted]' } : request;
+    console.log('📨 Background received message:', safeRequest);
 
     switch (request.action) {
         case 'ping':
@@ -163,6 +170,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 .then(result => sendResponse(result))
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true; // Keep message channel open for async response
+
+        case 'fetchAttackOnlineStatus':
+            handleAttackOnlineStatus(request)
+                .then(result => sendResponse(result))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
 
         case 'reportBug':
             // Handle Notion bug reporting
@@ -202,7 +215,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Create native Chrome notifications
             chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icons/icon48.png',
+                iconUrl: 'assets/icons/swissknife-48.png',
                 title: request.title || 'Sidekick',
                 message: request.message || 'Notification from Sidekick'
             });
@@ -210,12 +223,52 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
 
         case 'proxyFetch':
-            // Generic fetch proxy for content scripts that hit fetch issues
-            fetch(request.url)
-                .then(r => r.json())
-                .then(data => sendResponse({ success: true, data }))
-                .catch(err => sendResponse({ success: false, error: err.message }));
-            return true; // Keep channel open for async response
+            // Cross-origin fetch proxy for content scripts. Existing callers
+            // receive JSON, while Cracking requests plain text.
+            (async () => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), request.timeout || 30000);
+                try {
+                    const method = request.method || 'GET';
+                    const fetchOptions = {
+                        method,
+                        headers: request.headers || {},
+                        signal: controller.signal
+                    };
+                    if (request.body && method !== 'GET' && method !== 'HEAD') fetchOptions.body = request.body;
+
+                    const response = await fetch(request.url, fetchOptions);
+                    const responseText = await response.text();
+                    if (!response.ok) throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+
+                    if (request.responseType === 'text') {
+                        sendResponse({
+                            success: true,
+                            data: responseText,
+                            status: response.status,
+                            statusText: response.statusText,
+                            responseHeaders: [...response.headers]
+                                .map(([key, value]) => `${key}: ${value}`)
+                                .join('\r\n')
+                        });
+                    } else {
+                        sendResponse({
+                            success: true,
+                            data: JSON.parse(responseText),
+                            status: response.status,
+                            statusText: response.statusText
+                        });
+                    }
+                } catch (error) {
+                    sendResponse({
+                        success: false,
+                        error: error.name === 'AbortError' ? 'Request timed out' : error.message
+                    });
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            })();
+            return true;
 
         case 'crimeNotifierAlert':
             // Handle Crime Notifier alerts with browser notifications and badge
@@ -256,6 +309,58 @@ async function handleTornApiCall(request) {
     });
 
     return result;
+}
+
+async function handleAttackOnlineStatus(request) {
+    const apiKey = String(request.apiKey || '').trim();
+    const userId = String(request.userId || '').trim();
+    if (!apiKey) return { success: false, error: 'No API key provided' };
+    if (!/^\d+$/.test(userId)) return { success: false, error: 'Invalid target user ID' };
+
+    const cacheKey = `${apiKey}:${userId}`;
+    const cached = attackOnlineStatusCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < ATTACK_ONLINE_STATUS_TTL) {
+        return { ...cached.result, cached: true };
+    }
+
+    if (attackOnlineStatusPending.has(cacheKey)) return attackOnlineStatusPending.get(cacheKey);
+
+    const pending = (async () => {
+        const url = `https://api.torn.com/v2/user/${userId}/profile?key=${encodeURIComponent(apiKey)}&comment=SidekickAttackStatus`;
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'User-Agent': 'Sidekick Chrome Extension' }
+        });
+        if (!response.ok) {
+            const result = { success: false, error: `Torn API request failed (${response.status})` };
+            attackOnlineStatusCache.set(cacheKey, { result, timestamp: Date.now() });
+            return result;
+        }
+
+        const data = await response.json();
+        if (data.error) {
+            const result = { success: false, error: data.error.error || data.error.message || 'Torn API error' };
+            attackOnlineStatusCache.set(cacheKey, { result, timestamp: Date.now() });
+            return result;
+        }
+
+        const status = data.profile?.last_action?.status;
+        if (!status) {
+            const result = { success: false, error: 'Torn API profile did not include last_action.status' };
+            attackOnlineStatusCache.set(cacheKey, { result, timestamp: Date.now() });
+            return result;
+        }
+        const result = { success: true, status, name: data.profile?.name || '', cached: false };
+        attackOnlineStatusCache.set(cacheKey, { result, timestamp: Date.now() });
+        return result;
+    })();
+
+    attackOnlineStatusPending.set(cacheKey, pending);
+    try {
+        return await pending;
+    } finally {
+        attackOnlineStatusPending.delete(cacheKey);
+    }
 }
 
 
@@ -735,7 +840,7 @@ async function handleCrimeNotifierAlert(alertData) {
         if (windowsNotifEnabled) {
             await chrome.notifications.create({
                 type: 'basic',
-                iconUrl: 'icons/icon48.png',
+                iconUrl: 'assets/icons/swissknife-48.png',
                 title: title || '🚨 Crime Notifier',
                 message: message || 'Alert from Crime Notifier',
                 priority: 2,

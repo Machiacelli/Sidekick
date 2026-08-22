@@ -40,6 +40,7 @@
         pages: [],            // Array of { id, name, contentEl }
         activePageIndex: 0,
         sidebarWidth: 500,
+        pageClickTimer: null,
 
         // Initialize the UI module
         async init() {
@@ -240,7 +241,7 @@
                 contentEl.className = 'sidekick-page' + (idx === 0 ? ' active' : '');
                 contentEl.dataset.pageId = pg.id;
                 contentEl.id = 'sidekick-content'; // keep backward compat for first page
-                contentEl.style.cssText = 'flex:1; overflow:visible; position:relative; padding:5px;';
+                contentEl.style.cssText = 'flex:1; overflow:auto; position:relative; padding:5px;';
                 pageHost.appendChild(contentEl);
                 this.pages.push({ id: pg.id, name: pg.name, contentEl });
             });
@@ -437,15 +438,22 @@
                 tab.innerHTML = `<span class="tab-label" style="flex:1;overflow:hidden;text-overflow:ellipsis;">${this.escapeTabName(pg.name)}</span>`
                     + (this.pages.length > 1 ? `<span class="tab-delete" title="Delete page">✕</span>` : '');
 
-                // Click tab label to switch page
+                // Delay a single click briefly so it does not destroy and
+                // re-render the tab before the browser can deliver dblclick.
                 tab.querySelector('.tab-label').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.switchPage(idx);
+                    if (e.detail > 1) return;
+                    clearTimeout(this.pageClickTimer);
+                    this.pageClickTimer = setTimeout(() => {
+                        if (idx !== this.activePageIndex) this.switchPage(idx);
+                    }, 220);
                 });
 
                 // Double-click to rename
                 tab.querySelector('.tab-label').addEventListener('dblclick', (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
+                    clearTimeout(this.pageClickTimer);
                     const input = document.createElement('input');
                     input.value = pg.name;
                     input.style.cssText = 'background:transparent;border:none;outline:none;color:#8BC34A;width:80px;font-size:11px;';
@@ -454,14 +462,22 @@
                     lbl.appendChild(input);
                     input.focus();
                     input.select();
-                    const done = () => {
-                        const v = input.value.trim() || pg.name;
+                    let finished = false;
+                    const done = (save = true) => {
+                        if (finished) return;
+                        finished = true;
+                        const v = save ? (input.value.trim() || pg.name) : pg.name;
                         pg.name = v;
                         this.renderPageTabs();
                         this.saveSidebarState();
                     };
                     input.addEventListener('blur', done);
-                    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+                    input.addEventListener('click', event => event.stopPropagation());
+                    input.addEventListener('dblclick', event => event.stopPropagation());
+                    input.addEventListener('keydown', event => {
+                        if (event.key === 'Enter') input.blur();
+                        if (event.key === 'Escape') done(false);
+                    });
                 });
 
                 // Delete button
@@ -504,7 +520,7 @@
             const contentEl = document.createElement('div');
             contentEl.className = 'sidekick-page';
             contentEl.dataset.pageId = pg.id;
-            contentEl.style.cssText = 'flex:1; overflow:visible; position:relative; padding:5px;';
+            contentEl.style.cssText = 'flex:1; overflow:auto; position:relative; padding:5px;';
             const pageHost = document.getElementById('sidekick-page-host');
             // Insert before the add-module (+) button
             const addModBtn = pageHost?.querySelector('.sidekick-add-module-btn');
