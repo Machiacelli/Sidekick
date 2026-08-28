@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidekick Chrome Extension - Debt Module
  * Handles loan and debt tracking with automated API integration
  * Version: 1.0.0
@@ -234,8 +234,31 @@
                 return null;
             }
 
+            // Bail out early if the module has already been disabled due to context loss
+            if (this.moduleDisabled) {
+                return null;
+            }
+
+            // Verify extension context is still valid before attempting the call
+            if (!window.SidekickModules?.Core?.SafeMessageSender?.isExtensionContextValid()) {
+                this.moduleDisabled = true;
+                if (this.apiCheckInterval) {
+                    clearInterval(this.apiCheckInterval);
+                    this.apiCheckInterval = null;
+                }
+                if (this.interestUpdateInterval) {
+                    clearInterval(this.interestUpdateInterval);
+                    this.interestUpdateInterval = null;
+                }
+                if (!this.contextInvalidatedLogged) {
+                    console.debug('💰 Extension context invalidated - Debt module paused until page refresh');
+                    this.contextInvalidatedLogged = true;
+                }
+                return null;
+            }
+
             try {
-                const response = await chrome.runtime.sendMessage({
+                const response = await window.SidekickModules.Core.SafeMessageSender.sendToBackground({
                     action: 'proxyFetch',
                     url: `https://api.torn.com/v2/user/${encodeURIComponent(userId)}/profile?key=${encodeURIComponent(this.apiKey)}&comment=SidekickDebtActivity`,
                     timeout: 10000
@@ -252,7 +275,15 @@
 
                 return data.profile?.last_action?.timestamp || data.last_action?.timestamp || null;
             } catch (error) {
-                console.error(`💰 Failed to fetch user activity for ${userId}:`, error);
+                if (error.message?.includes('Extension context invalidated')) {
+                    this.moduleDisabled = true;
+                    if (!this.contextErrorLogged) {
+                        console.debug('💰 Extension context lost - Debt module paused');
+                        this.contextErrorLogged = true;
+                    }
+                } else {
+                    console.error(`💰 Failed to fetch user activity for ${userId}:`, error);
+                }
                 return null;
             }
         },
