@@ -14,7 +14,10 @@
         isEnabled: false,
         observer: null,
         scanTimer: null,
+        storageListenerRegistered: false,
         _settings: null, // Assigned in init() once Core is ready
+        lastDiagnosticSignature: '',
+        successfulItems: new Set(),
 
         bunkerBuckTable: {
             'Yellow': {
@@ -87,8 +90,9 @@
 
             try {
                 // Initialise shared settings helper
-                this._settings = window.SidekickModules.Core.ModuleSettingsHelper('bunker-bucks', true);
+                this._settings = window.SidekickModules.Core.ModuleSettingsHelper('bunker-bucks', false);
                 this.isEnabled = await this._settings.load();
+                this.registerStorageListener();
 
                 if (this.isEnabled) {
                     await this.enable();
@@ -99,6 +103,18 @@
             } catch (error) {
                 console.error("❌ Bunker Bucks Calculator initialization failed:", error);
             }
+        },
+
+        registerStorageListener() {
+            if (this.storageListenerRegistered) return;
+            this.storageListenerRegistered = true;
+            chrome.storage.onChanged.addListener((changes, areaName) => {
+                if (areaName !== 'local' || !changes.sidekick_settings) return;
+                const enabled = changes.sidekick_settings.newValue?.['bunker-bucks']?.isEnabled === true;
+                if (enabled === this.isEnabled) return;
+                if (enabled) this.enable();
+                else this.disable();
+            });
         },
 
         // Enable the module
@@ -129,7 +145,8 @@
 
             this.observer.observe(document.body, {
                 childList: true,
-                subtree: true
+                subtree: true,
+                characterData: true
             });
         },
 
@@ -155,9 +172,9 @@
         // Get item name from the popup
         getItemName(itemInfo) {
             const text = (itemInfo?.textContent || '').replace(/\s+/g, ' ').trim();
-            const sentence = text.match(/\bThe\s+(.+?)\s+is\s+(?:an?\s+)?[^.]{0,100}\b(?:Weapon|Armou?r)\b/i);
+            const sentence = text.match(/\bThe\s+(.+?)\s+(?:is|are)\s+(?:an?\s+)?[^.]{0,100}\b(?:Weapon|Armou?r)\b/i);
             if (sentence?.[1]) return sentence[1].trim();
-            const firstSentence = text.match(/\bThe\s+(.+?)\s+is\s+(?:an?\s+)?[^.]{1,160}\./i);
+            const firstSentence = text.match(/\bThe\s+(.+?)\s+(?:is|are)\s+(?:an?\s+)?[^.]{1,160}\./i);
             if (firstSentence?.[1]) return firstSentence[1].trim();
 
             const descriptionElement = itemInfo?.querySelector('[class*="description" i]');
@@ -195,7 +212,7 @@
 
         // Extract rarity from quality section
         getRarity(itemInfo) {
-            const textMatch = (itemInfo?.textContent || '').match(/Quality:\s*[\d.,]+%\s*(Yellow|Orange|Red)\b/i);
+            const textMatch = (itemInfo?.textContent || '').match(/Quality\s*:?[^\n]{0,100}?\b(Yellow|Orange|Red)\b/i);
             if (textMatch) return textMatch[1][0].toUpperCase() + textMatch[1].slice(1).toLowerCase();
 
             let qualityElement = itemInfo?.querySelector('[class*="rarity" i]');
@@ -252,14 +269,71 @@
             let current = qualityLabel;
             let fallback = null;
             while (current && current !== document.body) {
-                const text = (current.textContent || '').replace(/\s+/g, ' ');
-                if (/\bQuality\b/i.test(text) && /\b(?:Bonus|Damage|Armor|Armour|Defense|Defence)\b/i.test(text)) {
-                    if (!fallback) fallback = current;
-                    if (/\bThe\s+.+?\s+is\s+(?:an?\s+)?[^.]{1,160}\./i.test(text)) return current;
+                const text = (current.textContent || '').replace(/\s+/g, ' ').trim();
+                if (/\bQuality\s*:/i.test(text)) {
+                    const itemName = this.getItemName(current);
+                    const rarity = this.getRarity(current);
+                    const weaponType = this.getWeaponType(itemName, current);
+                    if (itemName && rarity && weaponType) return current;
+                    if (!fallback && /\bThe\s+.+?\s+(?:is|are)\s+(?:an?\s+)?[^.]{1,180}\./i.test(text)) {
+                        fallback = current;
+                    }
                 }
                 current = current.parentElement;
             }
             return fallback;
+        },
+
+        findDetailsRootFromDescription(descriptionElement) {
+            let current = descriptionElement;
+            let fallback = null;
+            while (current && current !== document.body) {
+                const text = (current.textContent || '').replace(/\s+/g, ' ').trim();
+                if (/\bQuality\s*:/i.test(text)) {
+                    if (!fallback) fallback = current;
+                    const itemName = this.getItemName(current);
+                    const rarity = this.getRarity(current);
+                    const weaponType = this.getWeaponType(itemName, current);
+                    if (itemName && rarity && weaponType) return current;
+                }
+                current = current.parentElement;
+            }
+            return fallback;
+        },
+
+        findDescriptionTargets(root = document) {
+            const scope = root === document ? (document.body || document.documentElement) : root;
+            if (!scope) return [];
+
+            const targets = new Set();
+            const descriptionPattern = /\bThe\s+.+?\s+(?:is|are)\s+(?:an?\s+)?[^.]{0,180}\b(?:Weapon|Armou?r)\b/i;
+
+            scope.querySelectorAll?.('[class*="description" i], p').forEach(element => {
+                const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+                if (descriptionPattern.test(text) && text.length <= 700) targets.add(element);
+            });
+
+            const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+            let textNode;
+            while ((textNode = walker.nextNode())) {
+                if (descriptionPattern.test((textNode.textContent || '').replace(/\s+/g, ' ')) && textNode.parentElement) {
+                    targets.add(textNode.parentElement);
+                }
+            }
+            return [...targets];
+        },
+
+        findDescriptionElement(detailsRoot, itemName) {
+            if (!detailsRoot || !itemName) return null;
+            const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`\\bThe\\s+${escapedName}\\s+(?:is|are)\\b`, 'i');
+            const candidates = Array.from(detailsRoot.querySelectorAll('[class*="description" i], p, div, span'))
+                .filter(element => {
+                    const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+                    return text.length <= 700 && pattern.test(text);
+                })
+                .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length);
+            return candidates[0] || null;
         },
 
         findFieldLabel(root, fieldName) {
@@ -269,92 +343,181 @@
         },
 
         findPropertyCell(label) {
-            const listItem = label.closest('li, tr, td');
-            if (listItem) return listItem;
-            let current = label.parentElement;
-            while (current?.parentElement && current.parentElement !== document.body) {
+            let current = label;
+            let smallestMatch = null;
+            while (current && current !== document.body) {
                 const text = (current.textContent || '').replace(/\s+/g, ' ').trim();
-                if (/^Quality:/i.test(text) && text.length < 120) return current;
+                const containsQuality = /\bQuality\s*:/i.test(text);
+                const containsValue = /[\d.,]+\s*%|\b(?:Yellow|Orange|Red)\b/i.test(text);
+                if (containsQuality && containsValue && text.length <= 240) {
+                    smallestMatch = current;
+                    break;
+                }
+
+                // Torn's React item preview uses a generated property wrapper.
+                // The stable class stem survives hash changes between releases.
+                if (containsQuality && /property/i.test(String(current.className || '')) && text.length <= 320) {
+                    smallestMatch = current;
+                    break;
+                }
                 current = current.parentElement;
             }
-            return label.parentElement;
+            return smallestMatch || label.parentElement;
         },
 
-        injectValue(detailsRoot, qualityLabel, bunkerBucks) {
-            if (detailsRoot.querySelector('.sidekick-bb-value')) return true;
-            const qualityCell = this.findPropertyCell(qualityLabel);
-            const host = qualityCell?.parentElement;
-            if (!qualityCell || !host) return false;
+        isQualityField(element) {
+            if (!element || element.classList?.contains('sidekick-bb-value')) return false;
+            const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!/\bQuality\s*:/i.test(text) || text.length > 240) return false;
 
-            const cell = qualityCell.cloneNode(true);
-            cell.classList.add('sidekick-bb-value');
-            cell.removeAttribute('id');
-            cell.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
-
-            const elements = [cell, ...cell.querySelectorAll('*')];
-            const label = elements.find(element => /^Quality\s*:?$/i.test(this.getDirectText(element)));
-            if (label) {
-                const textNode = Array.from(label.childNodes).find(node => node.nodeType === Node.TEXT_NODE && /Quality:/i.test(node.textContent));
-                if (textNode) textNode.textContent = textNode.textContent.replace(/Quality\s*:?/i, 'Bunker Bucks:');
-            }
-
-            const value = elements.find(element => {
-                const direct = this.getDirectText(element);
-                return /(?:Yellow|Orange|Red)/i.test(direct) || /\d[\d.,]*%/.test(direct);
+            // Prefer the smallest field wrapper so a whole details grid is
+            // never cloned when Torn changes its generated class names.
+            return !Array.from(element.children || []).some(child => {
+                const childText = (child.textContent || '').replace(/\s+/g, ' ').trim();
+                return /\bQuality\s*:/i.test(childText) && childText.length <= text.length;
             });
-            if (value) {
-                value.textContent = `${this.formatNumber(bunkerBucks)} BB`;
-            } else {
-                const fallback = document.createElement('span');
-                fallback.textContent = `${this.formatNumber(bunkerBucks)} BB`;
-                cell.appendChild(fallback);
+        },
+
+        findQualityFields(root = document) {
+            return Array.from(root.querySelectorAll('li, tr, td, dt, th, span, div, p'))
+                .filter(element => this.isQualityField(element));
+        },
+
+        findQualityTargets(root = document) {
+            const scope = root === document ? (document.body || document.documentElement) : root;
+            if (!scope) return [];
+
+            const targets = new Set(this.findQualityFields(root));
+            const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+            let textNode;
+            while ((textNode = walker.nextNode())) {
+                if (/\bQuality\s*:/i.test(textNode.textContent || '') && textNode.parentElement) {
+                    targets.add(textNode.parentElement);
+                }
             }
-            cell.title = 'Ranked War item value in Bunker Bucks';
-            cell.style.setProperty('color', '#f0c040');
-            cell.querySelectorAll('span, div').forEach(element => {
-                if (/Bunker Bucks|\bBB\b/i.test(element.textContent || '')) {
-                    element.style.setProperty('color', '#f0c040', 'important');
+
+            // Compatibility with the working userscript: generated hashes vary,
+            // but Torn has retained the semantic `rarity` class stem.
+            scope.querySelectorAll?.('[class*="rarity" i]').forEach(rarityElement => {
+                let current = rarityElement;
+                for (let depth = 0; current && current !== scope.parentElement && depth < 6; depth++) {
+                    if (/\bQuality\s*:/i.test(current.textContent || '')) {
+                        targets.add(current);
+                        break;
+                    }
+                    current = current.parentElement;
                 }
             });
-            host.appendChild(cell);
-            const fixedHeight = parseFloat(detailsRoot.style.height || '');
-            if (Number.isFinite(fixedHeight) && fixedHeight > 0 && detailsRoot.dataset.sidekickBbOriginalHeight === undefined) {
-                detailsRoot.dataset.sidekickBbOriginalHeight = detailsRoot.style.height;
-                detailsRoot.style.height = `${fixedHeight + 34}px`;
+
+            return [...targets];
+        },
+
+        injectValue(detailsRoot, qualityLabel, bunkerBucks, itemName) {
+            if (detailsRoot.querySelector('.sidekick-bb-value')) return true;
+            const value = document.createElement('span');
+            value.className = 'sidekick-bb-value';
+            value.textContent = `Bunker Bucks: ${this.formatNumber(bunkerBucks)} BB`;
+            value.title = 'Ranked War item value in Bunker Bucks';
+            value.dataset.sidekickBbItem = itemName || '';
+            value.style.setProperty('display', 'inline-flex', 'important');
+            value.style.setProperty('align-items', 'center', 'important');
+            value.style.setProperty('width', 'max-content', 'important');
+            value.style.setProperty('margin', '5px 0 5px 8px', 'important');
+            value.style.setProperty('padding', '2px 7px', 'important');
+            value.style.setProperty('border', '1px solid rgba(240, 192, 64, .65)', 'important');
+            value.style.setProperty('border-radius', '4px', 'important');
+            value.style.setProperty('background', 'rgba(72, 57, 14, .82)', 'important');
+            value.style.setProperty('color', '#f0c040', 'important');
+            value.style.setProperty('font-size', '12px', 'important');
+            value.style.setProperty('font-weight', '700', 'important');
+            value.style.setProperty('line-height', '18px', 'important');
+            value.style.setProperty('white-space', 'nowrap', 'important');
+            value.style.setProperty('position', 'relative', 'important');
+            value.style.setProperty('z-index', '4', 'important');
+
+            // The description exists on Item Market, Auction House, and
+            // Inventory details and is not constrained by Torn's property grid.
+            const description = this.findDescriptionElement(detailsRoot, itemName);
+            if (description?.parentElement && description !== detailsRoot) {
+                description.insertAdjacentElement('afterend', value);
+                return true;
             }
+
+            // Exact compatibility fallback for the working userscript and
+            // current Torn React preview: put the badge in the Quality value.
+            const qualityCell = qualityLabel ? this.findPropertyCell(qualityLabel) : null;
+            if (!qualityCell) return false;
+            const generatedValueWrapper = qualityCell.querySelector?.('[class*="valueWrapper" i]');
+            (generatedValueWrapper || qualityCell).appendChild(value);
             return true;
         },
 
-        processQualityLabel(qualityLabel) {
-            if (!this.isEnabled || !qualityLabel?.isConnected) return;
-            const detailsRoot = this.findDetailsRoot(qualityLabel);
-            if (!detailsRoot || detailsRoot.querySelector('.sidekick-bb-value')) return;
+        processDetailsRoot(detailsRoot, qualityLabel = null) {
+            if (!this.isEnabled || !detailsRoot || detailsRoot.querySelector('.sidekick-bb-value')) return false;
 
             const itemName = this.getItemName(detailsRoot);
             const weaponType = this.getWeaponType(itemName, detailsRoot);
             const rarity = this.getRarity(detailsRoot);
             const bonusCount = this.countBonuses(detailsRoot);
-            if (!weaponType || !rarity) return;
+            if (!itemName || !weaponType || !rarity) return false;
 
             const bunkerBucks = this.calculateBunkerBucks(rarity, weaponType, bonusCount);
-            if (bunkerBucks == null) return;
-            this.injectValue(detailsRoot, qualityLabel, bunkerBucks);
+            if (bunkerBucks == null) return false;
+            const injected = this.injectValue(detailsRoot, qualityLabel, bunkerBucks, itemName);
+            if (injected) {
+                const signature = `${itemName}|${rarity}|${weaponType}|${bunkerBucks}`;
+                if (!this.successfulItems.has(signature)) {
+                    this.successfulItems.add(signature);
+                    console.info(`[BunkerBucks] Added ${bunkerBucks} BB for ${itemName} (${rarity} ${weaponType})`);
+                }
+            }
+            return injected;
+        },
+
+        processQualityLabel(qualityLabel) {
+            if (!this.isEnabled || !qualityLabel?.isConnected) return false;
+            const detailsRoot = this.findDetailsRoot(qualityLabel);
+            return this.processDetailsRoot(detailsRoot, qualityLabel);
         },
 
         processPropertiesList(propertiesList) {
             if (!propertiesList || propertiesList.querySelector('.sidekick-bb-value')) return;
             const qualityLabel = this.findFieldLabel(propertiesList, 'Quality');
-            if (qualityLabel) this.processQualityLabel(qualityLabel);
+            if (qualityLabel) {
+                this.processQualityLabel(qualityLabel);
+                return;
+            }
+            this.findQualityTargets(propertiesList).forEach(field => this.processQualityLabel(field));
         },
 
         // Process all currently open item-information panels.
         processExistingPopups() {
             if (!this.isEnabled) return;
             document.querySelectorAll('ul[class*="properties" i]').forEach(list => this.processPropertiesList(list));
-            const elements = Array.from(document.querySelectorAll('span, dt, th, div'));
-            elements
-                .filter(element => /^Quality\s*:?$/i.test(this.getDirectText(element)))
-                .forEach(element => this.processQualityLabel(element));
+            let injected = false;
+            this.findDescriptionTargets(document).forEach(description => {
+                const root = this.findDetailsRootFromDescription(description);
+                injected = this.processDetailsRoot(root) || injected;
+            });
+            const targets = this.findQualityTargets(document);
+            targets.forEach(element => { injected = this.processQualityLabel(element) || injected; });
+
+            if (!injected && targets.length > 0 && !document.querySelector('.sidekick-bb-value')) {
+                const sample = targets[0];
+                const root = this.findDetailsRoot(sample);
+                const diagnostic = {
+                    targets: targets.length,
+                    itemName: this.getItemName(root),
+                    rarity: this.getRarity(root),
+                    weaponType: this.getWeaponType(this.getItemName(root), root),
+                    detailClass: String(root?.className || '')
+                };
+                const signature = JSON.stringify(diagnostic);
+                if (signature !== this.lastDiagnosticSignature) {
+                    this.lastDiagnosticSignature = signature;
+                    console.warn('[BunkerBucks] Ranked item details found but no value was inserted:', diagnostic);
+                }
+            }
         },
 
 

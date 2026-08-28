@@ -235,15 +235,22 @@
             }
 
             try {
-                const response = await fetch(`https://api.torn.com/user/${userId}?selections=timestamp&key=${this.apiKey}`);
-                const data = await response.json();
+                const response = await chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: `https://api.torn.com/v2/user/${encodeURIComponent(userId)}/profile?key=${encodeURIComponent(this.apiKey)}&comment=SidekickDebtActivity`,
+                    timeout: 10000
+                });
+                if (!response?.success) {
+                    throw new Error(response?.error || 'Torn API request failed');
+                }
+                const data = response.data;
 
                 if (data.error) {
                     console.error(`💰 API error fetching user ${userId}:`, data.error);
                     return null;
                 }
 
-                return data.last_action?.timestamp || null;
+                return data.profile?.last_action?.timestamp || data.last_action?.timestamp || null;
             } catch (error) {
                 console.error(`💰 Failed to fetch user activity for ${userId}:`, error);
                 return null;

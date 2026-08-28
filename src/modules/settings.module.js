@@ -123,14 +123,19 @@
     border-color:rgba(95,204,106,0.45);
     box-shadow:0 0 14px rgba(95,204,106,0.2),0 0 28px rgba(255,173,90,0.1);
 }
-.sk-nav-label{font-size:10px;font-weight:600;letter-spacing:0;text-align:center;white-space:normal;word-break:break-word;line-height:1.2;max-width:100%;}
+.sk-nav-label{
+    display:block; max-width:100%; min-height:16px; padding:1px 0 2px;
+    font-size:10px; font-weight:600; letter-spacing:0; line-height:13px;
+    text-align:center; white-space:normal; word-break:break-word; overflow:visible;
+}
 .sk-prev-content{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .sk-prev-topbar{
     display:flex;align-items:center;justify-content:space-between;
     padding:16px 24px; border-bottom:1px solid var(--border); flex-shrink:0;
 }
 .sk-prev-title{
-    font-size:20px;font-weight:700;
+    display:inline-block;min-height:32px;padding:3px 0 5px;overflow:visible;
+    font-size:20px;font-weight:700;line-height:24px;
     background:var(--grad);-webkit-background-clip:text;
     -webkit-text-fill-color:transparent;background-clip:text;
     letter-spacing:-0.3px;
@@ -222,6 +227,59 @@
     gap: 8px;
     margin-top: 8px;
 }
+.sk-trade-profile-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.sk-trade-profile-actions{display:flex;align-items:center;gap:8px;min-width:0;}
+.sk-trade-segment{display:inline-flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden;background:var(--surface2);}
+.sk-trade-profile-btn{min-width:92px;padding:8px 14px;border:0;border-right:1px solid var(--border2);background:transparent;color:var(--muted);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+.sk-trade-profile-btn:last-child{border-right:0;}
+.sk-trade-profile-btn.active{background:var(--grad);color:#111;}
+.sk-trade-compact-btn{width:auto;flex:none;padding:8px 12px;white-space:nowrap;}
+.sk-trade-default-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.sk-trade-default-row .sk-field-label{margin:0;white-space:nowrap;}
+.sk-trade-rate-input{width:118px;margin:0;}
+.sk-trade-editor{display:grid;grid-template-columns:220px minmax(0,1fr);height:430px;border:1px solid var(--border2);border-radius:10px;overflow:hidden;background:rgba(0,0,0,.08);}
+.sk-trade-category-pane{border-right:1px solid var(--border2);padding:12px 0;overflow-y:auto;scrollbar-width:thin;}
+.sk-trade-search{margin:0 12px 10px;width:calc(100% - 24px);}
+.sk-trade-category-group{padding:8px 12px 4px;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);}
+.sk-trade-category-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:7px 13px;border:0;border-top:1px solid rgba(255,255,255,.045);background:transparent;color:rgba(255,255,255,.78);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:left;}
+.sk-trade-category-btn:hover{background:rgba(255,255,255,.05);color:#fff;}
+.sk-trade-category-btn.active{background:rgba(95,204,106,.13);color:var(--green);}
+.sk-trade-category-rate{font-weight:700;white-space:nowrap;}
+.sk-trade-detail-pane{padding:18px;overflow-y:auto;scrollbar-width:thin;}
+.sk-trade-detail-title{font-size:17px;font-weight:700;color:var(--green);margin-bottom:16px;}
+.sk-trade-rate-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding-bottom:14px;border-bottom:1px solid var(--border);}
+.sk-trade-rate-row .sk-input{margin-bottom:0;}
+.sk-trade-rate-source{font-size:10px;color:var(--muted);margin-top:5px;}
+.sk-trade-exceptions-head{display:flex;align-items:center;justify-content:space-between;margin:15px 0 8px;}
+.sk-trade-exceptions-title{font-size:12px;font-weight:700;color:rgba(255,255,255,.72);}
+.sk-trade-exception-columns,.sk-trade-exception-row{display:grid;grid-template-columns:minmax(0,1fr) 112px 90px 54px;gap:6px;align-items:center;}
+.sk-trade-exception-columns{padding:0 2px 5px;color:var(--muted);font-size:10px;font-weight:700;}
+.sk-trade-exception-row{margin-bottom:6px;}
+.sk-trade-exception-row .sk-input,.sk-trade-exception-row .sk-select{margin:0;padding:7px 8px;font-size:11px;min-width:0;}
+.sk-trade-exception-row .sk-input:disabled{opacity:.55;cursor:not-allowed;}
+.sk-trade-item-picker{position:relative;min-width:0;}
+.sk-trade-item-picker>.sk-input{width:100%;}
+.sk-trade-item-results{position:absolute;z-index:80;top:calc(100% + 4px);left:0;width:min(310px,calc(100vw - 48px));max-height:218px;overflow-y:auto;padding:4px;background:#171717;border:1px solid var(--border2);border-radius:8px;box-shadow:0 12px 28px rgba(0,0,0,.7);scrollbar-width:thin;}
+.sk-trade-item-results[hidden]{display:none;}
+.sk-trade-item-option{display:block;width:100%;padding:7px 8px;border:0;border-radius:5px;background:transparent;color:#eee;font-family:inherit;text-align:left;cursor:pointer;}
+.sk-trade-item-option:hover,.sk-trade-item-option.active{background:rgba(95,204,106,.16);color:#fff;}
+.sk-trade-item-option-name{display:block;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sk-trade-item-option-type{display:block;margin-top:2px;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sk-trade-item-no-results{padding:8px;color:var(--muted);font-size:10px;text-align:center;}
+.sk-trade-delete{padding:7px 5px;border-radius:7px;border:1px solid rgba(255,80,80,.3);background:rgba(255,80,80,.08);color:#ff8585;font-family:inherit;font-size:10px;font-weight:600;cursor:pointer;}
+.sk-trade-delete:hover{background:rgba(255,80,80,.18);color:#fff;}
+.sk-trade-empty{padding:18px 10px;text-align:center;color:var(--muted);font-size:11px;border:1px dashed var(--border2);border-radius:8px;margin-bottom:8px;}
+.sk-trade-add{width:auto;flex:none;padding:7px 10px;}
+.sk-trade-save-row{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:14px;}
+.sk-trade-save-row .sk-status{display:none;flex:1;margin:0;text-align:left;}
+.sk-trade-save{width:190px;flex:none;}
+.sk-trade-export-preview{width:100%;height:240px;resize:vertical;background:#151515;border:1px solid var(--border2);border-radius:8px;color:rgba(255,255,255,.78);padding:12px;font:11px/1.5 Consolas,monospace;outline:none;margin-bottom:10px;}
+.sk-trade-export-preview:focus{border-color:var(--green);}
+.sk-trade-import-input{display:none;}
+@media (max-width:850px){
+    .sk-trade-profile-bar{align-items:flex-start;flex-direction:column;}
+    .sk-trade-editor{grid-template-columns:190px minmax(0,1fr);}
+}
 .sk-custom-cb-wrap {
     display: flex;
     justify-content: space-between;
@@ -279,6 +337,7 @@
       <button class="sk-nav-item" data-section="war"><div class="sk-nav-icon"><img class="sk-nav-icon-img" data-icon="War.png"></div><span class="sk-nav-label">War</span></button>
       <button class="sk-nav-item" data-section="missions"><div class="sk-nav-icon"><img class="sk-nav-icon-img" data-icon="Missions.png"></div><span class="sk-nav-label">Missions</span></button>
       <button class="sk-nav-item" data-section="events"><div class="sk-nav-icon"><img class="sk-nav-icon-img" data-icon="Events.png"></div><span class="sk-nav-label">Events</span></button>
+      <button class="sk-nav-item" data-section="trading"><div class="sk-nav-icon"><img class="sk-nav-icon-img" data-icon="Trading.png"></div><span class="sk-nav-label">Trading</span></button>
     </nav>
   </div>
 
@@ -538,14 +597,29 @@
             <input type="number" class="sk-input" min="1" max="10" value="1" placeholder="1">
           </div>
           <div class="sk-row" style="margin-top:4px;"><div class="sk-row-info"><div class="sk-row-title">Item Market Max Quantity</div><div class="sk-row-desc">Adds a button to fill max quantity when buying from Item Market</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-market-max-qty"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-sh" style="margin-top:18px;">Quick Deposit</div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Quick Deposit</div><div class="sk-row-desc">Makes your money display clickable for fast vault deposits</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-quick-deposit"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <label class="sk-field-label" style="margin-top:10px;">Deposit Target</label>
-          <select class="sk-select" id="skp-deposit-target"><option>Faction Vault</option><option>Property Vault</option><option>Company Vault</option><option value="ghost">Ghost Trade</option></select>
-          <div class="sk-ghost-trade-row" id="skp-ghost-row" style="display:none;">
-            <div class="sk-info" style="margin-top:8px;">Auto-detected when you visit a ghost trade page. Used as the deposit target when Ghost Trade is selected above.</div>
-            <input type="text" class="sk-input" placeholder="No ghost trade detected yet" readonly style="opacity:0.55;cursor:not-allowed;">
-            <button class="sk-btn sk-btn-danger" style="width:100%;">Clear Ghost Trade ID</button>
+          <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Quick Deposit</div>
+              <div class="sk-row-desc">Makes your money display clickable for fast vault deposits</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-quick-deposit" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-quick-deposit"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-quick-deposit" style="display:none;">
+            <div class="sk-sh" style="margin-top:0;font-size:10px;">Quick Deposit Settings</div>
+            <label class="sk-field-label">Deposit Target</label>
+            <select class="sk-select" id="skp-deposit-target">
+              <option value="FACTION">Faction Vault</option>
+              <option value="PROPERTY">Property Vault</option>
+              <option value="COMPANY">Company Vault</option>
+              <option value="GHOST">Ghost Trade</option>
+            </select>
+            <div class="sk-ghost-trade-row" id="skp-ghost-row" style="display:none;">
+              <div class="sk-info" style="margin-top:8px;">Auto-detected when you visit a ghost trade page. Used as the deposit target when Ghost Trade is selected above.</div>
+              <input type="text" class="sk-input" id="skp-deposit-ghost-id" placeholder="No ghost trade detected yet" readonly style="opacity:0.55;cursor:not-allowed;">
+              <button class="sk-btn sk-btn-danger" id="skp-deposit-clear-ghost" type="button" style="width:100%;">Clear Ghost Trade ID</button>
+            </div>
+            <div class="sk-status" id="skp-deposit-status" style="display:none;"></div>
           </div>
           <div class="sk-sh" style="margin-top:18px;">Bunker</div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Bunker Bucks</div><div class="sk-row-desc">Shows the Bunker Buck (BB) value of weapons &amp; armor on item listings</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-bunker-bucks" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
@@ -768,9 +842,9 @@
         </div>
         <div class="sk-subtab-panel" id="skp-tab-mugwarn">
           <div class="sk-sh">Mug Warning</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Mug Warning</div><div class="sk-row-desc">Show warning modal when viewing a recently mugged player</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Mug Warning</div><div class="sk-row-desc">Show warning modal when viewing a recently mugged player</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-mug-warning"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <label class="sk-field-label" style="margin-top:10px;">Warning Window (hours)</label>
-          <input type="number" class="sk-input" min="1" max="72" value="24" placeholder="24">
+          <input type="number" id="mug-warning-hours" class="sk-input" min="1" max="72" value="24" placeholder="24">
           <div class="sk-hint">Alert if you mugged the target within this many hours</div>
         </div>
       </div>
@@ -779,16 +853,16 @@
     <!-- WAR -->
     <div class="sk-sec-page" id="skp-war">
       <div class="sk-subtab-bar">
-        <button class="sk-subtab-btn active" data-tab="war-chainview">War Utilities</button>
+        <button class="sk-subtab-btn active" data-tab="war-utilities">War Utilities</button>
         <button class="sk-subtab-btn" data-tab="war-chain">Chain Timer</button>
-        <button class="sk-subtab-btn" data-tab="war-monitor">War Monitor</button>
-        <button class="sk-subtab-btn" data-tab="war-target-caller">Target Caller</button>
       </div>
       <div class="sk-scroll">
-        <div class="sk-subtab-panel active" id="skp-tab-war-chainview">
-          <div class="sk-sh">Tools</div>
+        <div class="sk-subtab-panel active" id="skp-tab-war-utilities">
+          <div class="sk-sh">War Utilities</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Extended Chain View</div><div class="sk-row-desc">Show more than 10 chain attacks on faction page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chain-view" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Termed War Mode</div><div class="sk-row-desc">Removes Mug and Hospitalize options after an attack</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-termed-war"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">War Monitor</div><div class="sk-row-desc">Show travel status and hospital time and sort by hospital time on war page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-monitor"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">War Target Caller</div><div class="sk-row-desc">Tag claimed players and add claim buttons</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-target-caller"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-war-chain">
           <div class="sk-sh">Chain Timer</div>
@@ -803,34 +877,15 @@
           <div class="sk-sh" style="margin-top:16px;">Display</div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Floating Display</div><div class="sk-row-desc">Show floating timer widget on the page (draggable and resizable)</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-ct-floating" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
-        <div class="sk-subtab-panel" id="skp-tab-war-monitor">
-          <div class="sk-sh">War Monitor</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable War Monitor</div><div class="sk-row-desc">Show travel status and hospital time and sort by hospital time on war page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-monitor"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-        </div>
-        <div class="sk-subtab-panel" id="skp-tab-war-target-caller">
-          <div class="sk-sh">War Target Caller</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable War Target Caller</div><div class="sk-row-desc">Tag claimed players and add claim buttons</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-target-caller"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-
-        </div>
       </div>
     </div>
 
     <!-- MISSIONS -->
     <div class="sk-sec-page" id="skp-missions">
-      <div class="sk-subtab-bar">
-        <button class="sk-subtab-btn active" data-tab="miss-tracker">Tracker</button>
-        <button class="sk-subtab-btn" data-tab="book-notifier">Book Notifier</button>
-      </div>
       <div class="sk-scroll">
-        <div class="sk-subtab-panel active" id="skp-tab-miss-tracker">
-          <div class="sk-sh">Mission Tracker</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Mission Tracker</div><div class="sk-row-desc">Tracks if there is an active mission and displays an icon</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-mission-tracker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-        </div>
-
-        <div class="sk-subtab-panel" id="skp-tab-book-notifier">
-          <div class="sk-sh">Book Notifier</div>
-          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Book Notifier</div><div class="sk-row-desc">Displays an icon when you have unclaimed book rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-book-notifier" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-        </div>
+        <div class="sk-sh">Mission &amp; Book Tracking</div>
+        <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Mission Tracker</div><div class="sk-row-desc">Tracks if there is an active mission and displays an icon</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-mission-tracker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Book Notifier</div><div class="sk-row-desc">Displays an icon when you have unclaimed book rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-book-notifier" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
       </div>
     </div>
 
@@ -871,6 +926,113 @@
           <div class="sk-sh">Christmas</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Bigger window</div><div class="sk-row-desc">Makes the Christmas Town map bigger</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-christmas-zoom"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Fast beers</div><div class="sk-row-desc">Faster beer rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-christmas-beers"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- TRADING -->
+    <div class="sk-sec-page" id="skp-trading">
+      <div class="sk-subtab-bar">
+        <button class="sk-subtab-btn active" data-tab="trade-display">Trade Display</button>
+        <button class="sk-subtab-btn" data-tab="trade-price-lists">Price Lists</button>
+        <button class="sk-subtab-btn" data-tab="trade-export">Export</button>
+      </div>
+      <div class="sk-scroll">
+        <div class="sk-subtab-panel active" id="skp-tab-trade-display">
+          <div class="sk-sh">Trade Display</div>
+          <div class="sk-info">These settings control what Sidekick will show inside Torn's trade window. Price-list editing is kept in its own tab.</div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Trade Assistant</div><div class="sk-row-desc">Show Sidekick values and pricing controls on trade pages</div></div><label class="sk-tog"><input type="checkbox" id="skp-trade-enabled" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Show market value per item</div><div class="sk-row-desc">Display each item's unadjusted market value</div></div><label class="sk-tog"><input type="checkbox" id="skp-trade-show-market" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Show your price per item</div><div class="sk-row-desc">Display what you pay or receive using the selected price list</div></div><label class="sk-tog"><input type="checkbox" id="skp-trade-show-buy" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Show trade calculator</div><div class="sk-row-desc">Show item totals and clearly state how much you pay or receive</div></div><label class="sk-tog"><input type="checkbox" id="skp-trade-show-totals" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-sh">Default Price List</div>
+          <label class="sk-field-label" for="skp-trade-default-profile">Price list selected when opening a trade</label>
+          <select class="sk-select" id="skp-trade-default-profile">
+            <option value="public">Public</option>
+            <option value="friendly">Friendly</option>
+          </select>
+          <div class="sk-hint">The price list can still be changed directly from the trade window.</div>
+        </div>
+
+        <div class="sk-subtab-panel" id="skp-tab-trade-price-lists">
+          <div class="sk-trade-profile-bar">
+            <div class="sk-trade-profile-actions">
+              <div class="sk-trade-segment" role="group" aria-label="Price list profile">
+                <button class="sk-trade-profile-btn active" type="button" data-trade-profile="public">Public</button>
+                <button class="sk-trade-profile-btn" type="button" data-trade-profile="friendly">Friendly</button>
+              </div>
+              <button class="sk-btn sk-btn-ghost sk-trade-compact-btn" type="button" id="skp-trade-copy-profile">Copy to Friendly</button>
+            </div>
+            <button class="sk-btn sk-btn-ghost sk-trade-compact-btn" type="button" id="skp-trade-open-export">Export Public Price List</button>
+          </div>
+
+          <div class="sk-trade-default-row">
+            <label class="sk-field-label" for="skp-trade-default-rate">Default percentage paid</label>
+            <input class="sk-input sk-trade-rate-input" id="skp-trade-default-rate" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Default percentage paid">
+            <span style="font-size:12px;color:var(--muted);">%</span>
+          </div>
+
+          <div class="sk-trade-editor">
+            <div class="sk-trade-category-pane">
+              <input class="sk-input sk-trade-search" id="skp-trade-category-search" type="search" placeholder="Find category" autocomplete="off">
+              <div id="skp-trade-category-list"></div>
+            </div>
+
+            <div class="sk-trade-detail-pane">
+              <div class="sk-trade-detail-title" id="skp-trade-category-title">Flowers</div>
+              <div class="sk-row">
+                <div class="sk-row-info">
+                  <div class="sk-row-title">Buy items from this category</div>
+                  <div class="sk-row-desc">Turn this off to mark every item in the category as NOT FOR TRADE</div>
+                </div>
+                <label class="sk-tog"><input type="checkbox" id="skp-trade-category-enabled" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+              </div>
+              <div class="sk-trade-rate-row">
+                <div>
+                  <label class="sk-field-label" for="skp-trade-category-rate">Percentage paid for this category</label>
+                  <input class="sk-input" id="skp-trade-category-rate" type="number" min="0" step="0.01" inputmode="decimal">
+                  <div class="sk-trade-rate-source" id="skp-trade-rate-source">Using the profile default</div>
+                </div>
+                <button class="sk-btn sk-btn-ghost sk-trade-compact-btn" type="button" id="skp-trade-reset-category">Use default percentage</button>
+              </div>
+
+              <div class="sk-trade-exceptions-head">
+                <div class="sk-trade-exceptions-title">Different prices for specific items</div>
+                <button class="sk-btn sk-btn-ghost sk-trade-add" type="button" id="skp-trade-add-exception">Set a different item price</button>
+              </div>
+              <div class="sk-trade-exception-columns" aria-hidden="true"><span>Search item</span><span>Price type</span><span>Value</span><span></span></div>
+              <div id="skp-trade-exceptions"></div>
+            </div>
+          </div>
+
+          <div class="sk-trade-save-row">
+            <div class="sk-status" id="skp-trade-save-status"></div>
+            <button class="sk-btn sk-btn-primary sk-trade-save" type="button" id="skp-trade-save">Save Price List</button>
+          </div>
+        </div>
+
+        <div class="sk-subtab-panel" id="skp-tab-trade-export">
+          <div class="sk-sh">Export</div>
+          <div class="sk-info">The readable list is intended for other players. The JSON file can be imported into Sidekick without re-entering every rate.</div>
+          <label class="sk-field-label" for="skp-trade-export-profile">Price list to export or replace</label>
+          <select class="sk-select" id="skp-trade-export-profile">
+            <option value="public">Public</option>
+            <option value="friendly">Friendly</option>
+          </select>
+          <label class="sk-field-label" for="skp-trade-export-preview">Readable price list preview</label>
+          <textarea class="sk-trade-export-preview" id="skp-trade-export-preview" readonly></textarea>
+          <div class="sk-btn-row">
+            <button class="sk-btn sk-btn-primary" type="button" id="skp-trade-copy-readable">Copy Readable List</button>
+            <button class="sk-btn sk-btn-ghost" type="button" id="skp-trade-download-readable">Download Text</button>
+          </div>
+          <div class="sk-btn-row">
+            <button class="sk-btn sk-btn-ghost" type="button" id="skp-trade-copy-json">Copy Sidekick JSON</button>
+            <button class="sk-btn sk-btn-ghost" type="button" id="skp-trade-download-json">Download JSON</button>
+            <button class="sk-btn sk-btn-ghost" type="button" id="skp-trade-import-json">Import JSON</button>
+          </div>
+          <input class="sk-trade-import-input" id="skp-trade-import-file" type="file" accept="application/json,.json">
+          <div class="sk-status" id="skp-trade-export-status" style="display:none;"></div>
         </div>
       </div>
     </div>
@@ -928,7 +1090,12 @@
             // Close on backdrop click disabled as requested
 
             // Close button
-            overlay.querySelector('#skp-close').addEventListener('click', () => {
+            overlay.querySelector('#skp-close').addEventListener('click', async () => {
+                if (typeof overlay.saveTradingSettings === 'function') {
+                    try { await overlay.saveTradingSettings(); } catch (error) {
+                        console.error('Failed to save Trading settings before closing:', error);
+                    }
+                }
                 overlay.remove();
                 document.body.style.overflow = '';
                 if (overlay.dataset.settingsChanged === 'true') {
@@ -939,7 +1106,8 @@
             // Section navigation
             const sectionTitles = {
                 general: 'General Settings', features: 'Features', profile: 'Profile',
-                crimes: 'Crimes', mugging: 'Mugging', war: 'War', missions: 'Missions', events: 'Events'
+                crimes: 'Crimes', mugging: 'Mugging', war: 'War', missions: 'Missions', events: 'Events',
+                trading: 'Trading'
             };
             overlay.querySelectorAll('.sk-nav-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -978,6 +1146,831 @@
                 });
             });
 
+            // Trading settings, profiles and price-list export
+            const initializeTradingSettings = async () => {
+                const storage = window.SidekickModules?.Core?.ChromeStorage;
+                if (!storage) return;
+
+                const STORAGE_KEY = 'sidekick_trading_settings';
+                const categoryGroups = {
+                    'Equipment': ['Armor', 'Melee', 'Primary', 'Secondary'],
+                    'Useful Supplies': ['Alcohol', 'Boosters', 'Candy', 'Drugs', 'Energy Drinks', 'Enhancers', 'Medical', 'Temporary'],
+                    'General Shopping': ['Artifacts', 'Cars', 'Clothing', 'Flowers', 'Jewelry', 'Materials', 'Miscellaneous', 'Plushies', 'Special', 'Supply Packs', 'Tools'],
+                    'Estate Agency': ['Basic Properties', 'Fully Upgraded Properties']
+                };
+                const allCategories = Object.values(categoryGroups).flat();
+                const clone = value => JSON.parse(JSON.stringify(value));
+                const textValue = (value, fallback = '') => {
+                    if (value === null || value === undefined) return fallback;
+                    const result = String(value).trim();
+                    return result || fallback;
+                };
+                const makeExceptionId = () => globalThis.crypto?.randomUUID?.() || `trade-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+                const normalizeException = value => {
+                    const source = value && typeof value === 'object' ? value : {};
+                    return {
+                        id: textValue(source.id, makeExceptionId()),
+                        item: textValue(source.item ?? source.itemKey ?? source.name),
+                        label: textValue(source.label),
+                        itemId: textValue(source.itemId),
+                        uid: textValue(source.uid),
+                        fingerprint: textValue(source.fingerprint),
+                        rule: ['fixed', 'not_for_trade'].includes(source.rule) ? source.rule : 'percentage',
+                        value: textValue(source.value)
+                    };
+                };
+
+                const normalizeProfile = value => {
+                    const source = value && typeof value === 'object' ? value : {};
+                    const categories = {};
+                    const sourceCategories = source.categories && typeof source.categories === 'object' ? source.categories : {};
+
+                    Object.entries(sourceCategories).forEach(([category, rawRecord]) => {
+                        if (rawRecord === null || rawRecord === undefined) return;
+                        if (typeof rawRecord === 'string' || typeof rawRecord === 'number') {
+                            categories[category] = { enabled: true, rate: textValue(rawRecord), exceptions: [] };
+                            return;
+                        }
+                        if (typeof rawRecord !== 'object') return;
+                        const exceptions = Array.isArray(rawRecord.exceptions)
+                            ? rawRecord.exceptions.map(normalizeException)
+                            : [];
+                        categories[category] = {
+                            enabled: rawRecord.enabled !== false,
+                            rate: textValue(rawRecord.rate),
+                            exceptions
+                        };
+                    });
+
+                    if (source.exceptions && typeof source.exceptions === 'object') {
+                        Object.entries(source.exceptions).forEach(([category, rawExceptions]) => {
+                            if (!Array.isArray(rawExceptions)) return;
+                            categories[category] ||= { enabled: true, rate: '', exceptions: [] };
+                            categories[category].exceptions.push(...rawExceptions.map(normalizeException));
+                        });
+                    }
+
+                    return {
+                        defaultRate: textValue(source.defaultRate, '100'),
+                        categories
+                    };
+                };
+
+                const normalizeSettings = value => {
+                    const source = value && typeof value === 'object' ? value : {};
+                    const display = source.display && typeof source.display === 'object' ? source.display : {};
+                    return {
+                        version: 1,
+                        display: {
+                            enabled: display.enabled !== false,
+                            showMarketValue: display.showMarketValue !== false,
+                            showBuyPrice: display.showBuyPrice !== false,
+                            showTotals: display.showTotals !== false,
+                            defaultProfile: display.defaultProfile === 'friendly' ? 'friendly' : 'public'
+                        },
+                        profiles: {
+                            public: normalizeProfile(source.profiles?.public),
+                            friendly: normalizeProfile(source.profiles?.friendly)
+                        }
+                    };
+                };
+
+                let state = normalizeSettings(await storage.get(STORAGE_KEY));
+                let selectedProfile = 'public';
+                let selectedCategory = 'Flowers';
+                let saveTimer = null;
+                let statusTimer = null;
+                const TRADE_CATALOG_KEY = 'sidekick_trade_item_catalog';
+                const normalizeItemName = value => textValue(value).replace(/\s+/g, ' ').toLowerCase();
+                let itemCatalog = {};
+                let itemCatalogByName = new Map();
+                let itemCatalogSearch = [];
+
+                const cachedCatalog = await storage.get(TRADE_CATALOG_KEY).catch(() => null);
+                if (cachedCatalog?.items && typeof cachedCatalog.items === 'object') {
+                    itemCatalog = cachedCatalog.items;
+                } else {
+                    try {
+                        const fallbackItems = JSON.parse(localStorage.getItem('tornItems') || '{}');
+                        Object.entries(fallbackItems).forEach(([id, item]) => {
+                            if (!item?.name) return;
+                            itemCatalog[id] = {
+                                id: String(id),
+                                name: item.name,
+                                marketValue: String(item.market_value ?? item.marketValue ?? '0'),
+                                type: item.type || ''
+                            };
+                        });
+                    } catch { /* The picker will refresh from Torn below. */ }
+                }
+
+                const rebuildItemPicker = () => {
+                    itemCatalogByName = new Map();
+                    itemCatalogSearch = Object.values(itemCatalog)
+                        .filter(item => item?.name)
+                        .sort((left, right) => left.name.localeCompare(right.name));
+                    itemCatalogSearch.forEach(item => {
+                        itemCatalogByName.set(normalizeItemName(item.name), item);
+                    });
+                };
+                rebuildItemPicker();
+
+                const refreshItemPicker = async () => {
+                    const hasTypedItems = Object.values(itemCatalog).some(item => textValue(item?.type));
+                    const age = Date.now() - Number(cachedCatalog?.updatedAt || 0);
+                    if (hasTypedItems && age < 86400000) return;
+                    const apiKey = await storage.get('sidekick_api_key').catch(() => '');
+                    if (!apiKey) return;
+                    try {
+                        const response = await fetch(`https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(apiKey)}&comment=SidekickTradeAssistant`);
+                        const data = await response.json();
+                        if (!response.ok || data.error || !data.items) throw new Error(data.error?.error || `Torn API returned ${response.status}`);
+                        const refreshed = {};
+                        Object.entries(data.items).forEach(([id, item]) => {
+                            if (item.tradeable === false || !item.name) return;
+                            refreshed[id] = {
+                                id: String(id),
+                                name: item.name,
+                                marketValue: String(item.market_value ?? '0'),
+                                type: item.type || item.category || '',
+                                image: item.image || ''
+                            };
+                        });
+                        itemCatalog = refreshed;
+                        rebuildItemPicker();
+                        await storage.set(TRADE_CATALOG_KEY, { updatedAt: Date.now(), items: refreshed });
+                    } catch (error) {
+                        console.warn('[TradingSettings] Could not refresh the item picker; using cached items.', error);
+                    }
+                };
+                refreshItemPicker();
+
+                const elements = {
+                    displayEnabled: overlay.querySelector('#skp-trade-enabled'),
+                    displayMarket: overlay.querySelector('#skp-trade-show-market'),
+                    displayBuy: overlay.querySelector('#skp-trade-show-buy'),
+                    displayTotals: overlay.querySelector('#skp-trade-show-totals'),
+                    defaultProfile: overlay.querySelector('#skp-trade-default-profile'),
+                    profileButtons: [...overlay.querySelectorAll('[data-trade-profile]')],
+                    copyProfile: overlay.querySelector('#skp-trade-copy-profile'),
+                    openExport: overlay.querySelector('#skp-trade-open-export'),
+                    defaultRate: overlay.querySelector('#skp-trade-default-rate'),
+                    categorySearch: overlay.querySelector('#skp-trade-category-search'),
+                    categoryList: overlay.querySelector('#skp-trade-category-list'),
+                    categoryTitle: overlay.querySelector('#skp-trade-category-title'),
+                    categoryEnabled: overlay.querySelector('#skp-trade-category-enabled'),
+                    categoryRate: overlay.querySelector('#skp-trade-category-rate'),
+                    rateSource: overlay.querySelector('#skp-trade-rate-source'),
+                    resetCategory: overlay.querySelector('#skp-trade-reset-category'),
+                    exceptions: overlay.querySelector('#skp-trade-exceptions'),
+                    addException: overlay.querySelector('#skp-trade-add-exception'),
+                    save: overlay.querySelector('#skp-trade-save'),
+                    saveStatus: overlay.querySelector('#skp-trade-save-status'),
+                    exportProfile: overlay.querySelector('#skp-trade-export-profile'),
+                    exportPreview: overlay.querySelector('#skp-trade-export-preview'),
+                    copyReadable: overlay.querySelector('#skp-trade-copy-readable'),
+                    downloadReadable: overlay.querySelector('#skp-trade-download-readable'),
+                    copyJson: overlay.querySelector('#skp-trade-copy-json'),
+                    downloadJson: overlay.querySelector('#skp-trade-download-json'),
+                    importJson: overlay.querySelector('#skp-trade-import-json'),
+                    importFile: overlay.querySelector('#skp-trade-import-file'),
+                    exportStatus: overlay.querySelector('#skp-trade-export-status')
+                };
+
+                const currentProfile = () => state.profiles[selectedProfile];
+                const categoryRecord = (profile, category, create = false) => {
+                    let record = profile.categories[category];
+                    if (!record && create) {
+                        record = { enabled: true, rate: '', exceptions: [] };
+                        profile.categories[category] = record;
+                    }
+                    return record || null;
+                };
+                const effectiveRate = (profile, category) => {
+                    const record = categoryRecord(profile, category);
+                    return textValue(record?.rate, profile.defaultRate);
+                };
+                const pruneCategoryRecord = (profile, category) => {
+                    const record = categoryRecord(profile, category);
+                    if (!record) return;
+                    if (record.enabled !== false && !textValue(record.rate) && (!Array.isArray(record.exceptions) || record.exceptions.length === 0)) {
+                        delete profile.categories[category];
+                    }
+                };
+
+                const showStatus = (element, message, isError = false) => {
+                    if (!element) return;
+                    clearTimeout(statusTimer);
+                    element.textContent = message;
+                    element.style.display = 'block';
+                    element.style.color = isError ? '#ff8585' : 'var(--green)';
+                    element.style.borderColor = isError ? 'rgba(255,80,80,.3)' : 'rgba(95,204,106,.18)';
+                    statusTimer = setTimeout(() => { element.style.display = 'none'; }, 2600);
+                };
+
+                const persist = async (message = '') => {
+                    clearTimeout(saveTimer);
+                    await storage.set(STORAGE_KEY, state);
+                    if (message) showStatus(elements.saveStatus, message);
+                    updateExportPreview();
+                };
+                const schedulePersist = () => {
+                    clearTimeout(saveTimer);
+                    saveTimer = setTimeout(() => {
+                        persist().catch(error => console.error('Failed to save Trading settings:', error));
+                    }, 250);
+                };
+                overlay.saveTradingSettings = () => persist();
+
+                const renderCategoryList = () => {
+                    if (!elements.categoryList) return;
+                    const profile = currentProfile();
+                    const query = textValue(elements.categorySearch?.value).toLowerCase();
+                    elements.categoryList.replaceChildren();
+                    let visibleCount = 0;
+
+                    Object.entries(categoryGroups).forEach(([groupName, categories]) => {
+                        const filtered = categories.filter(category => category.toLowerCase().includes(query));
+                        if (!filtered.length) return;
+                        visibleCount += filtered.length;
+
+                        const heading = document.createElement('div');
+                        heading.className = 'sk-trade-category-group';
+                        heading.textContent = groupName;
+                        elements.categoryList.appendChild(heading);
+
+                        filtered.forEach(category => {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.className = 'sk-trade-category-btn' + (category === selectedCategory ? ' active' : '');
+
+                            const name = document.createElement('span');
+                            name.textContent = category;
+                            const rate = document.createElement('span');
+                            rate.className = 'sk-trade-category-rate';
+                            rate.textContent = categoryRecord(profile, category)?.enabled === false
+                                ? 'NOT BUYING'
+                                : effectiveRate(profile, category) + '%';
+
+                            button.append(name, rate);
+                            button.addEventListener('click', () => {
+                                selectedCategory = category;
+                                renderCategoryList();
+                                renderCategoryDetail();
+                            });
+                            elements.categoryList.appendChild(button);
+                        });
+                    });
+
+                    if (!visibleCount) {
+                        const empty = document.createElement('div');
+                        empty.className = 'sk-trade-empty';
+                        empty.style.margin = '10px 12px';
+                        empty.textContent = 'No matching categories';
+                        elements.categoryList.appendChild(empty);
+                    }
+                };
+
+                const renderExceptions = () => {
+                    if (!elements.exceptions) return;
+                    const profile = currentProfile();
+                    const record = categoryRecord(profile, selectedCategory);
+                    const exceptions = Array.isArray(record?.exceptions) ? record.exceptions : [];
+                    elements.exceptions.replaceChildren();
+
+                    if (record?.enabled === false) {
+                        const empty = document.createElement('div');
+                        empty.className = 'sk-trade-empty';
+                        empty.textContent = 'This entire category is NOT FOR TRADE. Enable it above to edit individual item rules.';
+                        elements.exceptions.appendChild(empty);
+                        return;
+                    }
+
+                    if (!exceptions.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'sk-trade-empty';
+                        empty.textContent = 'No item-specific prices. This category uses its category rate.';
+                        elements.exceptions.appendChild(empty);
+                        return;
+                    }
+
+                    exceptions.forEach(exception => {
+                        const row = document.createElement('div');
+                        row.className = 'sk-trade-exception-row';
+
+                        const itemInput = document.createElement('input');
+                        itemInput.className = 'sk-input';
+                        itemInput.type = 'text';
+                        itemInput.placeholder = 'Search for an item';
+                        itemInput.value = exception.label || exception.item;
+                        itemInput.setAttribute('aria-label', 'Search for an item');
+                        itemInput.setAttribute('autocomplete', 'off');
+
+                        const itemPicker = document.createElement('div');
+                        itemPicker.className = 'sk-trade-item-picker';
+                        const itemResults = document.createElement('div');
+                        itemResults.className = 'sk-trade-item-results';
+                        itemResults.setAttribute('role', 'listbox');
+                        itemResults.hidden = true;
+                        let visibleMatches = [];
+                        let highlightedIndex = -1;
+
+                        const ruleSelect = document.createElement('select');
+                        ruleSelect.className = 'sk-select';
+                        ruleSelect.setAttribute('aria-label', 'Price rule');
+                        ruleSelect.append(
+                            new Option('% of market value', 'percentage'),
+                            new Option('Fixed price per item', 'fixed'),
+                            new Option('Not for trade', 'not_for_trade')
+                        );
+                        ruleSelect.value = exception.rule;
+
+                        const valueInput = document.createElement('input');
+                        valueInput.className = 'sk-input';
+                        valueInput.type = 'text';
+                        valueInput.value = exception.value;
+                        valueInput.setAttribute('aria-label', 'Exception value');
+
+                        const syncRuleInput = () => {
+                            const isNotForTrade = exception.rule === 'not_for_trade';
+                            valueInput.disabled = isNotForTrade;
+                            valueInput.inputMode = exception.rule === 'fixed' ? 'numeric' : 'decimal';
+                            valueInput.placeholder = isNotForTrade
+                                ? 'Not required'
+                                : (exception.rule === 'fixed' ? '$ value' : '% value');
+                            valueInput.setAttribute('aria-label', isNotForTrade ? 'No value required for not-for-trade items' : 'Exception value');
+                        };
+                        syncRuleInput();
+
+                        const removeButton = document.createElement('button');
+                        removeButton.className = 'sk-trade-delete';
+                        removeButton.type = 'button';
+                        removeButton.textContent = 'Remove';
+
+                        const updateExceptionItem = () => {
+                            const match = itemCatalogByName.get(normalizeItemName(itemInput.value));
+                            if (match) {
+                                exception.item = match.name;
+                                exception.label = match.name;
+                                exception.itemId = String(match.id || '');
+                                exception.uid = '';
+                                exception.fingerprint = '';
+                            } else {
+                                exception.item = itemInput.value;
+                                exception.label = '';
+                                exception.itemId = '';
+                                exception.uid = '';
+                                exception.fingerprint = '';
+                            }
+                            schedulePersist();
+                        };
+
+                        const hideItemResults = () => {
+                            itemResults.hidden = true;
+                            itemResults.replaceChildren();
+                            visibleMatches = [];
+                            highlightedIndex = -1;
+                            itemInput.removeAttribute('aria-activedescendant');
+                        };
+
+                        const selectItem = item => {
+                            itemInput.value = item.name;
+                            exception.item = item.name;
+                            exception.label = item.name;
+                            exception.itemId = String(item.id || '');
+                            exception.uid = '';
+                            exception.fingerprint = '';
+                            hideItemResults();
+                            schedulePersist();
+                        };
+
+                        const updateHighlightedItem = () => {
+                            const buttons = [...itemResults.querySelectorAll('.sk-trade-item-option')];
+                            buttons.forEach((button, index) => button.classList.toggle('active', index === highlightedIndex));
+                            const active = buttons[highlightedIndex];
+                            if (active) {
+                                itemInput.setAttribute('aria-activedescendant', active.id);
+                                active.scrollIntoView({ block: 'nearest' });
+                            } else {
+                                itemInput.removeAttribute('aria-activedescendant');
+                            }
+                        };
+
+                        const showItemResults = () => {
+                            const query = normalizeItemName(itemInput.value);
+                            if (query.length < 2) {
+                                hideItemResults();
+                                return;
+                            }
+
+                            const categoryTerm = normalizeItemName(selectedCategory).replace(/s$/, '');
+                            visibleMatches = itemCatalogSearch
+                                .filter(item => normalizeItemName(item.name).includes(query))
+                                .sort((left, right) => {
+                                    const leftName = normalizeItemName(left.name);
+                                    const rightName = normalizeItemName(right.name);
+                                    const leftCategory = normalizeItemName(left.type).replace(/s$/, '') === categoryTerm ? 0 : 1;
+                                    const rightCategory = normalizeItemName(right.type).replace(/s$/, '') === categoryTerm ? 0 : 1;
+                                    const categoryOrder = leftCategory - rightCategory;
+                                    if (categoryOrder) return categoryOrder;
+                                    const startOrder = Number(!leftName.startsWith(query)) - Number(!rightName.startsWith(query));
+                                    return startOrder || left.name.localeCompare(right.name);
+                                })
+                                .slice(0, 8);
+
+                            itemResults.replaceChildren();
+                            highlightedIndex = -1;
+                            if (!visibleMatches.length) {
+                                const noResults = document.createElement('div');
+                                noResults.className = 'sk-trade-item-no-results';
+                                noResults.textContent = 'No matching items';
+                                itemResults.appendChild(noResults);
+                            } else {
+                                visibleMatches.forEach((item, index) => {
+                                    const option = document.createElement('button');
+                                    option.type = 'button';
+                                    option.className = 'sk-trade-item-option';
+                                    option.id = `skp-trade-item-option-${exception.id}-${index}`;
+                                    option.setAttribute('role', 'option');
+
+                                    const name = document.createElement('span');
+                                    name.className = 'sk-trade-item-option-name';
+                                    name.textContent = item.name;
+                                    const type = document.createElement('span');
+                                    type.className = 'sk-trade-item-option-type';
+                                    type.textContent = item.type || 'Item';
+                                    option.append(name, type);
+                                    option.addEventListener('mousedown', event => event.preventDefault());
+                                    option.addEventListener('click', () => selectItem(item));
+                                    itemResults.appendChild(option);
+                                });
+                            }
+                            itemResults.hidden = false;
+                        };
+
+                        itemInput.addEventListener('input', () => {
+                            updateExceptionItem();
+                            showItemResults();
+                        });
+                        itemInput.addEventListener('focus', showItemResults);
+                        itemInput.addEventListener('blur', () => setTimeout(hideItemResults, 100));
+                        itemInput.addEventListener('keydown', event => {
+                            if (event.key === 'Escape') {
+                                hideItemResults();
+                                return;
+                            }
+                            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                                if (itemResults.hidden) showItemResults();
+                                if (!visibleMatches.length) return;
+                                event.preventDefault();
+                                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                                highlightedIndex = (highlightedIndex + direction + visibleMatches.length) % visibleMatches.length;
+                                updateHighlightedItem();
+                                return;
+                            }
+                            if (event.key === 'Enter' && !itemResults.hidden && visibleMatches.length) {
+                                event.preventDefault();
+                                selectItem(visibleMatches[highlightedIndex >= 0 ? highlightedIndex : 0]);
+                            }
+                        });
+                        ruleSelect.addEventListener('change', () => {
+                            exception.rule = ['fixed', 'not_for_trade'].includes(ruleSelect.value)
+                                ? ruleSelect.value
+                                : 'percentage';
+                            if (exception.rule === 'not_for_trade') exception.value = '';
+                            valueInput.value = exception.value;
+                            syncRuleInput();
+                            schedulePersist();
+                            updateExportPreview();
+                        });
+                        valueInput.addEventListener('input', () => {
+                            exception.value = valueInput.value;
+                            schedulePersist();
+                        });
+                        removeButton.addEventListener('click', () => {
+                            record.exceptions = record.exceptions.filter(entry => entry.id !== exception.id);
+                            pruneCategoryRecord(profile, selectedCategory);
+                            renderExceptions();
+                            schedulePersist();
+                        });
+
+                        itemPicker.append(itemInput, itemResults);
+                        row.append(itemPicker, ruleSelect, valueInput, removeButton);
+                        elements.exceptions.appendChild(row);
+                    });
+                };
+
+                const renderCategoryDetail = () => {
+                    const profile = currentProfile();
+                    const record = categoryRecord(profile, selectedCategory);
+                    const hasCustomRate = Boolean(textValue(record?.rate));
+                    const categoryEnabled = record?.enabled !== false;
+                    if (elements.categoryTitle) elements.categoryTitle.textContent = selectedCategory;
+                    if (elements.categoryEnabled) elements.categoryEnabled.checked = categoryEnabled;
+                    if (elements.categoryRate) elements.categoryRate.value = effectiveRate(profile, selectedCategory);
+                    if (elements.categoryRate) elements.categoryRate.disabled = !categoryEnabled;
+                    if (elements.rateSource) {
+                        elements.rateSource.textContent = !categoryEnabled
+                            ? `${selectedCategory} is NOT FOR TRADE`
+                            : hasCustomRate
+                            ? `Custom rate for ${selectedCategory}`
+                            : `Using the ${selectedProfile === 'public' ? 'Public' : 'Friendly'} default rate`;
+                    }
+                    if (elements.resetCategory) elements.resetCategory.disabled = !categoryEnabled || !hasCustomRate;
+                    if (elements.addException) elements.addException.disabled = !categoryEnabled;
+                    renderExceptions();
+                };
+
+                const renderProfile = () => {
+                    const profile = currentProfile();
+                    elements.profileButtons.forEach(button => {
+                        button.classList.toggle('active', button.dataset.tradeProfile === selectedProfile);
+                    });
+                    if (elements.copyProfile) {
+                        elements.copyProfile.textContent = selectedProfile === 'public' ? 'Copy to Friendly' : 'Copy to Public';
+                    }
+                    if (elements.openExport) {
+                        elements.openExport.textContent = `Export ${selectedProfile === 'public' ? 'Public' : 'Friendly'} Price List`;
+                    }
+                    if (elements.defaultRate) elements.defaultRate.value = profile.defaultRate;
+                    renderCategoryList();
+                    renderCategoryDetail();
+                    updateExportPreview();
+                };
+
+                const buildReadablePriceList = profileKey => {
+                    const profile = state.profiles[profileKey];
+                    const label = profileKey === 'public' ? 'Public' : 'Friendly';
+                    const lines = [
+                        'SIDEKICK TRADE PRICE LIST',
+                        `Price list: ${label}`,
+                        `Default percentage paid: ${profile.defaultRate}%`,
+                        '',
+                        'CATEGORY RATES'
+                    ];
+
+                    Object.entries(categoryGroups).forEach(([groupName, categories]) => {
+                        lines.push('', groupName.toUpperCase());
+                        categories.forEach(category => {
+                            lines.push(categoryRecord(profile, category)?.enabled === false
+                                ? `${category}: NOT FOR TRADE`
+                                : `${category}: ${effectiveRate(profile, category)}%`);
+                        });
+                    });
+
+                    const extraCategories = Object.keys(profile.categories).filter(category => !allCategories.includes(category));
+                    if (extraCategories.length) {
+                        lines.push('', 'OTHER CATEGORIES');
+                        extraCategories.forEach(category => lines.push(
+                            categoryRecord(profile, category)?.enabled === false
+                                ? `${category}: NOT FOR TRADE`
+                                : `${category}: ${effectiveRate(profile, category)}%`
+                        ));
+                    }
+
+                    const exceptionLines = [];
+                    Object.entries(profile.categories).forEach(([category, record]) => {
+                        if (record.enabled === false) return;
+                        (record.exceptions || []).forEach(exception => {
+                            if (!textValue(exception.item)) return;
+                            if (exception.rule !== 'not_for_trade' && !textValue(exception.value)) return;
+                            const value = exception.rule === 'not_for_trade'
+                                ? 'NOT FOR TRADE'
+                                : exception.rule === 'fixed'
+                                ? `${exception.value}`
+                                : `${exception.value}% of market value`;
+                            exceptionLines.push(`${category} — ${exception.label || exception.item}: ${value}`);
+                        });
+                    });
+                    lines.push('', 'ITEM EXCEPTIONS');
+                    lines.push(...(exceptionLines.length ? exceptionLines : ['None']));
+                    return lines.join('\n');
+                };
+
+                const buildJsonPackage = profileKey => ({
+                    schema: 'sidekick-trade-price-list',
+                    version: 1,
+                    profile: profileKey,
+                    exportedAt: new Date().toISOString(),
+                    priceList: clone(state.profiles[profileKey])
+                });
+
+                function updateExportPreview() {
+                    if (!elements.exportPreview || !elements.exportProfile) return;
+                    elements.exportPreview.value = buildReadablePriceList(elements.exportProfile.value === 'friendly' ? 'friendly' : 'public');
+                }
+
+                const copyText = async text => {
+                    if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        return;
+                    }
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.cssText = 'position:fixed;left:-9999px;top:0;';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    textarea.remove();
+                };
+
+                const downloadText = (filename, content, mimeType) => {
+                    const blob = new Blob([content], { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = filename;
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    anchor.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                };
+
+                elements.displayEnabled.checked = state.display.enabled;
+                elements.displayMarket.checked = state.display.showMarketValue;
+                elements.displayBuy.checked = state.display.showBuyPrice;
+                elements.displayTotals.checked = state.display.showTotals;
+                elements.defaultProfile.value = state.display.defaultProfile;
+
+                [
+                    [elements.displayEnabled, 'enabled'],
+                    [elements.displayMarket, 'showMarketValue'],
+                    [elements.displayBuy, 'showBuyPrice'],
+                    [elements.displayTotals, 'showTotals']
+                ].forEach(([input, key]) => {
+                    input?.addEventListener('change', () => {
+                        state.display[key] = input.checked;
+                        schedulePersist();
+                    });
+                });
+                elements.defaultProfile?.addEventListener('change', () => {
+                    state.display.defaultProfile = elements.defaultProfile.value === 'friendly' ? 'friendly' : 'public';
+                    schedulePersist();
+                });
+
+                elements.profileButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        selectedProfile = button.dataset.tradeProfile === 'friendly' ? 'friendly' : 'public';
+                        renderProfile();
+                    });
+                });
+                elements.copyProfile?.addEventListener('click', async () => {
+                    const targetProfile = selectedProfile === 'public' ? 'friendly' : 'public';
+                    const sourceLabel = selectedProfile === 'public' ? 'Public' : 'Friendly';
+                    const targetLabel = targetProfile === 'public' ? 'Public' : 'Friendly';
+                    if (!confirm(`Replace the ${targetLabel} price list with a copy of ${sourceLabel}?`)) return;
+                    state.profiles[targetProfile] = clone(currentProfile());
+                    await persist(`${sourceLabel} copied to ${targetLabel}`);
+                    renderProfile();
+                });
+                elements.openExport?.addEventListener('click', () => {
+                    if (elements.exportProfile) elements.exportProfile.value = selectedProfile;
+                    overlay.querySelector('[data-tab="trade-export"]')?.click();
+                    updateExportPreview();
+                });
+                elements.defaultRate?.addEventListener('input', () => {
+                    const value = textValue(elements.defaultRate.value);
+                    if (!value) return;
+                    currentProfile().defaultRate = value;
+                    renderCategoryList();
+                    const selectedRecord = categoryRecord(currentProfile(), selectedCategory);
+                    if (!textValue(selectedRecord?.rate) && elements.categoryRate) elements.categoryRate.value = value;
+                    schedulePersist();
+                });
+                elements.defaultRate?.addEventListener('blur', () => {
+                    if (!textValue(elements.defaultRate.value)) elements.defaultRate.value = currentProfile().defaultRate;
+                });
+                elements.categorySearch?.addEventListener('input', renderCategoryList);
+                elements.categoryEnabled?.addEventListener('change', () => {
+                    const profile = currentProfile();
+                    const record = categoryRecord(profile, selectedCategory, true);
+                    record.enabled = elements.categoryEnabled.checked;
+                    pruneCategoryRecord(profile, selectedCategory);
+                    renderCategoryList();
+                    renderCategoryDetail();
+                    schedulePersist();
+                });
+                elements.categoryRate?.addEventListener('input', () => {
+                    const profile = currentProfile();
+                    const value = textValue(elements.categoryRate.value);
+                    const record = categoryRecord(profile, selectedCategory, Boolean(value));
+                    if (value) record.rate = value;
+                    else if (record) record.rate = '';
+                    pruneCategoryRecord(profile, selectedCategory);
+                    if (elements.rateSource) {
+                        elements.rateSource.textContent = value
+                            ? `Custom rate for ${selectedCategory}`
+                            : `Using the ${selectedProfile === 'public' ? 'Public' : 'Friendly'} default rate`;
+                    }
+                    if (elements.resetCategory) elements.resetCategory.disabled = !value;
+                    renderCategoryList();
+                    schedulePersist();
+                });
+                elements.categoryRate?.addEventListener('blur', () => {
+                    if (!textValue(elements.categoryRate.value)) renderCategoryDetail();
+                });
+                elements.resetCategory?.addEventListener('click', () => {
+                    const profile = currentProfile();
+                    const record = categoryRecord(profile, selectedCategory);
+                    if (record) record.rate = '';
+                    pruneCategoryRecord(profile, selectedCategory);
+                    renderCategoryList();
+                    renderCategoryDetail();
+                    schedulePersist();
+                });
+                elements.addException?.addEventListener('click', () => {
+                    const profile = currentProfile();
+                    const record = categoryRecord(profile, selectedCategory, true);
+                    record.exceptions ||= [];
+                    record.exceptions.push({
+                        id: makeExceptionId(),
+                        item: '',
+                        rule: 'percentage',
+                        value: effectiveRate(profile, selectedCategory)
+                    });
+                    renderExceptions();
+                    elements.exceptions?.querySelector('.sk-trade-exception-row:last-child .sk-input')?.focus();
+                    schedulePersist();
+                });
+                elements.save?.addEventListener('click', () => {
+                    persist('Price list saved').catch(error => {
+                        console.error('Failed to save price list:', error);
+                        showStatus(elements.saveStatus, 'Failed to save price list', true);
+                    });
+                });
+
+                elements.exportProfile?.addEventListener('change', updateExportPreview);
+                elements.copyReadable?.addEventListener('click', async () => {
+                    try {
+                        await copyText(elements.exportPreview.value);
+                        showStatus(elements.exportStatus, 'Readable price list copied');
+                    } catch (error) {
+                        console.error('Failed to copy readable price list:', error);
+                        showStatus(elements.exportStatus, 'Could not copy the price list', true);
+                    }
+                });
+                elements.downloadReadable?.addEventListener('click', () => {
+                    const profileKey = elements.exportProfile.value === 'friendly' ? 'friendly' : 'public';
+                    downloadText(`sidekick-${profileKey}-price-list.txt`, buildReadablePriceList(profileKey), 'text/plain;charset=utf-8');
+                    showStatus(elements.exportStatus, 'Readable price list downloaded');
+                });
+                elements.copyJson?.addEventListener('click', async () => {
+                    const profileKey = elements.exportProfile.value === 'friendly' ? 'friendly' : 'public';
+                    try {
+                        await copyText(JSON.stringify(buildJsonPackage(profileKey), null, 2));
+                        showStatus(elements.exportStatus, 'Sidekick JSON copied');
+                    } catch (error) {
+                        console.error('Failed to copy Sidekick JSON:', error);
+                        showStatus(elements.exportStatus, 'Could not copy Sidekick JSON', true);
+                    }
+                });
+                elements.downloadJson?.addEventListener('click', () => {
+                    const profileKey = elements.exportProfile.value === 'friendly' ? 'friendly' : 'public';
+                    downloadText(
+                        `sidekick-${profileKey}-price-list.json`,
+                        JSON.stringify(buildJsonPackage(profileKey), null, 2),
+                        'application/json;charset=utf-8'
+                    );
+                    showStatus(elements.exportStatus, 'Sidekick JSON downloaded');
+                });
+                elements.importJson?.addEventListener('click', () => elements.importFile?.click());
+                elements.importFile?.addEventListener('change', async () => {
+                    const file = elements.importFile.files?.[0];
+                    if (!file) return;
+                    const targetProfile = elements.exportProfile.value === 'friendly' ? 'friendly' : 'public';
+                    const targetLabel = targetProfile === 'friendly' ? 'Friendly' : 'Public';
+                    try {
+                        const imported = JSON.parse(await file.text());
+                        let importedProfile = null;
+                        if (imported?.schema === 'sidekick-trade-price-list' && imported.priceList) {
+                            importedProfile = imported.priceList;
+                        } else if (imported?.profiles?.[targetProfile]) {
+                            importedProfile = imported.profiles[targetProfile];
+                        }
+                        if (!importedProfile) throw new Error('This is not a Sidekick price-list file.');
+                        if (!confirm(`Replace the ${targetLabel} price list with the imported list?`)) return;
+                        state.profiles[targetProfile] = normalizeProfile(importedProfile);
+                        await persist();
+                        if (selectedProfile === targetProfile) renderProfile();
+                        updateExportPreview();
+                        showStatus(elements.exportStatus, `${targetLabel} price list imported`);
+                    } catch (error) {
+                        console.error('Failed to import Sidekick price list:', error);
+                        showStatus(elements.exportStatus, error.message || 'Could not import the price list', true);
+                    } finally {
+                        elements.importFile.value = '';
+                    }
+                });
+
+                renderProfile();
+                updateExportPreview();
+            };
+
+            initializeTradingSettings().catch(error => {
+                console.error('Failed to initialize Trading settings:', error);
+            });
+
             // Sliders
             overlay.querySelectorAll('.skp-slider').forEach(slider => {
                 const outId = slider.dataset.out;
@@ -985,15 +1978,6 @@
                 const out = overlay.querySelector('#' + outId);
                 if (out) slider.addEventListener('input', () => { out.textContent = slider.value + suffix; });
             });
-
-            // Ghost Trade row: show/hide based on deposit target selection
-            const depositSel = overlay.querySelector('#skp-deposit-target');
-            const ghostRow = overlay.querySelector('#skp-ghost-row');
-            if (depositSel && ghostRow) {
-                depositSel.addEventListener('change', () => {
-                    ghostRow.style.display = depositSel.value === 'ghost' ? 'block' : 'none';
-                });
-            }
 
             // Shelf toggle buttons (settings expand/collapse)
             overlay.querySelectorAll('.sk-shelf-toggle').forEach(btn => {
@@ -1101,13 +2085,19 @@
             ];
 
             // Helper: read isEnabled from storage
-            async function loadToggle(storageKey, subKey) {
-                if (!CS()) return false;
-                const data = await CS().get(storageKey) || {};
+            async function loadToggle(storageKey, subKey, defaultEnabled = false) {
+                if (!CS()) return Boolean(defaultEnabled);
+                const data = await CS().get(storageKey);
+                if (!data || typeof data !== 'object') return Boolean(defaultEnabled);
                 if (subKey) {
-                    return (data[subKey] && data[subKey].isEnabled === true);
+                    const moduleSettings = data[subKey];
+                    return typeof moduleSettings?.isEnabled === 'boolean'
+                        ? moduleSettings.isEnabled
+                        : Boolean(defaultEnabled);
                 }
-                return data.isEnabled === true;
+                return typeof data.isEnabled === 'boolean'
+                    ? data.isEnabled
+                    : Boolean(defaultEnabled);
             }
 
             // Helper: write isEnabled to storage
@@ -1135,11 +2125,11 @@
                 if (apiInput && apiKey) apiInput.value = apiKey;
 
                 // Load all module toggles
-                for (const [sel, storKey, subKey] of TOGGLE_MAP) {
+                for (const [sel, storKey, subKey, defaultEnabled] of TOGGLE_MAP) {
                     const inp = overlay.querySelector(sel);
                     if (!inp) continue;
                     try {
-                        const enabled = await loadToggle(storKey, subKey);
+                        const enabled = await loadToggle(storKey, subKey, defaultEnabled);
                         inp.checked = enabled;
                     } catch (e) { /* storage not ready */ }
                 }
@@ -1277,6 +2267,47 @@
                     const d = await CS().get('sidekick_blocktraining') || {};
                     btInp.checked = d.isBlocked === true || d.isEnabled === true;
                 })();
+            }
+
+            // === Browser desktop notifications ===
+            const browserNotifInp = overlay.querySelector('#skp-tog-browser-notif');
+            if (browserNotifInp) {
+                (async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_notification_prefs') || {};
+                    browserNotifInp.checked = d.windowsNotifications === true;
+                })();
+                browserNotifInp.addEventListener('change', async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_notification_prefs') || {};
+                    d.windowsNotifications = browserNotifInp.checked;
+                    await CS().set('sidekick_notification_prefs', d);
+                });
+            }
+
+            // === Mug Warning: uses `enabled`, not the unified isEnabled field ===
+            const mugWarningInp = overlay.querySelector('#skp-tog-mug-warning');
+            const mugWarningHours = overlay.querySelector('#mug-warning-hours');
+            if (mugWarningInp || mugWarningHours) {
+                (async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('mug-warning') || {};
+                    if (mugWarningInp) mugWarningInp.checked = d.enabled === true;
+                    if (mugWarningHours) mugWarningHours.value = d.hoursThreshold || 24;
+                })();
+                const saveMugWarning = async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('mug-warning') || {};
+                    if (mugWarningInp) d.enabled = mugWarningInp.checked;
+                    if (mugWarningHours) d.hoursThreshold = Math.min(72, Math.max(1, parseInt(mugWarningHours.value, 10) || 24));
+                    await CS().set('mug-warning', d);
+                    if (window.SidekickModules?.MugWarning) {
+                        if (d.enabled) window.SidekickModules.MugWarning.enable?.();
+                        else window.SidekickModules.MugWarning.disable?.();
+                    }
+                };
+                mugWarningInp?.addEventListener('change', saveMugWarning);
+                mugWarningHours?.addEventListener('change', saveMugWarning);
             }
 
             // === Blood Bag Reminder: special fields ===
@@ -1499,7 +2530,7 @@
             if (overlay.querySelector('#sidekick-chain-threshold')) this.attachChainTimerTabListeners(overlay);
             if (overlay.querySelector('.toggle-switch[data-module="notification-sound"]')) this.attachNotificationsTabListeners(overlay);
             if (overlay.querySelector('#bloodbag-count')) this.attachBloodBagTabListeners(overlay);
-            if (overlay.querySelector('#quickdeposit-target')) this.attachQuickDepositTabListeners(overlay);
+            if (overlay.querySelector('#skp-deposit-target')) this.attachQuickDepositTabListeners(overlay);
             if (overlay.querySelector('#crime-notifier-interval')) this.attachCrimeNotifierTabListeners(overlay);
             this.attachCrimesTabListeners(overlay);
             this.attachMugWarningTabListeners(overlay);
@@ -2339,24 +3370,47 @@
 
         // Attach Quick Deposit tab listeners
         async attachQuickDepositTabListeners(panel) {
-            const targetSelect = panel.querySelector('#quickdeposit-target');
-            const ghostIdInput = panel.querySelector('#quickdeposit-ghostid');
-            const clearGhostBtn = panel.querySelector('#quickdeposit-clear-ghost');
-            const statusDiv = panel.querySelector('#sidekick-quickdeposit-status');
+            const targetSelect = panel.querySelector('#skp-deposit-target');
+            const ghostIdInput = panel.querySelector('#skp-deposit-ghost-id');
+            const clearGhostBtn = panel.querySelector('#skp-deposit-clear-ghost');
+            const ghostRow = panel.querySelector('#skp-ghost-row');
+            const statusDiv = panel.querySelector('#skp-deposit-status');
 
             if (!targetSelect) {
                 return;
             }
+
+            const normalizeTarget = value => {
+                const normalized = String(value || '')
+                    .trim()
+                    .toUpperCase()
+                    .replace(/[\s_-]+VAULT$/, '')
+                    .replace(/[\s_-]+TRADE$/, '');
+
+                return ['FACTION', 'PROPERTY', 'COMPANY', 'GHOST'].includes(normalized)
+                    ? normalized
+                    : 'FACTION';
+            };
+
+            const updateGhostRow = () => {
+                if (ghostRow) {
+                    ghostRow.style.display = targetSelect.value === 'GHOST' ? 'block' : 'none';
+                }
+            };
 
             // Load current settings
             try {
                 const targetStored = await window.SidekickModules.Core.ChromeStorage.get('quickDeposit_target');
                 const ghostStored = await window.SidekickModules.Core.ChromeStorage.get('quickDeposit_ghostID');
 
-                // Set dropdown value
-                if (targetStored) {
-                    targetSelect.value = targetStored;
-                    console.log('🏦 Loaded target:', targetStored);
+                const target = normalizeTarget(targetStored);
+                targetSelect.value = target;
+                updateGhostRow();
+
+                // Migrate values written by the old settings dropdown, such as
+                // "Faction Vault", to the canonical values used by the module.
+                if (targetStored !== target) {
+                    await window.SidekickModules.Core.ChromeStorage.set('quickDeposit_target', target);
                 }
 
                 // Set ghost ID display
@@ -2370,7 +3424,9 @@
             // Save target selection
             if (targetSelect) {
                 targetSelect.addEventListener('change', async () => {
-                    const target = targetSelect.value;
+                    const target = normalizeTarget(targetSelect.value);
+                    targetSelect.value = target;
+                    updateGhostRow();
                     try {
                         await window.SidekickModules.Core.ChromeStorage.set('quickDeposit_target', target);
 

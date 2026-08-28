@@ -18,6 +18,7 @@ const MissionTrackerModule = {
     checkIntervalMinutes: 30,
 
     pollTimer: null,
+    urgencyTimer: null,
     observer: null,
     activeMissions: null,
 
@@ -130,12 +131,19 @@ const MissionTrackerModule = {
         this.stopPolling();
         this.checkMissions();
         this.pollTimer = setInterval(() => this.checkMissions(), this.checkIntervalMinutes * 60 * 1000);
+        this.urgencyTimer = setInterval(() => {
+            if (this.activeMissions?.length) this.showIcon(this.activeMissions);
+        }, 60000);
     },
 
     stopPolling() {
         if (this.pollTimer) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
+        }
+        if (this.urgencyTimer) {
+            clearInterval(this.urgencyTimer);
+            this.urgencyTimer = null;
         }
     },
 
@@ -178,6 +186,61 @@ const MissionTrackerModule = {
 
     // ─── Icon ─────────────────────────────────────────────────────────────────
 
+    getMissionExpiry(mission) {
+        const absoluteKeys = [
+            'expires_at', 'expiry_at', 'expire_at', 'deadline', 'deadline_at',
+            'ends_at', 'end_at', 'time_expires', 'timestamp_end'
+        ];
+        const remainingKeys = ['time_left', 'seconds_left', 'remaining_seconds'];
+        const nowSeconds = Date.now() / 1000;
+        const containers = [mission, mission?.time, mission?.timing].filter(Boolean);
+
+        for (const container of containers) {
+            for (const key of absoluteKeys) {
+                const raw = container[key];
+                if (raw == null || raw === '') continue;
+                if (typeof raw === 'string' && !/^\d+(?:\.\d+)?$/.test(raw)) {
+                    const parsedDate = Date.parse(raw);
+                    if (Number.isFinite(parsedDate)) return parsedDate / 1000;
+                }
+                let value = Number(raw);
+                if (!Number.isFinite(value) || value <= 0) continue;
+                if (value > 1e12) value /= 1000;
+                return value;
+            }
+
+            for (const key of remainingKeys) {
+                const seconds = Number(container[key]);
+                if (Number.isFinite(seconds) && seconds >= 0) return nowSeconds + seconds;
+            }
+        }
+        return null;
+    },
+
+    getMissionUrgency(missions) {
+        const nowSeconds = Date.now() / 1000;
+        const expiries = missions
+            .map(mission => this.getMissionExpiry(mission))
+            .filter(expiry => Number.isFinite(expiry));
+
+        if (!expiries.length) return { level: 'normal', remaining: null, text: '' };
+        const remaining = Math.ceil(Math.min(...expiries) - nowSeconds);
+        if (remaining <= 0) return { level: 'critical', remaining: 0, text: 'Expired' };
+        if (remaining <= 6 * 3600) return { level: 'critical', remaining, text: this.formatTimeLeft(remaining) };
+        if (remaining <= 24 * 3600) return { level: 'warning', remaining, text: this.formatTimeLeft(remaining) };
+        return { level: 'safe', remaining, text: this.formatTimeLeft(remaining) };
+    },
+
+    formatTimeLeft(totalSeconds) {
+        const seconds = Math.max(0, Math.ceil(totalSeconds));
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.max(1, Math.ceil((seconds % 3600) / 60));
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    },
+
     showIcon(missions) {
         const statusUl = document.querySelector('ul[class*="status-icons"]');
         if (!statusUl) return;
@@ -198,6 +261,8 @@ const MissionTrackerModule = {
         if (ready > 0) labels.push(`${ready} missions complete`);
         if (accepted > 0) labels.push(`${accepted} active`);
         if (unaccepted > 0) labels.push(`${unaccepted} unaccepted`);
+        const urgency = this.getMissionUrgency(missions);
+        if (urgency.text) labels.push(`Time left: ${urgency.text}`);
         const label = 'Missions|' + (labels.join(', ') || 'Available');
 
         let li = document.getElementById(this.ICON_ID);
@@ -217,7 +282,7 @@ const MissionTrackerModule = {
 
             const iconSpan = document.createElement('span');
             iconSpan.className = 'sk-mission-icon-glyph';
-            iconSpan.textContent = '🎯';
+            iconSpan.textContent = '◎';
             
             a.appendChild(iconSpan);
             li.appendChild(a);
@@ -225,6 +290,8 @@ const MissionTrackerModule = {
 
             this.enableNativeLikeTooltip(a);
         }
+
+        li.dataset.urgency = urgency.level;
 
         const a = li.querySelector('a');
         if (a) {
@@ -252,11 +319,14 @@ const MissionTrackerModule = {
 
             const [title, subtitle] = this.parseTwoLines(text);
             const p1 = document.createElement('p');
-            p1.innerHTML = `<b>${title}</b>`;
+            const bold = document.createElement('b');
+            bold.textContent = title;
+            p1.appendChild(bold);
             content.appendChild(p1);
 
             if (subtitle) {
                 const p2 = document.createElement('p');
+                p2.className = `sk-mission-time-${anchor.closest('li')?.dataset.urgency || 'normal'}`;
                 p2.textContent = subtitle;
                 content.appendChild(p2);
             }
@@ -272,11 +342,14 @@ const MissionTrackerModule = {
             
             const [title, subtitle] = this.parseTwoLines(text);
             const p1 = document.createElement('p');
-            p1.innerHTML = `<b>${title}</b>`;
+            const bold = document.createElement('b');
+            bold.textContent = title;
+            p1.appendChild(bold);
             content.appendChild(p1);
 
             if (subtitle) {
                 const p2 = document.createElement('p');
+                p2.className = `sk-mission-time-${anchor.closest('li')?.dataset.urgency || 'normal'}`;
                 p2.textContent = subtitle;
                 content.appendChild(p2);
             }
@@ -373,9 +446,25 @@ const MissionTrackerModule = {
                 height: 100% !important;
             }
             .sk-mission-icon-glyph {
-                font-size: 15px;
+                font-size: 19px;
+                font-weight: 800;
                 line-height: 1;
                 display: block;
+            }
+            #${this.ICON_ID}[data-urgency="safe"] .sk-mission-icon-glyph,
+            .sk-mission-time-safe {
+                color: #62c875 !important;
+                filter: drop-shadow(0 0 2px rgba(98, 200, 117, .35));
+            }
+            #${this.ICON_ID}[data-urgency="warning"] .sk-mission-icon-glyph,
+            .sk-mission-time-warning {
+                color: #f0ac3f !important;
+                filter: drop-shadow(0 0 2px rgba(240, 172, 63, .35));
+            }
+            #${this.ICON_ID}[data-urgency="critical"] .sk-mission-icon-glyph,
+            .sk-mission-time-critical {
+                color: #ef6262 !important;
+                filter: drop-shadow(0 0 2px rgba(239, 98, 98, .4));
             }
             .sidekick-tooltip {
                 background: #f2f2f2;

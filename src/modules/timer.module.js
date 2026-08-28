@@ -1287,8 +1287,7 @@
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
-                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.4)'"
-                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                        ">
                             <span>${info.name}</span>
                             <span style="font-size: 10px; opacity: 0.8;">${Math.floor(info.duration / 60)}m ${info.duration % 60}s</span>
                         </button>
@@ -1305,8 +1304,7 @@
                         font-weight: 600;
                         transition: all 0.2s;
                         margin-top: 5px;
-                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.4)'"
-                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                    ">
                         📝 Custom Timer
                     </button>
                 </div>

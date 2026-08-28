@@ -669,3 +669,72 @@ body.sidekick-sidebar-hidden {
 .sk-action-menu-item:hover {
     background: #333 !important;
 }
+
+/* CSP-safe interaction states. These replace inline onmouseover/onmouseout
+   attributes, which Torn's Content Security Policy blocks. */
+.linkgroup-dropdown-content > button:hover,
+.movable-notepad .dropdown-content > button:hover,
+.attacklist-dropdown-content > button:hover,
+.sidekick-debt-tracker .debt-cogwheel-btn:hover,
+.sidekick-debt-tracker .debt-menu-option:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.linkgroup-close:hover,
+.movable-notepad .close-btn:hover,
+.attacklist-close:hover,
+.debt-close-btn:hover,
+.debt-tracker-close:hover {
+    background: #c82333 !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 0 8px rgba(220, 53, 69, 0.6) !important;
+}
+
+.remove-target-btn:hover,
+.remove-task-btn:hover {
+    background: rgba(200, 35, 51, 1) !important;
+    opacity: 1 !important;
+    transform: scale(1.1) !important;
+}
+
+.cooldown-option:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+.todolist-dropdown-btn:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.todolist-dropdown-btn:focus {
+    outline: none !important;
+}
+
+.todolist-option:hover {
+    background: #3a3a3a !important;
+}
+
+.todolist-options-menu .menu-item:hover {
+    background: #444 !important;
+}
+
+.todolist-close:hover {
+    background: #c82333 !important;
+    transform: scale(1.1) !important;
+}
+
+#task-name-input:focus {
+    border-color: #4CAF50 !important;
+}
+
+.debt-player-link:hover {
+    text-decoration: underline !important;
+}
+
+.payoff-remove-btn:hover {
+    background: #388e3c !important;
+}
+
+.payoff-keep-btn:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+}

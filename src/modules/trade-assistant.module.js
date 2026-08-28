@@ -382,6 +382,17 @@
         const marketTotal = item.isRw || marketValue === null
             ? null
             : { scaled: marketValue * BigInt(item.quantity), scale: 0 };
+        const category = exceptionMatch?.category || categoryForItem(item);
+
+        if (profile.categories?.[category]?.enabled === false || exceptionMatch?.exception?.rule === 'not_for_trade') {
+            return {
+                marketTotal,
+                buyTotal: null,
+                ruleLabel: profile.categories?.[category]?.enabled === false ? 'Category not for trade' : 'Not for trade',
+                exceptionMatch,
+                notForTrade: true
+            };
+        }
 
         if (exceptionMatch?.exception?.rule === 'fixed') {
             return {
@@ -400,7 +411,6 @@
             return { marketTotal: null, buyTotal: null, ruleLabel: 'Market value unavailable', exceptionMatch };
         }
 
-        const category = exceptionMatch?.category || categoryForItem(item);
         const rate = exceptionMatch?.exception?.rule === 'percentage'
             ? normalizeText(exceptionMatch.exception.value)
             : effectiveCategoryRate(profile, category);
@@ -422,6 +432,7 @@
             .sk-ta-buy{color:#75d77e;margin-right:8px;font-weight:700;}
             .sk-ta-rule{color:#aaa;font-weight:400;}
             .sk-ta-missing{color:#ffb25c;margin-right:8px;font-weight:700;}
+            .sk-ta-not-for-trade{display:inline-block;margin-right:8px;padding:1px 6px;border:1px solid rgba(255,95,95,.6);border-radius:4px;background:rgba(180,35,35,.2);color:#ff8585;font-weight:800;letter-spacing:.25px;}
             .sk-ta-rw-button{padding:1px 5px;border:1px solid rgba(255,173,90,.45);border-radius:4px;background:rgba(255,173,90,.12);color:#ffbd72;font:600 9px Arial,sans-serif;cursor:pointer;vertical-align:middle;}
             .sk-ta-rw-button:hover{background:rgba(255,173,90,.25);color:#fff;}
             #${MODULE_ID}-panel{margin-top:10px;border:1px solid #444;border-radius:5px;background:#252525;color:#ddd;font:12px Arial,sans-serif;overflow:hidden;}
@@ -441,6 +452,7 @@
             .sk-ta-result strong{font-size:15px;color:#7ddd75;}
             .sk-ta-result[data-result="pay"] strong{color:#ffbd72;}
             .sk-ta-result[data-result="unavailable"] strong{color:#ffb25c;}
+            .sk-ta-result[data-result="blocked"] strong{color:#ff8585;}
             @media(max-width:600px){.sk-ta-panel-head{align-items:flex-start;flex-wrap:wrap}.sk-ta-profile-label{margin-left:0}.sk-ta-summary{grid-template-columns:1fr}.sk-ta-side{padding:7px 10px;}}
         `;
         document.head.appendChild(style);
@@ -495,6 +507,15 @@
             market.className = 'sk-ta-market';
             market.textContent = `Market: ${formatMoney(valuation.marketTotal)}`;
             container.appendChild(market);
+        }
+
+        if (valuation.notForTrade) {
+            const blocked = document.createElement('span');
+            blocked.className = 'sk-ta-not-for-trade';
+            blocked.textContent = 'NOT FOR TRADE';
+            blocked.title = 'This item is excluded from this price list and must be removed from the trade.';
+            container.appendChild(blocked);
+            return;
         }
 
         if (settings.display.showBuyPrice && valuation.buyTotal) {
@@ -587,19 +608,30 @@
         ['left', 'right'].forEach(side => {
             const sidePanel = panel.querySelector(`[data-side="${side}"]`);
             const sideValues = valuations[side];
+            const excludedCount = sideValues.notForTrade.length;
             setText(
                 sidePanel.querySelector('[data-value="price"]'),
-                sideValues.buyMissing ? 'Incomplete' : formatMoney(sideValues.buy)
+                excludedCount
+                    ? `${formatMoney(sideValues.buy)} · ${excludedCount} excluded`
+                    : (sideValues.buyMissing ? 'Incomplete' : formatMoney(sideValues.buy))
             );
+            sidePanel.title = excludedCount
+                ? `Not for trade: ${sideValues.notForTrade.join(', ')}`
+                : '';
         });
 
         const hasMissingBuyPrices = valuations.left.buyMissing || valuations.right.buyMissing;
+        const hasNotForTradeItems = valuations.left.notForTrade.length || valuations.right.notForTrade.length;
         const difference = subtractDecimals(valuations.right.buy, valuations.left.buy);
         const result = panel.querySelector('.sk-ta-result');
         const resultLabel = result.querySelector('.sk-ta-result-label');
         const resultValue = result.querySelector('strong');
 
-        if (hasMissingBuyPrices) {
+        if (hasNotForTradeItems) {
+            result.dataset.result = 'blocked';
+            setText(resultLabel, 'TRADE BLOCKED');
+            setText(resultValue, 'Remove not-for-trade items');
+        } else if (hasMissingBuyPrices) {
             result.dataset.result = 'unavailable';
             setText(resultLabel, 'TOTAL UNAVAILABLE');
             setText(resultValue, 'Set missing item prices');
@@ -632,8 +664,8 @@
             if (!collected.trade) return;
             const profile = settings.profiles[activeProfile];
             const valuations = {
-                left: { marketItems: [], buyItems: [], marketMissing: 0, buyMissing: 0 },
-                right: { marketItems: [], buyItems: [], marketMissing: 0, buyMissing: 0 }
+                left: { marketItems: [], buyItems: [], marketMissing: 0, buyMissing: 0, notForTrade: [] },
+                right: { marketItems: [], buyItems: [], marketMissing: 0, buyMissing: 0, notForTrade: [] }
             };
 
             ['left', 'right'].forEach(side => {
@@ -642,7 +674,8 @@
                     renderItemValue(item, valuation);
                     if (valuation.marketTotal) valuations[side].marketItems.push(valuation.marketTotal);
                     else valuations[side].marketMissing += 1;
-                    if (valuation.buyTotal) valuations[side].buyItems.push(valuation.buyTotal);
+                    if (valuation.notForTrade) valuations[side].notForTrade.push(item.label);
+                    else if (valuation.buyTotal) valuations[side].buyItems.push(valuation.buyTotal);
                     else valuations[side].buyMissing += 1;
                 });
                 valuations[side].market = sumDecimals(valuations[side].marketItems);

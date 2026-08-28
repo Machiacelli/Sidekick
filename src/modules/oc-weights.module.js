@@ -159,9 +159,13 @@
         // Background API fetch — silently replaces data if API is reachable
         async fetchWeightsFromAPI() {
             try {
-                const res = await fetch(this.API_URL);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
+                const response = await chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: this.API_URL,
+                    timeout: 8000
+                });
+                if (!response?.success) throw new Error(response?.error || 'Request failed');
+                const data = response.data;
                 if (typeof data !== 'object' || Object.keys(data).length === 0) throw new Error('Empty response');
 
                 const fresh = this.normalizeData(data);

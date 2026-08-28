@@ -230,8 +230,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     🎯 Add Target
                                 </button>
                                 <button class="color-attacklist-btn" style="
@@ -244,8 +243,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     🎨 Change Color
                                 </button>
                                 <button class="pin-attacklist-btn" style="
@@ -258,8 +256,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     ${attackList.pinned ? '📌 Unpin' : '📌 Pin'}
                                 </button>
                             </div>
@@ -280,8 +277,7 @@
                             line-height: 1;
                             transition: all 0.2s;
                             font-weight: bold;
-                        " onmouseover="this.style.background='#c82333'; this.style.transform='scale(1.1)'; this.style.boxShadow='0 0 8px rgba(220, 53, 69, 0.6)'" 
-                           onmouseout="this.style.background='#dc3545'; this.style.transform='scale(1)'; this.style.boxShadow='none'" 
+                        " 
                            title="Close">×</button>
                     </div>
                 </div>
@@ -381,8 +377,7 @@
                             line-height: 1;
                             transition: all 0.2s;
                             opacity: 0.7;
-                        " onmouseover="this.style.background='rgba(200, 35, 51, 1)'; this.style.transform='scale(1.1)'; this.style.opacity='1'" 
-                           onmouseout="this.style.background='rgba(220, 53, 69, 0.8)'; this.style.transform='scale(1)'; this.style.opacity='0.7'" 
+                        " 
                            title="Remove target">×</button>
                     </div>
                 </div>

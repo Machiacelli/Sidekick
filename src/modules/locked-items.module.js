@@ -94,6 +94,7 @@ const LockedItemsManagerModule = {
                 'sidekick_locked_items',
                 this.lockedItems
             );
+            this.updateStoreFilterStyles();
         } catch (error) {
             console.error(
                 '🔒 Failed to save locked items:',
@@ -112,6 +113,7 @@ const LockedItemsManagerModule = {
         }
 
         this.addStyles();
+        this.updateStoreFilterStyles();
         this.processPage();
         this.startObserver();
 
@@ -156,6 +158,19 @@ const LockedItemsManagerModule = {
 
             this.hashChangeHandler = null;
         }
+
+        document.documentElement.classList.remove(
+            'sidekick-locked-store-page'
+        );
+        document.getElementById(
+            'sidekick-locked-store-filter'
+        )?.remove();
+        document.querySelectorAll(
+            '.sidekick-hide-locked'
+        ).forEach(element => {
+            element.classList.remove('sidekick-hide-locked');
+            element.style.removeProperty('display');
+        });
 
         console.log('🔒 Locked Items Manager disabled');
     },
@@ -262,6 +277,47 @@ const LockedItemsManagerModule = {
         document.head.appendChild(style);
     },
 
+    updateStoreFilterStyles() {
+        let style = document.getElementById(
+            'sidekick-locked-store-filter'
+        );
+
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'sidekick-locked-store-filter';
+            document.head.appendChild(style);
+        }
+
+        const selectors = new Set();
+
+        Object.entries(this.lockedItems).forEach(([key, locked]) => {
+            if (locked !== true) return;
+
+            const armoryMatch = key.match(/^armory_(\d+)$/);
+            if (armoryMatch) {
+                selectors.add(
+                    `html.sidekick-locked-store-page li[data-id="${armoryMatch[1]}"][data-item]`
+                );
+                return;
+            }
+
+            if (!/^\d+$/.test(key)) return;
+
+            // Short numeric keys are Torn base item IDs. Long keys are usually
+            // armory IDs, but checking both attributes also migrates old locks.
+            selectors.add(
+                `html.sidekick-locked-store-page li[data-item="${key}"][data-id]`
+            );
+            selectors.add(
+                `html.sidekick-locked-store-page li[data-id="${key}"][data-item]`
+            );
+        });
+
+        style.textContent = selectors.size
+            ? `${[...selectors].join(',\n')} { display: none !important; }`
+            : '';
+    },
+
     /*
      * Inventory:
      *   data-armoryid="20146354346"
@@ -363,6 +419,16 @@ const LockedItemsManagerModule = {
                 node.getAttribute?.('data-item')
             );
 
+            addNumeric(
+                baseIds,
+                node.getAttribute?.('data-item-id')
+            );
+
+            addNumeric(
+                baseIds,
+                node.getAttribute?.('data-itemid')
+            );
+
             const dataId =
                 node.getAttribute?.('data-id');
 
@@ -440,7 +506,7 @@ const LockedItemsManagerModule = {
 
             const imageMatch =
                 String(source || '').match(
-                    /\/items\/(\d+)\//
+                    /\/items\/(\d+)(?:\/|[._-])/i
                 );
 
             if (imageMatch) {
@@ -515,6 +581,7 @@ const LockedItemsManagerModule = {
             Array.from(
                 element.querySelectorAll(
                     'input[name="amount"], ' +
+                    'input.input-money:not([type="hidden"]), ' +
                     'input[placeholder="Qty"], ' +
                     'input[placeholder="Quantity"]'
                 )
@@ -1066,6 +1133,11 @@ const LockedItemsManagerModule = {
         const url =
             window.location.href;
 
+        document.documentElement.classList.toggle(
+            'sidekick-locked-store-page',
+            this.isStorePage(url)
+        );
+
         if (
             url.includes(
                 'itemuseparcel.php'
@@ -1164,13 +1236,28 @@ const LockedItemsManagerModule = {
     },
 
     processStorePage() {
-        const items = Array.from(
-            document.querySelectorAll(
-                'li[data-id][data-item]'
-            )
-        );
+        // Locked inventory items must only be removed from Torn's sell list.
+        // The old image walk also matched NPC purchase cards, so React rebuilt
+        // those cards while Sidekick hid them again, causing the visible
+        // flower/show/hide loop and broken sales layout.
+        const items = Array.from(document.querySelectorAll(
+            'li[data-id][data-item]'
+        )).filter(element => (
+            element.getAttribute('data-group') !== 'parent'
+        ));
 
-        if (items.length === 0) return;
+        document.querySelectorAll(
+            '.sidekick-hide-locked'
+        ).forEach(element => {
+            if (items.includes(element)) return;
+
+            element.style.removeProperty(
+                'display'
+            );
+            element.classList.remove(
+                'sidekick-hide-locked'
+            );
+        });
 
         items.forEach(element => {
             const identifiers =
@@ -1201,7 +1288,14 @@ const LockedItemsManagerModule = {
                 element.classList.add(
                     'sidekick-hide-locked'
                 );
-            } else {
+            } else if (
+                element.classList.contains(
+                    'sidekick-hide-locked'
+                )
+            ) {
+                // Only undo styles that Sidekick applied. Removing display from
+                // every unlocked Torn element can reveal native hidden cells and
+                // corrupt the sell table while React is updating it.
                 element.style.removeProperty(
                     'display'
                 );

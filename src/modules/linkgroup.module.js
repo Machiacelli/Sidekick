@@ -271,8 +271,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     ➕ Add Link
                                 </button>
                                 <button class="color-linkgroup-btn" style="
@@ -285,8 +284,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     🎨 Change Color
                                 </button>
                                 <button class="pin-linkgroup-btn" style="
@@ -299,8 +297,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     ${linkGroup.pinned ? '📌 Unpin' : '📌 Pin'}
                                 </button>
                             </div>
@@ -321,8 +318,7 @@
                             line-height: 1;
                             transition: all 0.2s;
                             font-weight: bold;
-                        " onmouseover="this.style.background='#c82333'; this.style.transform='scale(1.1)'; this.style.boxShadow='0 0 8px rgba(220, 53, 69, 0.6)'" 
-                           onmouseout="this.style.background='#dc3545'; this.style.transform='scale(1)'; this.style.boxShadow='none'" 
+                        " 
                            title="Close">×</button>
                     </div>
                 </div>

@@ -1,756 +1,541 @@
-<!DOCTYPE html>
-<html>
-
+<!doctype html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Sidekick Notifications</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sidekick</title>
     <style>
-        .notification-item {
-            padding: 15px;
-            margin-bottom: 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            border-left: 3px solid #4CAF50;
-            transition: all 0.2s ease;
+        :root {
+            color-scheme: dark;
+            --bg: #151617;
+            --panel: #202224;
+            --panel-hover: #282b2d;
+            --border: #343739;
+            --text: #f3f4f4;
+            --muted: #8f9497;
+            --green: #55c96a;
+            --green-dark: #318c43;
+            --amber: #f1aa3d;
+            --red: #ef6262;
         }
 
-        .notification-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .notification-item.info {
-            border-left-color: #2196F3;
-        }
-
-        .notification-item.warning {
-            border-left-color: #FF9800;
-        }
-
-        .notification-item.error {
-            border-left-color: #F44336;
-        }
-
-        .notification-title {
-            font-weight: 600;
-            margin-bottom: 5px;
-            font-size: 14px;
-        }
-
-        .notification-message {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-
-        .notification-time {
-            font-size: 11px;
-            opacity: 0.5;
-            margin-top: 5px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            opacity: 0.5;
-        }
-
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-
-        /* HIDE ALL SCROLLBARS */
         * {
-            scrollbar-width: none !important;
-            -ms-overflow-style: none !important;
-        }
-
-        *::-webkit-scrollbar {
-            display: none !important;
-            width: 0 !important;
-            height: 0 !important;
+            box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: #3b3e40 transparent;
         }
 
         body {
             width: 550px;
-            min-height: 450px;
-            max-height: 600px;
-            padding: 0;
+            height: 600px;
             margin: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a1a !important;
-            color: white;
-            overflow: auto;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font: 13px/1.4 "Segoe UI", Arial, sans-serif;
         }
 
-        .header {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 15px 20px 20px 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        button,
+        input {
+            font: inherit;
         }
 
-        .header .logo {
-            width: 200px;
+        button {
+            color: inherit;
+        }
+
+        .shell {
+            display: grid;
+            grid-template-rows: 75px minmax(0, 1fr) 56px;
+            height: 100%;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            background: #18191a;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .brand-logo {
+            width: 116px;
             height: auto;
-            margin-bottom: 5px;
-            margin-top: -5px;
-            border: none !important;
-            outline: none !important;
-            background: transparent !important;
-            background-color: transparent !important;
             display: block;
-            box-shadow: none !important;
-            padding: 0 !important;
-            margin-left: auto;
-            margin-right: auto;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-            -webkit-backface-visibility: hidden;
-            backface-visibility: hidden;
         }
 
-        .header h1 {
-            display: none;
-        }
-
-        .header .version {
+        .version {
+            color: var(--muted);
             font-size: 11px;
-            opacity: 0.6;
-            margin-top: 2px;
-            margin-bottom: 10px;
+            white-space: nowrap;
         }
 
-        .quick-actions {
+        .header-actions {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
+            gap: 8px;
         }
 
-        .quick-action-btn {
-            flex: 1;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            color: white;
+        .icon-button,
+        .subtle-button,
+        .primary-button,
+        .footer-button {
+            border: 1px solid var(--border);
+            background: var(--panel);
             cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
-            transition: all 0.2s ease;
+            transition: border-color .15s ease, background .15s ease, transform .15s ease;
         }
 
-        .quick-action-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(76, 175, 80, 0.5);
+        .icon-button:hover,
+        .subtle-button:hover,
+        .footer-button:hover {
+            background: var(--panel-hover);
+            border-color: #515557;
         }
 
-        .tabs {
-            display: flex;
-            background: rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        .icon-button:active,
+        .subtle-button:active,
+        .primary-button:active,
+        .footer-button:active {
+            transform: translateY(1px);
         }
 
-        .tab-button {
-            flex: 1;
-            padding: 12px 20px;
-            background: transparent;
-            border: none;
-            color: rgba(255, 255, 255, 0.6);
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border-bottom: 2px solid transparent;
+        .icon-button {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 8px;
+            padding: 0;
         }
 
-        .tab-button:hover {
-            color: rgba(255, 255, 255, 0.8);
-            background: rgba(255, 255, 255, 0.05);
+        .icon-button img {
+            width: 23px;
+            height: 23px;
+            object-fit: contain;
         }
 
-        .tab-button.active {
-            color: white;
-            border-bottom-color: rgba(76, 175, 80, 1);
-            background: rgba(255, 255, 255, 0.05);
+        .notification-dot {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            min-width: 8px;
+            height: 8px;
+            padding: 0 3px;
+            border-radius: 8px;
+            background: var(--red);
+            border: 2px solid #18191a;
         }
 
-        .tab-content {
+        .notification-dot[hidden] {
             display: none;
-            padding: 20px;
-        }
-
-        .tab-content::-webkit-scrollbar {
-            display: none !important;
-            width: 0 !important;
-            height: 0 !important;
-        }
-
-        .tab-content.active {
-            display: block;
         }
 
         .content {
-            padding: 0;
+            min-height: 0;
             overflow: hidden;
         }
 
-        .setting-group {
-            margin-bottom: 20px;
-        }
-
-        .setting-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .setting-group input[type="text"],
-        .setting-group select {
-            width: 100%;
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-
-        .setting-group input[type="text"]::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .setting-group input[type="checkbox"] {
-            margin-right: 8px;
-        }
-
-        .setting-group input[type="range"] {
-            width: 100%;
-            margin-top: 8px;
-        }
-
-        .setting-group .range-value {
-            display: inline-block;
-            min-width: 30px;
-            text-align: center;
-            font-weight: bold;
-            color: rgba(76, 175, 80, 1);
-        }
-
-        .button {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            width: 100%;
-            margin-bottom: 10px;
-        }
-
-        .button:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .button.danger {
-            background: rgba(244, 67, 54, 0.3);
-            border-color: rgba(244, 67, 54, 0.5);
-        }
-
-        .button.danger:hover {
-            background: rgba(244, 67, 54, 0.5);
-        }
-
-        .status {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 6px;
-            background: rgba(76, 175, 80, 0.2);
-            border: 1px solid rgba(76, 175, 80, 0.3);
-            font-size: 13px;
+        .view {
             display: none;
+            height: 100%;
+            min-height: 0;
+            padding: 20px;
         }
 
-        .status.error {
-            background: rgba(244, 67, 54, 0.2);
-            border-color: rgba(244, 67, 54, 0.3);
-        }
-
-        .links {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .links a {
-            color: rgba(255, 255, 255, 0.8);
-            text-decoration: none;
-            font-size: 12px;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        .links a:hover {
-            color: white;
-        }
-
-        .cache-info {
-            font-size: 13px;
-            opacity: 0.8;
-            margin-top: 10px;
-            padding: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-        }
-
-        .switch input:checked+.slider {
-            background-color: #4CAF50 !important;
-        }
-
-        .switch .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        .switch input:checked+.slider:before {
-            transform: translateX(24px);
-        }
-
-        /* Module Control Panel - Two Column Grid */
-        .module-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        .module-item {
+        .view.active {
             display: flex;
-            align-items: center;
-            padding: 10px 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 6px;
-            transition: all 0.2s ease;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            flex-direction: column;
         }
 
-        .module-item:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(76, 175, 80, 0.3);
+        .view-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            margin: 0 0 3px;
+            font-size: 19px;
+            line-height: 1.2;
+            font-weight: 650;
+        }
+
+        .helper {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .subtle-button,
+        .primary-button {
+            min-height: 34px;
+            padding: 7px 13px;
+            border-radius: 7px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .primary-button {
+            background: var(--green-dark);
+            border-color: var(--green-dark);
+        }
+
+        .primary-button:hover {
+            background: #3a9e4e;
+        }
+
+        .control-list,
+        .customize-list,
+        .notifications-list {
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        .control-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 3px;
+        }
+
+        .control-row {
+            min-height: 57px;
+            display: grid;
+            grid-template-columns: 38px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 13px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel);
+        }
+
+        .control-row:hover {
+            background: var(--panel-hover);
+            border-color: #424648;
         }
 
         .module-icon {
-            font-size: 16px;
-            margin-right: 8px;
-            flex-shrink: 0;
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 7px;
+            background: #191a1b;
+            border: 1px solid #303335;
+        }
+
+        .module-icon img {
+            width: 26px;
+            height: 26px;
+            object-fit: contain;
         }
 
         .module-name {
-            flex: 1;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
         }
 
-        .module-toggle {
+        .module-status {
+            color: var(--muted);
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        .module-status.enabled {
+            color: var(--green);
+        }
+
+        .switch {
             position: relative;
             display: inline-block;
-            width: 40px;
-            height: 20px;
-            flex-shrink: 0;
+            width: 42px;
+            height: 24px;
         }
 
-        .module-toggle input {
+        .switch input {
+            position: absolute;
             opacity: 0;
-            width: 0;
-            height: 0;
+            pointer-events: none;
         }
 
-        .module-toggle .slider {
+        .switch-track {
             position: absolute;
+            inset: 0;
+            border-radius: 999px;
+            background: #4b4f51;
+            border: 1px solid #5a5e60;
             cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(255, 255, 255, 0.2);
-            transition: .3s;
-            border-radius: 20px;
+            transition: background .18s ease, border-color .18s ease;
         }
 
-        .module-toggle .slider:before {
-            position: absolute;
+        .switch-track::after {
             content: "";
-            height: 14px;
-            width: 14px;
+            position: absolute;
+            top: 3px;
             left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .3s;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
+            background: #f4f5f5;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+            transition: transform .18s ease;
         }
 
-        .module-toggle input:checked+.slider {
-            background-color: #4CAF50;
+        .switch input:checked + .switch-track {
+            background: var(--green-dark);
+            border-color: var(--green);
         }
 
-        .module-toggle input:checked+.slider:before {
-            transform: translateX(20px);
+        .switch input:checked + .switch-track::after {
+            transform: translateX(18px);
         }
 
-        .tab-section-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            opacity: 0.9;
+        .switch input:focus-visible + .switch-track {
+            outline: 2px solid #8ed79a;
+            outline-offset: 2px;
+        }
+
+        .customize-toolbar {
             display: flex;
-            align-items: center;
             gap: 8px;
+            margin-bottom: 12px;
         }
 
-        /* Notification Cards */
-        .notification-card {
-            margin-bottom: 10px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 6px;
-            border-left: 3px solid;
+        .search-input {
+            flex: 1;
+            min-width: 0;
+            height: 35px;
+            padding: 0 11px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #101112;
+            color: var(--text);
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--green-dark);
+            box-shadow: 0 0 0 2px rgba(85, 201, 106, .12);
+        }
+
+        .customize-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-right: 3px;
+        }
+
+        .picker-row {
+            min-height: 48px;
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 11px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--panel);
             cursor: pointer;
-            transition: all 0.2s ease;
         }
 
-        .notification-card:hover {
-            background: rgba(255, 255, 255, 0.08);
+        .picker-row:hover {
+            background: var(--panel-hover);
         }
 
-        .notification-card.info {
-            border-left-color: #2196F3;
+        .picker-row img {
+            width: 25px;
+            height: 25px;
+            object-fit: contain;
         }
 
-        .notification-card.success {
-            border-left-color: #4CAF50;
+        .picker-category {
+            color: var(--muted);
+            font-size: 11px;
         }
 
-        .notification-card.warning {
-            border-left-color: #FF9800;
+        .picker-row input {
+            width: 17px;
+            height: 17px;
+            accent-color: var(--green);
         }
 
-        .notification-card.error {
-            border-left-color: #F44336;
+        .notifications-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 3px;
         }
 
-        .notification-card-header {
+        .notification-card {
+            padding: 11px 12px;
+            border: 1px solid var(--border);
+            border-left: 3px solid #5c9fe5;
+            border-radius: 7px;
+            background: var(--panel);
+        }
+
+        .notification-card.warning { border-left-color: var(--amber); }
+        .notification-card.error { border-left-color: var(--red); }
+        .notification-card.success { border-left-color: var(--green); }
+
+        .notification-title-row {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 6px;
+            gap: 10px;
         }
 
-        .notification-card-title {
-            font-size: 13px;
+        .notification-title {
             font-weight: 600;
         }
 
-        .notification-card-time {
-            font-size: 10px;
-            opacity: 0.6;
+        .notification-time,
+        .notification-message {
+            color: var(--muted);
+            font-size: 11px;
         }
 
-        .notification-card-message {
+        .notification-message {
+            margin-top: 4px;
             font-size: 12px;
-            opacity: 0.85;
-            line-height: 1.4;
         }
 
-        .notification-card.unread {
-            background: rgba(255, 255, 255, 0.08);
+        .empty-state {
+            margin: auto;
+            color: var(--muted);
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            border-top: 1px solid var(--border);
+            background: #18191a;
+        }
+
+        .footer-button {
+            width: 100%;
+            height: 35px;
+            border-radius: 7px;
+            color: #d9dcde;
+            font-weight: 600;
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 64px;
+            z-index: 10;
+            transform: translate(-50%, 10px);
+            max-width: 430px;
+            padding: 8px 13px;
+            border: 1px solid #4a4e50;
+            border-radius: 7px;
+            background: #292c2e;
+            color: var(--text);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .16s ease, transform .16s ease;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+        }
+
+        .toast.visible {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
+        .toast.error {
+            border-color: var(--red);
+        }
+
+        [hidden] {
+            display: none !important;
         }
     </style>
 </head>
-
 <body>
-    <div class="header">
-        <img src="../assets/icons/sidekick-logo.png" alt="Sidekick" class="logo">
-        <h1>Sidekick</h1>
-        <div class="version">Chrome Extension v1.2.29</div>
-        <div class="quick-actions">
-            <button class="quick-action-btn" id="openSettingsBtn">⚙️ Settings</button>
-            <button class="quick-action-btn" id="reportIssuesBtn">🐛 Report Bug</button>
-        </div>
-    </div>
-
-    <!-- Tabs Navigation -->
-    <div class="tabs">
-        <button class="tab-button active" data-tab="modules">⚙️ Features</button>
-        <button class="tab-button" data-tab="notifications">🔔 Notifications</button>
-    </div>
-
-    <div class="content">
-        <!-- Modules Tab -->
-        <div class="tab-content active" id="modules-tab">
-            <div class="tab-section-title">FEATURE TOGGLES</div>
-
-            <div class="module-grid">
-                <div class="module-item">
-                    <span class="module-icon">⚔️</span>
-                    <span class="module-name">Fast Attack</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="attack-button-mover" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">⏰</span>
-                    <span class="module-name">Time on Tab</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="time-on-tab" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🎲</span>
-                    <span class="module-name">Random Target</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="random-target" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🏎️</span>
-                    <span class="module-name">Racing Alert</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="racing-alert" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🛡️</span>
-                    <span class="module-name">Refill Blocker</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="refill-blocker" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">📊</span>
-                    <span class="module-name">OC Weights</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="oc-weights" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">💰</span>
-                    <span class="module-name">Bunker Bucks</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="bunker-bucks" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🩸</span>
-                    <span class="module-name">Blood Bag Reminder</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="blood-bag-reminder" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🎯</span>
-                    <span class="module-name">Mission Tracker</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="mission-tracker">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🔒</span>
-                    <span class="module-name">Locked Items Manager</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="locked-items">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">⛓️</span>
-                    <span class="module-name">Chain View</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="extended-chain-view" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🥊</span>
-                    <span class="module-name">Mug Calc</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="mug-calculator" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🎯</span>
-                    <span class="module-name">Weapon XP</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="weapon-xp-tracker" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">⏱️</span>
-                    <span class="module-name">Chain Timer</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="chain-timer" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">💊</span>
-                    <span class="module-name">Xanax Viewer</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="xanax-viewer" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🔔</span>
-                    <span class="module-name">Notif Sounds</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="notif-sound" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🚨</span>
-                    <span class="module-name">Crime Notifier</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="crime-notifier" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">⚔️</span>
-                    <span class="module-name">War Monitor</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="war-monitor" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🏷️</span>
-                    <span class="module-name">Price Filler</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="price-filler">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">⚠️</span>
-                    <span class="module-name">Mug Warning</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="mug-warning" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">💪</span>
-                    <span class="module-name">Auto Gym Switch</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="auto-gym-switch">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🚫</span>
-                    <span class="module-name">Block Training</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" id="trainingBlockerToggle" data-module="blocktraining">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="module-item">
-                    <span class="module-icon">🏦</span>
-                    <span class="module-name">Quick Deposit</span>
-                    <label class="module-toggle">
-                        <input type="checkbox" data-module="quick-deposit">
-                        <span class="slider"></span>
-                    </label>
-                </div>
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <img class="brand-logo" src="../assets/icons/sidekick-logo.png" alt="Sidekick">
+                <span class="version" id="versionText">Chrome Extension</span>
             </div>
-        </div>
-
-        <!-- Notifications Tab -->
-        <div class="tab-content" id="notifications-tab">
-            <div class="tab-section-title" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>RECENT ACTIVITY</span>
-                <button id="clearAllNotifications"
-                    style="padding: 6px 12px; background: rgba(244, 67, 54, 0.2); border: 1px solid rgba(244, 67, 54, 0.4); color: #F44336; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">
-                    Clear All
+            <div class="header-actions">
+                <button class="icon-button" id="settingsButton" type="button" title="Open Sidekick settings" aria-label="Open Sidekick settings">
+                    <img src="../assets/icons/General.png" alt="">
+                </button>
+                <button class="icon-button" id="notificationsButton" type="button" title="Notifications" aria-label="Open notifications">
+                    <img src="../assets/icons/Events.png" alt="">
+                    <span class="notification-dot" id="notificationDot" hidden></span>
                 </button>
             </div>
+        </header>
 
-            <!-- Windows Notifications Setting -->
-            <div style="margin: 0 0 14px 0; padding: 10px 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
-                <label style="display: flex; align-items: center; gap: 10px; color: #ccc; cursor: pointer; margin:0;">
-                    <input type="checkbox" id="popup-notif-windows" style="accent-color: #2196F3; width:14px; height:14px;">
-                    <span style="font-size: 13px; font-weight: 500;">🖥️ Windows Notifications</span>
-                </label>
-                <div style="font-size: 11px; color: #999; margin-top: 4px; margin-left: 24px;">
-                    Crime Notifier alerts sent as OS-level toasts, even when Torn is in the background
+        <div class="content">
+            <main class="view active" id="controlsView">
+                <div class="view-heading">
+                    <div>
+                        <h1>Quick controls</h1>
+                        <p class="helper">Your pinned Sidekick modules</p>
+                    </div>
+                    <button class="subtle-button" id="customizeButton" type="button">Customize</button>
                 </div>
-            </div>
+                <div class="control-list" id="controlList" aria-live="polite"></div>
+            </main>
 
-            <!-- Notifications List -->
-            <div id="notifications-container">
-                <!-- Notifications will be rendered here dynamically -->
-                <div class="empty-state" id="emptyState">
-                    <div class="empty-state-icon">🔔</div>
-                    <div style="font-size: 14px; margin-bottom: 10px;">No Recent Notifications</div>
-                    <div style="font-size: 12px; opacity: 0.7;">
-                        Notifications will appear here when:<br>
-                        • Modules perform actions<br>
-                        • Important events occur<br>
-                        • Status changes happen
+            <section class="view" id="customizeView" aria-labelledby="customizeTitle">
+                <div class="view-heading">
+                    <div>
+                        <h1 id="customizeTitle">Choose controls</h1>
+                        <p class="helper">Pin the switches you use most</p>
+                    </div>
+                    <button class="primary-button" id="customizeDoneButton" type="button">Done</button>
+                </div>
+                <div class="customize-toolbar">
+                    <input class="search-input" id="moduleSearch" type="search" placeholder="Search modules" aria-label="Search modules">
+                </div>
+                <div class="customize-list" id="customizeList"></div>
+            </section>
+
+            <section class="view" id="notificationsView" aria-labelledby="notificationsTitle">
+                <div class="view-heading">
+                    <div>
+                        <h1 id="notificationsTitle">Notifications</h1>
+                        <p class="helper">Recent Sidekick activity</p>
+                    </div>
+                    <div>
+                        <button class="subtle-button" id="clearNotificationsButton" type="button">Clear</button>
+                        <button class="subtle-button" id="notificationsBackButton" type="button">Back</button>
                     </div>
                 </div>
-            </div>
+                <div class="notifications-list" id="notificationsList"></div>
+                <div class="empty-state" id="notificationsEmpty" hidden>No notifications yet.</div>
+            </section>
         </div>
+
+        <footer class="footer">
+            <button class="footer-button" id="reportBugButton" type="button">Report Bug</button>
+        </footer>
     </div>
 
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="popup.js"></script>
 </body>
-
 </html>

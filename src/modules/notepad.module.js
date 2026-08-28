@@ -403,8 +403,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     ${notepad.pinned ? '📌 Unpin' : '📌 Pin'}
                                 </button>
                                 <button class="color-btn" style="
@@ -417,8 +416,7 @@
                                     cursor: pointer;
                                     font-size: 12px;
                                     transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
-                                   onmouseout="this.style.background='none'">
+                                ">
                                     🎨 Change Color
                                 </button>
                                 <div style="height: 1px; background: #555; margin: 2px 4px;"></div>
@@ -426,17 +424,17 @@
                                     background: none; border: none; color: #fff;
                                     padding: 8px 12px; width: 100%; text-align: left;
                                     cursor: pointer; font-size: 12px; transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'"><b style="margin-right:6px;">B</b> Bold</button>
+                                "><b style="margin-right:6px;">B</b> Bold</button>
                                 <button class="fmt-btn" data-cmd="italic" style="
                                     background: none; border: none; color: #fff;
                                     padding: 8px 12px; width: 100%; text-align: left;
                                     cursor: pointer; font-size: 12px; transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'"><i style="margin-right:6px;">I</i> Italic</button>
+                                "><i style="margin-right:6px;">I</i> Italic</button>
                                 <button class="fmt-btn" data-cmd="strikeThrough" style="
                                     background: none; border: none; color: #fff;
                                     padding: 8px 12px; width: 100%; text-align: left;
                                     cursor: pointer; font-size: 12px; transition: background 0.2s;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'"><s style="margin-right:6px;">S</s> Strikethrough</button>
+                                "><s style="margin-right:6px;">S</s> Strikethrough</button>
                             </div>
                         </div>
                         <button class="close-btn" style="
@@ -456,8 +454,7 @@
                             font-weight: bold;
                             flex-shrink: 0;
                             min-width: 14px;
-                        " onmouseover="this.style.background='#c82333'; this.style.transform='scale(1.1)'; this.style.boxShadow='0 0 8px rgba(220, 53, 69, 0.6)'" 
-                           onmouseout="this.style.background='#dc3545'; this.style.transform='scale(1)'; this.style.boxShadow='none'" 
+                        " 
                            title="Delete notepad">×</button>
                     </div>
                 </div>

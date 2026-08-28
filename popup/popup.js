@@ -1,453 +1,487 @@
 /**
- * Sidekick Chrome Extension - Popup Script V2
- * Handles the extension popup interface (Notification Center)
+ * Sidekick popup quick controls.
+ * Each registry entry deliberately mirrors settings.module.js so both UIs
+ * read and write the same isEnabled flag.
  */
+(function () {
+    'use strict';
 
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('📬 Sidekick Popup loaded');
+    const PINNED_KEY = 'sidekick_popup_pinned_modules';
+    const NOTIFICATIONS_KEY = 'sidekick_notifications';
+    const DEFAULT_PINNED = [
+        'locked-items',
+        'bunker-bucks',
+        'price-filler',
+        'war-monitor',
+        'quick-deposit',
+        'crime-notifier'
+    ];
 
-    // Tab switching
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content');
+    const ICONS = {
+        Personal: '../assets/icons/Profile.png',
+        Gym: '../assets/icons/Features.png',
+        Economy: '../assets/icons/Trading.png',
+        Utility: '../assets/icons/General.png',
+        Reminders: '../assets/icons/Events.png',
+        Crimes: '../assets/icons/Crimes.png',
+        War: '../assets/icons/War.png',
+        Missions: '../assets/icons/Missions.png',
+        Events: '../assets/icons/Events.png',
+        Medical: '../assets/icons/blood-bag-2.png',
+        Mugging: '../assets/icons/MugCalc.png',
+        Merits: '../assets/icons/Features.png'
+    };
 
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const targetTab = button.dataset.tab;
+    const MODULES = [
+        { id: 'fast-attack', name: 'Fast Attack', category: 'Personal', storageKey: 'sidekick_attack_button_mover', defaultEnabled: true },
+        { id: 'attack-online-status', name: 'Attack Online Status', category: 'Personal', storageKey: 'sidekick_settings', subKey: 'attack-online-status', defaultEnabled: true },
+        { id: 'loadout-switcher', name: 'Loadout Switcher', category: 'Personal', storageKey: 'sidekick_settings', subKey: 'loadout-switcher', defaultEnabled: false },
+        { id: 'locked-items', name: 'Locked Items', category: 'Personal', storageKey: 'sidekick_settings', subKey: 'locked-items', defaultEnabled: false },
+        { id: 'weapon-xp', name: 'Weapon XP Tracker', category: 'Personal', storageKey: 'sidekick_weapon_xp_tracker', defaultEnabled: false },
+        { id: 'stats-tracker', name: 'Stats Tracker', category: 'Personal', storageKey: 'sidekick_stats_tracker_window', defaultEnabled: false },
 
-            // Update buttons
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
+        { id: 'special-gym-ratios', name: 'Special Gym Ratios', category: 'Gym', storageKey: 'sidekick_settings', subKey: 'special-gym-ratios', defaultEnabled: true },
+        { id: 'auto-gym-switch', name: 'Automatic Gym Switch', category: 'Gym', storageKey: 'sidekick_settings', subKey: 'auto-gym-switch', defaultEnabled: false },
+        { id: 'block-training', name: 'Gym Blocker / Block Training', category: 'Gym', storageKey: 'sidekick_blocktraining', enabledKeys: ['isEnabled', 'isBlocked'], defaultEnabled: false },
 
-            // Update content
-            tabContents.forEach(content => content.classList.remove('active'));
-            document.getElementById(`${targetTab}-tab`).classList.add('active');
-        });
-    });
+        { id: 'market-max-quantity', name: 'Market Max Quantity', category: 'Economy', storageKey: 'sidekick_market_max_qty', defaultEnabled: true },
+        { id: 'price-filler', name: 'Price Filler', category: 'Economy', storageKey: 'sidekick_settings', subKey: 'price-filler', defaultEnabled: false },
+        { id: 'bazaar-filler', name: 'Bazaar Filler', category: 'Economy', storageKey: 'sidekick_settings', subKey: 'bazaar-filler', defaultEnabled: false },
+        { id: 'quick-deposit', name: 'Quick Deposit', category: 'Economy', storageKey: 'sidekick_settings', subKey: 'quick-deposit', defaultEnabled: false },
+        { id: 'bunker-bucks', name: 'Bunker Bucks', category: 'Economy', storageKey: 'sidekick_settings', subKey: 'bunker-bucks', defaultEnabled: false },
+        { id: 'trade-assistant', name: 'Trade Assistant', category: 'Economy', storageKey: 'sidekick_trading_settings', subKey: 'display', enabledKey: 'enabled', defaultEnabled: true },
 
-    // Feature toggles - using unified sidekick_settings storage
-    const featureToggles = document.querySelectorAll('.module-toggle input');
+        { id: 'time-on-tab', name: 'Time on Tab', category: 'Utility', storageKey: 'sidekick_time_on_tab', defaultEnabled: false },
+        { id: 'random-target', name: 'Random Target', category: 'Utility', storageKey: 'sidekick_random_target', defaultEnabled: false },
+        { id: 'chat-popout', name: 'Chat Popout', category: 'Utility', storageKey: 'sidekick_settings', subKey: 'chat-popout', defaultEnabled: false },
+        { id: 'legible-names', name: 'Legible Player Names', category: 'Utility', storageKey: 'sidekick_settings', subKey: 'legible-names', defaultEnabled: false },
+        { id: 'xanax-viewer', name: 'Xanax Viewer', category: 'Utility', storageKey: 'sidekick_xanax_viewer', defaultEnabled: false },
+        { id: 'refill-blocker', name: 'Refill Blocker', category: 'Utility', storageKey: 'sidekick_refill_blocker', defaultEnabled: false },
+        { id: 'auction-weapon-bonus', name: 'Auction Weapon Bonus', category: 'Utility', storageKey: 'sidekick_settings', subKey: 'auction-weapon-bonus', defaultEnabled: false },
+        { id: 'oc-weights', name: 'OC Weights', category: 'Utility', storageKey: 'sidekick_settings', subKey: 'oc-weights', defaultEnabled: true },
+        { id: 'chat-alert', name: 'Chat Alert', category: 'Utility', storageKey: 'chat-alert', enabledKey: 'enabled', defaultEnabled: false },
 
-    // Load all toggle states from unified storage
-    chrome.storage.local.get(['sidekick_settings'], result => {
-        const settings = result.sidekick_settings || {};
+        { id: 'travel-blocker', name: 'Travel Blocker', category: 'Reminders', storageKey: 'sidekick_travel_blocker', defaultEnabled: true },
+        { id: 'racing-alert', name: 'Racing Alert', category: 'Reminders', storageKey: 'sidekick_racing_alert', defaultEnabled: false },
+        { id: 'rehab-warning', name: 'Rehab Warning', category: 'Reminders', storageKey: 'sidekick_rehab_warning', defaultEnabled: false },
+        { id: 'blood-bag-reminder', name: 'Blood Bag Reminder', category: 'Reminders', storageKey: 'sidekick_settings', subKey: 'blood-bag-reminder', defaultEnabled: false },
+        { id: 'browser-notifications', name: 'Browser Desktop Notifications', category: 'Reminders', storageKey: 'sidekick_notification_prefs', enabledKey: 'windowsNotifications', defaultEnabled: false },
 
-        featureToggles.forEach(toggle => {
-            const moduleId = toggle.dataset.module;
-            if (!moduleId) return; // Skip if no module ID
+        { id: 'crime-sfc', name: 'Search for Cash Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-sfc', defaultEnabled: false },
+        { id: 'crime-notifier', name: 'Shoplifting Notifier', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-notifier', defaultEnabled: false },
+        { id: 'crime-pickpocketing', name: 'Pickpocketing Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-pickpocketing', defaultEnabled: false },
+        { id: 'crime-burglary', name: 'Burglary Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-burglary', defaultEnabled: false },
+        { id: 'crime-disposal', name: 'Disposal Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-disposal', defaultEnabled: false },
+        { id: 'crime-cracking', name: 'Cracking Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-cracking', defaultEnabled: false },
+        { id: 'crime-scamming', name: 'Scamming Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-scamming', defaultEnabled: false },
+        { id: 'crime-hustling', name: 'Hustling Helper', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'crime-hustling', defaultEnabled: false },
+        { id: 'hide-crime-outcome', name: 'Crime Outcome Customization', category: 'Crimes', storageKey: 'sidekick_settings', subKey: 'hide-crime-outcome', defaultEnabled: false, onEnable: { mode: 1 }, onDisable: { mode: 0 } },
 
-            // Load saved state (default to true if not set)
-            const moduleSettings = settings[moduleId];
-            const isEnabled = moduleSettings ? moduleSettings.isEnabled !== false : true;
-            toggle.checked = isEnabled;
-        });
-    });
+        { id: 'chain-timer', name: 'Chain Timer', category: 'War', storageKey: 'sidekick_chain_timer', defaultEnabled: false },
+        { id: 'war-monitor', name: 'War Monitor', category: 'War', storageKey: 'sidekick_war_monitor', defaultEnabled: false },
+        { id: 'extended-chain-view', name: 'Extended Chain View', category: 'War', storageKey: 'sidekick_extended_chain_view', defaultEnabled: false },
+        { id: 'termed-war-mode', name: 'Termed War Mode', category: 'War', storageKey: 'sidekick_settings', subKey: 'termed-war-mode', defaultEnabled: false },
+        { id: 'war-target-caller', name: 'War Target Caller', category: 'War', storageKey: 'sidekick_war_target_caller', defaultEnabled: false },
 
-    // Handle toggle changes
-    featureToggles.forEach(toggle => {
-        toggle.addEventListener('change', () => {
-            const moduleId = toggle.dataset.module;
-            if (!moduleId) return;
+        { id: 'mission-tracker', name: 'Mission Tracker', category: 'Missions', storageKey: 'sidekick_settings', subKey: 'mission-tracker', defaultEnabled: false },
+        { id: 'book-notifier', name: 'Book Notifier', category: 'Missions', storageKey: 'sidekick_settings', subKey: 'book-notifier', defaultEnabled: false },
 
-            const isEnabled = toggle.checked;
+        { id: 'event-calendar', name: 'Event Calendar', category: 'Events', storageKey: 'sidekick_settings', subKey: 'event-calendar', defaultEnabled: false },
+        { id: 'easter-helper', name: 'Easter Egg Helper', category: 'Events', storageKey: 'sidekick_egg_helper', defaultEnabled: false },
+        { id: 'halloween-helper', name: 'Halloween Helper', category: 'Events', storageKey: 'sidekick_halloween', defaultEnabled: false },
+        { id: 'christmas-zoom', name: 'Christmas Zoom', category: 'Events', storageKey: 'sidekick_settings', subKey: 'christmas_zoom', defaultEnabled: false },
+        { id: 'christmas-beers', name: 'Christmas Beer Counter', category: 'Events', storageKey: 'sidekick_settings', subKey: 'christmas_beers', defaultEnabled: false },
 
-            // Get current settings, update the specific module, and save
-            chrome.storage.local.get(['sidekick_settings'], result => {
-                const settings = result.sidekick_settings || {};
+        { id: 'smart-medical', name: 'Smart Medical Button', category: 'Medical', storageKey: 'sidekick_smart_medical', defaultEnabled: false },
+        { id: 'mug-calculator', name: 'Mug Calculator', category: 'Mugging', storageKey: 'sidekick_mug_calculator', defaultEnabled: false },
+        { id: 'mug-warning', name: 'Mug Warning', category: 'Mugging', storageKey: 'mug-warning', enabledKey: 'enabled', defaultEnabled: false },
+        { id: 'merit-calculator', name: 'Merit Calculator', category: 'Merits', storageKey: 'sidekick_merit_calculator', defaultEnabled: false }
+    ].map(module => Object.freeze({ ...module, icon: ICONS[module.category] || ICONS.Utility }));
 
-                // Update or create module settings
-                if (!settings[moduleId]) {
-                    settings[moduleId] = {};
-                }
-                settings[moduleId].isEnabled = isEnabled;
+    const MODULE_BY_ID = new Map(MODULES.map(module => [module.id, module]));
+    const state = {
+        pinned: [],
+        customizeDraft: new Set(),
+        values: new Map(),
+        pinSaveQueue: Promise.resolve(),
+        toastTimer: null
+    };
 
-                // Save to unified storage
-                chrome.storage.local.set({ sidekick_settings: settings }, () => {
-                    console.log(`⚙️ Module ${moduleId}: ${isEnabled ? 'ON' : 'OFF'}`);
-                    showMessage(`${moduleId.replace(/-/g, ' ')} ${isEnabled ? 'enabled' : 'disabled'}`, 'success');
+    const elements = {};
 
-                    // ALSO save to legacy format for backwards compatibility
-                    const legacyKey = `sidekick_${moduleId.replace(/-/g, '_')}`;
-                    chrome.storage.local.set({ [legacyKey]: { isEnabled } }, () => {
-                        console.log(`💾 Also saved to legacy key: ${legacyKey}`);
-                    });
+    document.addEventListener('DOMContentLoaded', initialize);
 
+    async function initialize() {
+        cacheElements();
+        wireNavigation();
+        setVersion();
 
-                    // Emit notification for Block Training toggles
-                    if (moduleId === 'blocktraining') {
-                        console.log('🔍 Block training toggle detected, isEnabled:', isEnabled);
-                        chrome.tabs.query({ active: true, url: ['https://www.torn.com/*', 'https://*.torn.com/*'] }, function (tabs) {
-                            console.log('🔍 Found tabs:', tabs.length, tabs);
-                            if (tabs[0]) {
-                                console.log('📬 Sending notification to tab:', tabs[0].id);
-                                chrome.tabs.sendMessage(tabs[0].id, {
-                                    action: 'emitNotification',
-                                    notification: {
-                                        moduleId: 'blocktraining',
-                                        type: isEnabled ? 'warning' : 'success',
-                                        title: isEnabled ? 'Training Blocked' : 'Training Unblocked',
-                                        message: isEnabled ? 'Gym access blocked to prevent accidental training' : 'Gym access restored'
-                                    }
-                                }).then(response => {
-                                    console.log('✅ Notification message sent, response:', response);
-                                }).catch(err => {
-                                    console.error('❌ Failed to send notification:', err);
-                                });
-                            } else {
-                                console.warn('⚠️ No active Torn tab found');
-                            }
-                        });
-                    }
+        state.pinned = await loadPinnedModules();
+        await refreshModuleValues();
+        renderControls();
+        await refreshNotificationIndicator();
 
-
-                    // Send message to content scripts to update module state
-                    chrome.tabs.query({ url: ['https://www.torn.com/*', 'https://*.torn.com/*'] }, function (tabs) {
-                        tabs.forEach(tab => {
-                            chrome.tabs.sendMessage(tab.id, {
-                                action: 'updateModuleSettings',
-                                moduleId: moduleId,
-                                settings: settings[moduleId]
-                            }).catch(() => { }); // Ignore errors for tabs without content script
-                        });
-                    });
-                });
-            });
-        });
-    });
-
-    // Listen for storage changes from settings page
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName === 'local' && changes.sidekick_settings) {
-            const newSettings = changes.sidekick_settings.newValue || {};
-
-            // Update all toggle states
-            featureToggles.forEach(toggle => {
-                const moduleId = toggle.dataset.module;
-                if (!moduleId) return;
-
-                const moduleSettings = newSettings[moduleId];
-                const isEnabled = moduleSettings ? moduleSettings.isEnabled !== false : true;
-
-                // Only update if changed to avoid unnecessary reflows
-                if (toggle.checked !== isEnabled) {
-                    toggle.checked = isEnabled;
-                    console.log(`🔄 Synced ${moduleId}: ${isEnabled ? 'ON' : 'OFF'}`);
-                }
-            });
-        }
-    });
-
-    // ========================================
-    // NOTIFICATION SYSTEM
-    // ========================================
-
-    // Load and display notifications
-    async function loadNotifications() {
-        try {
-            // Get notifications directly from chrome.storage
-            const result = await chrome.storage.local.get(['sidekick_notifications', 'sidekick_notification_preferences']);
-            const allNotifications = result.sidekick_notifications || [];
-            const preferences = result.sidekick_notification_preferences || {};
-
-            console.log('📬 DEBUG: All notifications from storage:', allNotifications);
-            console.log('📬 DEBUG: Preferences:', preferences);
-
-            // Get recent 10
-            const recent = allNotifications.slice(0, 10);
-
-            // Filter based on preferences
-            const filtered = recent.filter(n => {
-                const pref = preferences[n.moduleId];
-                if (!pref) return true; // Show if no preference set
-
-                // Check if this notification type is enabled for this module
-                const typeEnabled = pref[n.type.toLowerCase()];
-                return typeEnabled !== false; // Show unless explicitly disabled
-            });
-
-            console.log('📬 Loaded notifications:', filtered.length, 'of', recent.length);
-            console.log('📬 DEBUG: Filtered notifications:', filtered);
-            renderNotifications(filtered);
-        } catch (error) {
-            console.error('Error loading notifications:', error);
-        }
+        chrome.storage.onChanged.addListener(handleStorageChange);
     }
 
-    // Render notifications
-    function renderNotifications(notifications) {
-        const container = document.getElementById('notifications-container');
-        const emptyState = document.getElementById('emptyState');
+    function cacheElements() {
+        [
+            'controlsView', 'customizeView', 'notificationsView', 'controlList',
+            'customizeList', 'moduleSearch', 'notificationDot', 'notificationsList',
+            'notificationsEmpty', 'toast'
+        ].forEach(id => { elements[id] = document.getElementById(id); });
+    }
 
-        if (notifications.length === 0) {
-            emptyState.style.display = 'block';
-            // Remove any existing notification cards
-            container.querySelectorAll('.notification-card').forEach(card => card.remove());
+    function wireNavigation() {
+        document.getElementById('customizeButton').addEventListener('click', openCustomizer);
+        document.getElementById('customizeDoneButton').addEventListener('click', saveCustomizer);
+        document.getElementById('notificationsButton').addEventListener('click', openNotifications);
+        document.getElementById('notificationsBackButton').addEventListener('click', () => showView('controlsView'));
+        document.getElementById('clearNotificationsButton').addEventListener('click', clearNotifications);
+        document.getElementById('settingsButton').addEventListener('click', () => sendToActiveTornTab('openSettings'));
+        document.getElementById('reportBugButton').addEventListener('click', () => sendToActiveTornTab('openBugReporter'));
+        elements.moduleSearch.addEventListener('input', renderCustomizer);
+    }
+
+    function setVersion() {
+        const version = chrome.runtime.getManifest().version;
+        document.getElementById('versionText').textContent = `Chrome Extension v${version}`;
+    }
+
+    function showView(viewId) {
+        document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === viewId));
+    }
+
+    async function loadPinnedModules() {
+        const result = await chrome.storage.local.get(PINNED_KEY);
+        const hasSavedSelection = Array.isArray(result[PINNED_KEY]);
+        const saved = hasSavedSelection ? result[PINNED_KEY] : DEFAULT_PINNED;
+        const valid = [...new Set(saved)].filter(id => MODULE_BY_ID.has(id));
+        return hasSavedSelection ? valid : [...DEFAULT_PINNED];
+    }
+
+    async function refreshModuleValues() {
+        const keys = [...new Set(MODULES.map(module => module.storageKey))];
+        const stored = await chrome.storage.local.get(keys);
+        MODULES.forEach(module => state.values.set(module.id, readModuleValue(module, stored[module.storageKey])));
+    }
+
+    function readModuleValue(module, storedValue) {
+        if (!storedValue || typeof storedValue !== 'object') return Boolean(module.defaultEnabled);
+        const settings = module.subKey ? storedValue[module.subKey] : storedValue;
+        if (!settings || typeof settings !== 'object') return Boolean(module.defaultEnabled);
+        if (Array.isArray(module.enabledKeys)) {
+            const values = module.enabledKeys
+                .map(key => settings[key])
+                .filter(value => typeof value === 'boolean');
+            return values.length ? values.some(Boolean) : Boolean(module.defaultEnabled);
+        }
+        const enabledKey = module.enabledKey || 'isEnabled';
+        return typeof settings[enabledKey] === 'boolean'
+            ? settings[enabledKey]
+            : Boolean(module.defaultEnabled);
+    }
+
+    async function writeModuleValue(module, enabled) {
+        const result = await chrome.storage.local.get(module.storageKey);
+        const root = result[module.storageKey] && typeof result[module.storageKey] === 'object'
+            ? { ...result[module.storageKey] }
+            : {};
+
+        const enabledKey = module.enabledKey || 'isEnabled';
+        const extra = enabled ? module.onEnable : module.onDisable;
+        const target = module.subKey
+            ? { ...(root[module.subKey] && typeof root[module.subKey] === 'object' ? root[module.subKey] : {}) }
+            : root;
+
+        if (Array.isArray(module.enabledKeys)) {
+            module.enabledKeys.forEach(key => { target[key] = enabled; });
+        } else {
+            target[enabledKey] = enabled;
+        }
+        if (extra && typeof extra === 'object') Object.assign(target, extra);
+        if (module.subKey) root[module.subKey] = target;
+
+        await chrome.storage.local.set({ [module.storageKey]: root });
+        state.values.set(module.id, enabled);
+        await broadcastModuleUpdate(module, enabled);
+    }
+
+    function renderControls() {
+        elements.controlList.replaceChildren();
+
+        if (!state.pinned.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No quick controls pinned. Use Customize to add modules.';
+            elements.controlList.appendChild(empty);
             return;
         }
 
-        emptyState.style.display = 'none';
-
-        // Clear existing notifications
-        container.querySelectorAll('.notification-card').forEach(card => card.remove());
-
-        // Render each notification
-        notifications.forEach(notification => {
-            const card = createNotificationCard(notification);
-            container.insertBefore(card, emptyState);
+        state.pinned.forEach(id => {
+            const module = MODULE_BY_ID.get(id);
+            if (!module) return;
+            elements.controlList.appendChild(createControlRow(module));
         });
     }
 
-    // Create a notification card element
-    function createNotificationCard(notification) {
-        const card = document.createElement('div');
-        card.className = `notification-card ${notification.type} ${!notification.read ? 'unread' : ''}`;
-        card.dataset.id = notification.id;
+    function createControlRow(module) {
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        row.dataset.moduleId = module.id;
 
-        const timeAgo = getTimeAgo(notification.timestamp);
+        const icon = document.createElement('div');
+        icon.className = 'module-icon';
+        const iconImage = document.createElement('img');
+        iconImage.src = module.icon;
+        iconImage.alt = '';
+        icon.appendChild(iconImage);
 
-        card.innerHTML = `
-            <div class="notification-card-header">
-                <div class="notification-card-title">${notification.title}</div>
-                <div class="notification-card-time">${timeAgo}</div>
-            </div>
-            ${notification.message ? `<div class="notification-card-message">${notification.message}</div>` : ''}
-        `;
+        const details = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'module-name';
+        name.textContent = module.name;
+        const status = document.createElement('div');
+        status.className = 'module-status';
+        details.append(name, status);
 
-        // Handle click
-        card.addEventListener('click', async () => {
-            // Mark as read
-            await NotificationCenter.markAsRead(notification.id);
-            card.classList.remove('unread');
+        const switchLabel = document.createElement('label');
+        switchLabel.className = 'switch';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.setAttribute('aria-label', `Toggle ${module.name}`);
+        checkbox.checked = state.values.get(module.id) === true;
+        const track = document.createElement('span');
+        track.className = 'switch-track';
+        switchLabel.append(checkbox, track);
 
-            // Handle action if present
-            if (notification.action?.type === 'openModule') {
-                // Send message to content script to open module
-                chrome.tabs.query({ active: true, currentWindow: true, url: ['https://www.torn.com/*', 'https://*.torn.com/*'] }, function (tabs) {
-                    if (tabs[0]) {
-                        chrome.tabs.sendMessage(tabs[0].id, {
-                            action: 'openModule',
-                            moduleId: notification.action.moduleId
+        updateStatus(status, checkbox.checked);
+        checkbox.addEventListener('change', async () => {
+            const nextValue = checkbox.checked;
+            checkbox.disabled = true;
+            try {
+                await writeModuleValue(module, nextValue);
+                updateStatus(status, nextValue);
+                showToast(`${module.name} ${nextValue ? 'enabled' : 'disabled'}`);
+            } catch (error) {
+                checkbox.checked = !nextValue;
+                updateStatus(status, checkbox.checked);
+                showToast(`Could not update ${module.name}`, true);
+                console.error('[Sidekick Popup] Toggle failed:', error);
+            } finally {
+                checkbox.disabled = false;
+            }
+        });
+
+        row.append(icon, details, switchLabel);
+        return row;
+    }
+
+    function updateStatus(element, enabled) {
+        element.textContent = enabled ? 'Enabled' : 'Off';
+        element.classList.toggle('enabled', enabled);
+    }
+
+    function openCustomizer() {
+        state.customizeDraft = new Set(state.pinned);
+        elements.moduleSearch.value = '';
+        renderCustomizer();
+        showView('customizeView');
+        elements.moduleSearch.focus();
+    }
+
+    function renderCustomizer() {
+        const query = elements.moduleSearch.value.trim().toLowerCase();
+        elements.customizeList.replaceChildren();
+
+        MODULES
+            .filter(module => !query || `${module.name} ${module.category}`.toLowerCase().includes(query))
+            .forEach(module => {
+                const label = document.createElement('label');
+                label.className = 'picker-row';
+
+                const image = document.createElement('img');
+                image.src = module.icon;
+                image.alt = '';
+
+                const details = document.createElement('div');
+                const name = document.createElement('div');
+                name.className = 'module-name';
+                name.textContent = module.name;
+                const category = document.createElement('div');
+                category.className = 'picker-category';
+                category.textContent = module.category;
+                details.append(name, category);
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = state.customizeDraft.has(module.id);
+                checkbox.setAttribute('aria-label', `Pin ${module.name}`);
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) state.customizeDraft.add(module.id);
+                    else state.customizeDraft.delete(module.id);
+                    queuePinnedSelectionSave()
+                        .then(() => showToast('Selection saved'))
+                        .catch(error => {
+                            console.error('[Sidekick Popup] Could not save quick controls:', error);
+                            showToast('Could not save selection', true);
                         });
-                        window.close();
-                    }
                 });
-            }
-        });
 
-        return card;
+                label.append(image, details, checkbox);
+                elements.customizeList.appendChild(label);
+            });
     }
 
-    // Helper: Get time ago string
-    function getTimeAgo(timestamp) {
-        const seconds = Math.floor((Date.now() - timestamp) / 1000);
-
-        if (seconds < 60) return 'Just now';
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-        return `${Math.floor(seconds / 86400)}d ago`;
+    async function saveCustomizer() {
+        await queuePinnedSelectionSave();
+        renderControls();
+        showView('controlsView');
+        showToast('Quick controls updated');
     }
 
-    // Clear All button
-    document.getElementById('clearAllNotifications')?.addEventListener('click', async () => {
-        try {
-            await chrome.storage.local.set({ 'sidekick_notifications': [] });
-            loadNotifications();
-            showMessage('All notifications cleared', 'info');
-        } catch (error) {
-            console.error('Failed to clear notifications:', error);
-        }
-    });
+    function queuePinnedSelectionSave() {
+        const selection = MODULES
+            .filter(module => state.customizeDraft.has(module.id))
+            .map(module => module.id);
+        state.pinned = selection;
 
-    // Preferences toggle
-    const togglePreferencesBtn = document.getElementById('togglePreferences');
-    const preferencesContent = document.getElementById('preferencesContent');
-    const preferencesChevron = document.getElementById('preferencesChevron');
-
-    togglePreferencesBtn?.addEventListener('click', () => {
-        const isHidden = preferencesContent.style.display === 'none';
-        preferencesContent.style.display = isHidden ? 'block' : 'none';
-        preferencesChevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-    });
-
-    // Load preferences and set checkboxes
-    async function loadPreferences() {
-        const result = await chrome.storage.local.get('sidekick_notification_preferences');
-        const preferences = result.sidekick_notification_preferences || {};
-
-        // Set type checkboxes
-        document.querySelectorAll('.pref-type').forEach(checkbox => {
-            const type = checkbox.dataset.type;
-            checkbox.checked = preferences.types?.[type] !== false;
-        });
-
-        // Set module checkboxes
-        document.querySelectorAll('.pref-module').forEach(checkbox => {
-            const module = checkbox.dataset.module;
-            checkbox.checked = preferences.modules?.[module] !== false;
-        });
-    }
-
-    // Handle preference changes
-    document.querySelectorAll('.pref-type').forEach(checkbox => {
-        checkbox.addEventListener('change', async () => {
-            await NotificationPreferences.toggleType(checkbox.dataset.type);
-            loadNotifications(); // Refresh displayed notifications
-        });
-    });
-
-    document.querySelectorAll('.pref-module').forEach(checkbox => {
-        checkbox.addEventListener('change', async () => {
-            await NotificationPreferences.toggleModule(checkbox.dataset.module);
-            loadNotifications(); // Refresh displayed notifications
-        });
-    });
-
-    // Initialize notifications when Notifications tab is clicked
-    document.querySelector('[data-tab="notifications"]')?.addEventListener('click', () => {
-        loadNotifications();
-        loadPreferences();
-        loadWindowsNotifSetting();
-    });
-
-    // Load notifications immediately if on notifications tab
-    if (document.getElementById('notifications-tab')?.classList.contains('active')) {
-        loadNotifications();
-        loadPreferences();
-        loadWindowsNotifSetting();
-    }
-
-    // Windows Notifications checkbox
-    const winNotifCheckbox = document.getElementById('popup-notif-windows');
-
-    async function loadWindowsNotifSetting() {
-        const result = await chrome.storage.local.get('sidekick_notification_prefs');
-        const prefs = result.sidekick_notification_prefs || {};
-        if (winNotifCheckbox) winNotifCheckbox.checked = prefs.windowsNotifications || false;
-    }
-
-    winNotifCheckbox?.addEventListener('change', async () => {
-        const result = await chrome.storage.local.get('sidekick_notification_prefs');
-        const prefs = result.sidekick_notification_prefs || {};
-        prefs.windowsNotifications = winNotifCheckbox.checked;
-        await chrome.storage.local.set({ sidekick_notification_prefs: prefs });
-        showMessage(`Windows notifications ${winNotifCheckbox.checked ? 'enabled' : 'disabled'}`, 'success');
-    });
-
-    // ========================================
-    // END NOTIFICATION SYSTEM
-    // ========================================
-
-    // Remove module settings buttons logic since features don't have settings buttons
-
-    // Get DOM elements
-    const openSettingsBtn = document.getElementById('openSettingsBtn');
-    const reportIssuesBtn = document.getElementById('reportIssuesBtn');
-    const trainingBlockerToggle = document.getElementById('trainingBlockerToggle');
-
-    // Load training blocker status
-    loadTrainingBlockerStatus();
-
-    // Open Settings (cogwheel panel)
-    openSettingsBtn.addEventListener('click', () => {
-        // Send message to active Torn.com tab to open settings panel
-        chrome.tabs.query({ active: true, currentWindow: true, url: ['https://www.torn.com/*', 'https://*.torn.com/*'] }, function (tabs) {
-            if (tabs[0]) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: 'openSettings'
-                }).then(response => {
-                    if (response && response.success) {
-                        showMessage('Settings panel opened!', 'success');
-                        setTimeout(() => window.close(), 500);
-                    } else {
-                        showMessage('Please navigate to Torn.com to access settings', 'warning');
-                    }
-                }).catch(() => {
-                    showMessage('Please navigate to Torn.com to access settings', 'warning');
-                });
-            } else {
-                showMessage('Please navigate to Torn.com to access settings', 'warning');
-            }
-        });
-    });
-
-    // Report Issues (Bug Reporter)
-    reportIssuesBtn.addEventListener('click', () => {
-        chrome.tabs.query({ active: true, currentWindow: true, url: ['https://www.torn.com/*', 'https://*.torn.com/*'] }, function (tabs) {
-            if (tabs[0]) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: 'openBugReporter'
-                }).then(response => {
-                    if (response && response.success) {
-                        showMessage('Bug reporter opened!', 'success');
-                        setTimeout(() => window.close(), 500);
-                    } else {
-                        showMessage('Please navigate to Torn.com to report bugs', 'warning');
-                    }
-                }).catch(() => {
-                    showMessage('Please navigate to Torn.com to report bugs', 'warning');
-                });
-            } else {
-                showMessage('Please navigate to Torn.com to report bugs', 'warning');
-            }
-        });
-    });
-
-    // Training Blocker Toggle
-    if (trainingBlockerToggle) {
-        trainingBlockerToggle.addEventListener('change', () => {
-            const isEnabled = trainingBlockerToggle.checked;
-
-            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-                if (tabs[0] && tabs[0].url && tabs[0].url.includes('torn.com')) {
-                    chrome.tabs.sendMessage(tabs[0].id, {
-                        action: 'toggleTrainingBlocker',
-                        enabled: isEnabled
-                    }).then(response => {
-                        if (response && response.success) {
-                            showMessage(isEnabled ? 'Training blocker enabled!' : 'Training blocker disabled!', 'success');
-                        } else {
-                            showMessage('Failed to toggle. Try refreshing the page.', 'warning');
-                            trainingBlockerToggle.checked = !isEnabled;
-                        }
-                    }).catch(err => {
-                        console.error('Failed to toggle training blocker:', err);
-                        showMessage('Error toggling blocker. Try refreshing the page.', 'warning');
-                        trainingBlockerToggle.checked = !isEnabled;
-                    });
-                } else {
-                    showMessage('Please navigate to Torn.com', 'warning');
-                    trainingBlockerToggle.checked = false;
+        state.pinSaveQueue = state.pinSaveQueue
+            .catch(() => undefined)
+            .then(async () => {
+                await chrome.storage.local.set({ [PINNED_KEY]: selection });
+                const verification = await chrome.storage.local.get(PINNED_KEY);
+                const saved = verification[PINNED_KEY];
+                if (!Array.isArray(saved) || JSON.stringify(saved) !== JSON.stringify(selection)) {
+                    throw new Error('Pinned module verification failed');
                 }
             });
-        });
+        return state.pinSaveQueue;
     }
 
-    loadExtensionInfo();
+    async function openNotifications() {
+        await renderNotifications();
+        showView('notificationsView');
+    }
 
-    function loadTrainingBlockerStatus() {
-        chrome.storage.local.get(['sidekick_block_training'], function (result) {
-            if (trainingBlockerToggle && result.sidekick_block_training) {
-                trainingBlockerToggle.checked = result.sidekick_block_training.isBlocked === true;
+    async function renderNotifications() {
+        const result = await chrome.storage.local.get(NOTIFICATIONS_KEY);
+        const notifications = Array.isArray(result[NOTIFICATIONS_KEY]) ? result[NOTIFICATIONS_KEY].slice(0, 15) : [];
+        elements.notificationsList.replaceChildren();
+        elements.notificationsEmpty.hidden = notifications.length !== 0;
+
+        notifications.forEach(notification => {
+            const card = document.createElement('article');
+            card.className = `notification-card ${safeNotificationType(notification.type)}`;
+
+            const titleRow = document.createElement('div');
+            titleRow.className = 'notification-title-row';
+            const title = document.createElement('div');
+            title.className = 'notification-title';
+            title.textContent = notification.title || 'Sidekick';
+            const time = document.createElement('time');
+            time.className = 'notification-time';
+            time.textContent = formatTimeAgo(notification.timestamp);
+            titleRow.append(title, time);
+            card.appendChild(titleRow);
+
+            if (notification.message) {
+                const message = document.createElement('div');
+                message.className = 'notification-message';
+                message.textContent = notification.message;
+                card.appendChild(message);
             }
+
+            elements.notificationsList.appendChild(card);
         });
+
+        if (notifications.some(notification => notification.read === false)) {
+            const all = Array.isArray(result[NOTIFICATIONS_KEY]) ? result[NOTIFICATIONS_KEY] : [];
+            await chrome.storage.local.set({
+                [NOTIFICATIONS_KEY]: all.map(notification => ({ ...notification, read: true }))
+            });
+        }
+        elements.notificationDot.hidden = true;
     }
 
-    function showMessage(message, type = 'info') {
-        const messageEl = document.createElement('div');
-        const bgColor = type === 'success' ? 'rgba(76, 175, 80, 0.9)' : type === 'warning' ? 'rgba(255, 152, 0, 0.9)' : 'rgba(33, 150, 243, 0.9)';
-        messageEl.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; background: ${bgColor}; color: white; border-radius: 6px; font-size: 13px; font-weight: 500; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);`;
-        messageEl.textContent = message;
-        document.body.appendChild(messageEl);
-        setTimeout(() => messageEl.remove(), 3000);
+    async function clearNotifications() {
+        await chrome.storage.local.set({ [NOTIFICATIONS_KEY]: [] });
+        await renderNotifications();
+        showToast('Notifications cleared');
     }
 
+    async function refreshNotificationIndicator() {
+        const result = await chrome.storage.local.get(NOTIFICATIONS_KEY);
+        const notifications = Array.isArray(result[NOTIFICATIONS_KEY]) ? result[NOTIFICATIONS_KEY] : [];
+        elements.notificationDot.hidden = !notifications.some(notification => notification.read === false);
+    }
 
+    function safeNotificationType(type) {
+        return ['success', 'warning', 'error', 'info'].includes(type) ? type : 'info';
+    }
 
+    function formatTimeAgo(timestamp) {
+        const value = Number(timestamp);
+        if (!Number.isFinite(value)) return '';
+        const seconds = Math.max(0, Math.floor((Date.now() - value) / 1000));
+        if (seconds < 60) return 'Now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+        return `${Math.floor(seconds / 86400)}d`;
+    }
 
+    async function broadcastModuleUpdate(module, enabled) {
+        const tabs = await chrome.tabs.query({ url: ['https://www.torn.com/*', 'https://*.torn.com/*'] });
+        await Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, {
+            action: 'updateModuleSettings',
+            moduleId: module.subKey || module.id,
+            settings: { isEnabled: enabled }
+        })));
+    }
 
-
-    function loadExtensionInfo() {
-        chrome.storage.local.get(['sidekick_api_key'], function (result) {
-            console.log('📦 API Key configured:', !!(result.sidekick_api_key));
+    async function sendToActiveTornTab(action) {
+        const tabs = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+            url: ['https://www.torn.com/*', 'https://*.torn.com/*']
         });
+        if (!tabs[0]) {
+            showToast('Open Torn before using this action', true);
+            return;
+        }
+
+        try {
+            await chrome.tabs.sendMessage(tabs[0].id, { action });
+            window.close();
+        } catch (error) {
+            showToast('Sidekick is not ready on this Torn tab', true);
+        }
     }
-});
+
+    async function handleStorageChange(changes, areaName) {
+        if (areaName !== 'local') return;
+
+        if (changes[PINNED_KEY]) {
+            state.pinned = await loadPinnedModules();
+            renderControls();
+        }
+
+        if (changes[NOTIFICATIONS_KEY]) {
+            await refreshNotificationIndicator();
+            if (elements.notificationsView.classList.contains('active')) await renderNotifications();
+        }
+
+        if (MODULES.some(module => changes[module.storageKey])) {
+            await refreshModuleValues();
+            renderControls();
+        }
+    }
+
+    function showToast(message, isError = false) {
+        clearTimeout(state.toastTimer);
+        elements.toast.textContent = message;
+        elements.toast.classList.toggle('error', isError);
+        elements.toast.classList.add('visible');
+        state.toastTimer = setTimeout(() => elements.toast.classList.remove('visible'), 1800);
+    }
+})();

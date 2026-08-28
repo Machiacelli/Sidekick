@@ -77,6 +77,18 @@
                 resetDaily: true,  // Reset baseline at midnight UTC
                 visible: true
             },
+            dailyBoughtItems: {
+                name: 'Daily Bought Items',
+                icon: '🛒',
+                color: '#FF9800',
+                description: 'Buy 100 items from NPC shops',
+                apiField: 'cityitemsbought',
+                maxCount: 100,
+                currentCount: 0,
+                completed: false,
+                resetDaily: true,
+                visible: true
+            },
             prayer: {
                 name: 'Daily Prayer',
                 icon: '🙏',
@@ -182,7 +194,14 @@
                         for (const taskKey in this.dailyTasks) {
                             if (saved[taskKey]) {
                                 // Preserve the saved state while keeping the task structure
+                                const configuredMaxCount = this.dailyTasks[taskKey].maxCount;
                                 Object.assign(this.dailyTasks[taskKey], saved[taskKey]);
+
+                                // Stored progress must not restore an obsolete
+                                // completion target after the module is updated.
+                                if (configuredMaxCount !== undefined) {
+                                    this.dailyTasks[taskKey].maxCount = configuredMaxCount;
+                                }
 
                                 // Validate completed state for tasks with maxCount (like xanax)
                                 const task = this.dailyTasks[taskKey];
@@ -292,6 +311,15 @@
                 console.log(`📦 Stored yesterday's final xantaken: ${this.apiBaselines.yesterdayFinalXantaken} (from ${this.apiBaselines.lastKnownXantaken !== undefined ? 'lastKnown' : 'baseline'})`);
             }
 
+            const finalCityItemsToStore =
+                this.apiBaselines.lastKnownCityItemsBought !== undefined
+                    ? this.apiBaselines.lastKnownCityItemsBought
+                    : this.apiBaselines.cityitemsbought;
+            if (finalCityItemsToStore !== undefined) {
+                this.apiBaselines.yesterdayFinalCityItemsBought = finalCityItemsToStore;
+                console.log(`📦 Stored yesterday's final NPC shop item count: ${finalCityItemsToStore}`);
+            }
+
             // Force reset ALL tasks to incomplete state, preserving user visibility preferences
             for (const taskKey in this.dailyTasks) {
                 const task = this.dailyTasks[taskKey];
@@ -315,6 +343,12 @@
             // This will trigger smart recovery on next API check
             delete this.apiBaselines.xantaken;
             delete this.apiBaselines.lastKnownXantaken;
+            delete this.apiBaselines.xantakenBaselineUtcDay;
+            delete this.apiBaselines.xantakenBaselineSource;
+            delete this.apiBaselines.cityitemsbought;
+            delete this.apiBaselines.lastKnownCityItemsBought;
+            delete this.apiBaselines.cityItemsBaselineUtcDay;
+            delete this.apiBaselines.cityItemsBaselineSource;
             console.log("🧹 Cleared today's xantaken baseline - will use smart recovery on next API check");
 
             // Set last reset date to current UTC date (not time)
@@ -529,7 +563,9 @@
                                 backgroundResult.logs,
                                 backgroundResult.bars,
                                 backgroundResult.cooldowns,
-                                backgroundResult.refills  // Pass refills data from background
+                                backgroundResult.refills,
+                                backgroundResult.xanaxDayStart,
+                                backgroundResult.cityItemsBoughtDayStart
                             );
                             this.apiCheckFailureCount = 0;
                             return;
@@ -562,10 +598,26 @@
                     throw new Error('Extension context invalidated - please refresh page');
                 }
 
+                const todayUtcDay = new Date().toISOString().slice(0, 10);
+                const needsXanaxDayStart =
+                    this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay ||
+                    this.apiBaselines.xantakenBaselineSource !== 'utc-snapshot';
+                const needsCityItemsDayStart =
+                    this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay ||
+                    this.apiBaselines.cityItemsBaselineSource !== 'utc-snapshot';
+
+                const selections = ['personalstats', 'logs', 'bars', 'cooldowns', 'refills'];
+                if (needsXanaxDayStart) {
+                    selections.push('xanaxDayStart');
+                }
+                if (needsCityItemsDayStart) {
+                    selections.push('cityItemsBoughtDayStart');
+                }
+
                 const response = await window.SidekickModules.Core.SafeMessageSender.sendToBackground({
                     action: 'fetchTornApi',
                     apiKey: apiKey,
-                    selections: ['personalstats', 'logs', 'bars', 'cooldowns', 'refills']
+                    selections
                 });
 
                 return response;
@@ -611,6 +663,8 @@
             let logData = null;
             let barsData = null;
             let cooldownsData = null;
+            let xanaxDayStart = null;
+            let cityItemsBoughtDayStart = null;
 
             try {
                 console.log('📊 Fetching personal stats...');
@@ -620,6 +674,87 @@
             } catch (error) {
                 console.error('❌ Failed to fetch personal stats:', error.message);
                 throw error; // Re-throw to be handled by main error handler
+            }
+
+            const todayUtcDay = new Date().toISOString().slice(0, 10);
+            const needsXanaxDayStart =
+                this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay ||
+                this.apiBaselines.xantakenBaselineSource !== 'utc-snapshot';
+            const needsCityItemsDayStart =
+                this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay ||
+                this.apiBaselines.cityItemsBaselineSource !== 'utc-snapshot';
+
+            if (needsXanaxDayStart) {
+                try {
+                    const todayUtcStart = new Date();
+                    todayUtcStart.setUTCHours(0, 0, 0, 0);
+                    const beforeTodayUtc = Math.floor(todayUtcStart.getTime() / 1000) - 1;
+                    console.log('💊 Fetching Xanax count at the UTC day boundary...');
+                    const baselineResponse = await fetchWithTimeout(
+                        `https://api.torn.com/user?selections=personalstats&stat=xantaken&timestamp=${beforeTodayUtc}&key=${apiKey}`
+                    );
+                    const baselineData = await baselineResponse.json();
+                    if (!baselineData.error && typeof baselineData.personalstats?.xantaken === 'number') {
+                        xanaxDayStart = baselineData.personalstats.xantaken;
+                        console.log('✅ UTC day-start Xanax count received');
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Failed to fetch UTC day-start Xanax count; using saved fallback:', error.message);
+                }
+            }
+
+            if (needsCityItemsDayStart) {
+                try {
+                    const todayUtcStart = new Date();
+                    todayUtcStart.setUTCHours(0, 0, 0, 0);
+                    const beforeTodayUtc = Math.floor(todayUtcStart.getTime() / 1000) - 1;
+                    console.log('🛒 Fetching city item count at the UTC day boundary...');
+                    const baselineResponse = await fetchWithTimeout(
+                        `https://api.torn.com/v2/user/personalstats?stat=cityitemsbought&timestamp=${beforeTodayUtc}&key=${apiKey}`
+                    );
+                    const baselineData = await baselineResponse.json();
+
+                    if (!baselineData.error) {
+                        const normalizedStatName = 'cityitemsbought';
+                        const numericLeaves = [];
+                        const visit = (value, key = '') => {
+                            if (typeof value === 'number' && Number.isFinite(value)) {
+                                const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+                                if (normalizedKey === normalizedStatName) {
+                                    numericLeaves.unshift({ exact: true, value });
+                                } else if (!/(timestamp|time|id|code|count|offset|limit)/i.test(key)) {
+                                    numericLeaves.push({ exact: false, value });
+                                }
+                                return;
+                            }
+                            if (!value || typeof value !== 'object') return;
+                            if (
+                                typeof value.value === 'number' &&
+                                [value.stat, value.name, value.key].some(candidate =>
+                                    typeof candidate === 'string' &&
+                                    candidate.replace(/[^a-z0-9]/gi, '').toLowerCase() === normalizedStatName
+                                )
+                            ) {
+                                numericLeaves.unshift({ exact: true, value: value.value });
+                            }
+                            Object.entries(value).forEach(([childKey, childValue]) => visit(childValue, childKey));
+                        };
+                        visit(baselineData);
+                        const exact = numericLeaves.find(entry => entry.exact);
+                        const fallbackValues = numericLeaves
+                            .filter(entry => !entry.exact)
+                            .map(entry => entry.value);
+                        cityItemsBoughtDayStart = exact
+                            ? exact.value
+                            : (fallbackValues.length === 1 ? fallbackValues[0] : null);
+
+                        if (typeof cityItemsBoughtDayStart === 'number') {
+                            console.log('✅ UTC day-start city item count received');
+                        }
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Failed to fetch UTC day-start city item count; using saved fallback:', error.message);
+                }
             }
 
             try {
@@ -672,7 +807,9 @@
                     logData?.log,
                     barsData?.bars,
                     cooldownsData?.cooldowns,
-                    refillsData?.refills  // Pass refills data
+                    refillsData?.refills,
+                    xanaxDayStart,
+                    cityItemsBoughtDayStart
                 );
 
                 // Reset failure count on successful API call
@@ -824,7 +961,7 @@
         },
 
         // Update daily task completion based on API data
-        updateTasksFromApi(personalstats, logData = null, barsData = null, cooldownsData = null, refillsData = null) {
+        updateTasksFromApi(personalstats, logData = null, barsData = null, cooldownsData = null, refillsData = null, xanaxDayStart = null, cityItemsBoughtDayStart = null) {
             let hasUpdates = false;
 
             // Store API data for debugging
@@ -833,7 +970,9 @@
                 logs: logData,
                 bars: barsData,
                 cooldowns: cooldownsData,
-                refills: refillsData
+                refills: refillsData,
+                xanaxDayStart,
+                cityItemsBoughtDayStart
             };
 
             console.log('📋 Updating tasks from API data...');
@@ -842,7 +981,9 @@
                 logData: !!logData,
                 barsData: !!barsData,
                 cooldownsData: !!cooldownsData,
-                refillsData: !!refillsData
+                refillsData: !!refillsData,
+                xanaxDayStart: typeof xanaxDayStart === 'number',
+                cityItemsBoughtDayStart: typeof cityItemsBoughtDayStart === 'number'
             });
 
             // 🆕 PRIORITY: Initialize xantaken baseline if not set
@@ -854,6 +995,25 @@
             // we can still calculate correct usage by using yesterday's final value!
             if (typeof personalstats?.xantaken === 'number') {
                 const currentXan = personalstats.xantaken;
+                const xanTask = this.dailyTasks.xanaxDose;
+                const todayUtcDay = new Date().toISOString().slice(0, 10);
+                const dayStartDelta = currentXan - xanaxDayStart;
+                let refreshedDayStartBaseline = false;
+                const hasValidDayStart =
+                    Number.isInteger(xanaxDayStart) &&
+                    xanaxDayStart >= 0 &&
+                    dayStartDelta >= 0 &&
+                    dayStartDelta <= xanTask.maxCount;
+
+                // A historical snapshot from 23:59:59 UTC gives us an exact day boundary.
+                // This detects Xanax taken on mobile while excluding every intake before 00:00 UTC.
+                if (hasValidDayStart) {
+                    this.apiBaselines.xantaken = xanaxDayStart;
+                    this.apiBaselines.xantakenBaselineUtcDay = todayUtcDay;
+                    this.apiBaselines.xantakenBaselineSource = 'utc-snapshot';
+                    console.log(`💊 UTC day-start baseline set to ${xanaxDayStart} for ${todayUtcDay}`);
+                    refreshedDayStartBaseline = true;
+                }
 
                 // If no baseline exists (after reset), use SMART RECOVERY
                 if (this.apiBaselines.xantaken === undefined) {
@@ -870,7 +1030,8 @@
                         console.log(`💊   Usage since midnight: ${xanUsedSinceMidnight}`);
 
                         // Set baseline to show correct usage
-                        // If user took 2 xanax on mobile before PC startup, we want to show 2/3
+                        // If the user took Xanax on mobile before PC startup,
+                        // preserve that progress against the configured daily target.
                         this.apiBaselines.xantaken = currentXan - xanUsedSinceMidnight;
 
                         console.log(`💊   Setting baseline to: ${this.apiBaselines.xantaken}`);
@@ -885,22 +1046,83 @@
 
                 // Always update lastKnownXantaken so resets use the actual final value
                 this.apiBaselines.lastKnownXantaken = currentXan;
+                if (refreshedDayStartBaseline) {
+                    this.saveDailyTasks();
+                }
 
                 const baselineXan = this.apiBaselines.xantaken;
                 const xanUsedToday = Math.max(0, currentXan - baselineXan);
-                const xanClamped = Math.min(3, xanUsedToday);
-
-                const xanTask = this.dailyTasks.xanaxDose;
+                const xanClamped = Math.min(xanTask.maxCount, xanUsedToday);
 
                 console.log(`💊 Xanax calculation: current=${currentXan}, baseline=${baselineXan}, used today=${xanUsedToday}, clamped=${xanClamped}`);
 
-                if (xanTask.currentCount !== xanClamped || xanTask.completed !== (xanClamped >= 3)) {
+                if (xanTask.currentCount !== xanClamped || xanTask.completed !== (xanClamped >= xanTask.maxCount)) {
                     xanTask.currentCount = xanClamped;
-                    xanTask.completed = xanClamped >= 3;
+                    xanTask.completed = xanClamped >= xanTask.maxCount;
                     hasUpdates = true;
-                    console.log(`💊 Updated Xanax: ${xanClamped}/3 (total lifetime: ${currentXan}, baseline: ${baselineXan}, used today: ${xanUsedToday})`);
+                    console.log(`💊 Updated Xanax: ${xanClamped}/${xanTask.maxCount} (total lifetime: ${currentXan}, baseline: ${baselineXan}, used today: ${xanUsedToday})`);
                 } else {
-                    console.log(`💊 Xanax status confirmed: ${xanClamped}/3 (lifetime: ${currentXan}, baseline: ${baselineXan})`);
+                    console.log(`💊 Xanax status confirmed: ${xanClamped}/${xanTask.maxCount} (lifetime: ${currentXan}, baseline: ${baselineXan})`);
+                }
+            }
+
+            // cityitemsbought is Torn's cumulative "Shop purchases" stat for
+            // NPC city shops. Subtract the 23:59:59 UTC snapshot so purchases
+            // made on mobile or before Sidekick opened are still included.
+            if (typeof personalstats?.cityitemsbought === 'number') {
+                const currentCityItems = personalstats.cityitemsbought;
+                const shopTask = this.dailyTasks.dailyBoughtItems;
+                const todayUtcDay = new Date().toISOString().slice(0, 10);
+                const dayStartDelta = currentCityItems - cityItemsBoughtDayStart;
+                const hasValidDayStart =
+                    Number.isInteger(cityItemsBoughtDayStart) &&
+                    cityItemsBoughtDayStart >= 0 &&
+                    dayStartDelta >= 0;
+                let baselineChanged = false;
+
+                if (hasValidDayStart) {
+                    this.apiBaselines.cityitemsbought = cityItemsBoughtDayStart;
+                    this.apiBaselines.cityItemsBaselineUtcDay = todayUtcDay;
+                    this.apiBaselines.cityItemsBaselineSource = 'utc-snapshot';
+                    baselineChanged = true;
+                }
+
+                if (this.apiBaselines.cityitemsbought === undefined) {
+                    const yesterdayFinal =
+                        this.apiBaselines.yesterdayFinalCityItemsBought;
+
+                    this.apiBaselines.cityitemsbought =
+                        Number.isInteger(yesterdayFinal) &&
+                        yesterdayFinal <= currentCityItems
+                            ? yesterdayFinal
+                            : currentCityItems;
+                    baselineChanged = true;
+                }
+
+                this.apiBaselines.lastKnownCityItemsBought = currentCityItems;
+
+                const boughtToday = Math.max(
+                    0,
+                    currentCityItems - this.apiBaselines.cityitemsbought
+                );
+                const boughtClamped = Math.min(
+                    shopTask.maxCount,
+                    boughtToday
+                );
+                const isComplete = boughtClamped >= shopTask.maxCount;
+
+                if (
+                    shopTask.currentCount !== boughtClamped ||
+                    shopTask.completed !== isComplete
+                ) {
+                    shopTask.currentCount = boughtClamped;
+                    shopTask.completed = isComplete;
+                    hasUpdates = true;
+                    console.log(`🛒 Updated Daily Bought Items: ${boughtClamped}/${shopTask.maxCount}`);
+                }
+
+                if (baselineChanged) {
+                    this.saveDailyTasks();
                 }
             }
 
@@ -1032,6 +1254,12 @@
 
                 // Skip xanax - it's now handled at the top with baseline system (lines 783-798)
                 if (taskKey === 'xanaxDose') {
+                    continue;
+                }
+
+                // Daily NPC shop purchases are handled above using the exact
+                // UTC day-start snapshot of cityitemsbought.
+                if (taskKey === 'dailyBoughtItems') {
                     continue;
                 }
 
@@ -1698,7 +1926,7 @@
             ];
 
             const count = this.countItemUsageFromLogs(logData, sinceTimestamp, xanaxPatterns, 'Xanax Dose', timezone);
-            return Math.min(count, 3); // Cap at 3 per day
+            return Math.min(count, this.dailyTasks.xanaxDose.maxCount);
         },
 
         // Create a new todo list
@@ -1829,9 +2057,7 @@
                                 position: relative;
                                 outline: none;
                                 box-shadow: none;
-                            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" 
-                               onmouseout="this.style.background='rgba(255,255,255,0.2)'" 
-                               onfocus="this.style.outline='none'" 
+                            " 
                                title="Todo list options">⚙️</button>
                             
                             <div class="todolist-dropdown-content" style="
@@ -1853,8 +2079,7 @@
                                     color: #fff;
                                     font-size: 12px;
                                     border-bottom: 1px solid #444;
-                                " onmouseover="this.style.background='#3a3a3a'" 
-                                   onmouseout="this.style.background='none'">${todoList.pinned ? '🗋 Unpin' : '📌 Pin'}</div>
+                                ">${todoList.pinned ? '🗋 Unpin' : '📌 Pin'}</div>
                                 
                                 <div class="todolist-option" data-action="refresh" style="
                                     padding: 8px 12px;
@@ -1862,8 +2087,7 @@
                                     color: #fff;
                                     font-size: 12px;
                                     border-bottom: 1px solid #444;
-                                " onmouseover="this.style.background='#3a3a3a'" 
-                                   onmouseout="this.style.background='none'">🔄 Refresh API</div>
+                                ">🔄 Refresh API</div>
                                 
                                 <div class="todolist-option" data-action="reset-daily" style="
                                     padding: 8px 12px;
@@ -1871,8 +2095,7 @@
                                     color: #fff;
                                     font-size: 12px;
                                     border-bottom: 1px solid #444;
-                                " onmouseover="this.style.background='#3a3a3a'" 
-                                   onmouseout="this.style.background='none'">♻️ Reset Daily Tasks</div>
+                                ">♻️ Reset Daily Tasks</div>
                                 
                                 <div class="todolist-option" data-action="add" style="
                                     padding: 8px 12px;
@@ -1880,8 +2103,7 @@
                                     color: #fff;
                                     font-size: 12px;
                                     border-bottom: 1px solid #444;
-                                " onmouseover="this.style.background='#3a3a3a'" 
-                                   onmouseout="this.style.background='none'">➕ Add Task</div>
+                                ">➕ Add Task</div>
                                 
                                 <div class="todolist-option" data-action="color" style="
                                     padding: 8px 12px;
@@ -1889,16 +2111,14 @@
                                     color: #fff;
                                     font-size: 12px;
                                     border-bottom: 1px solid #444;
-                                " onmouseover="this.style.background='#3a3a3a'" 
-                                   onmouseout="this.style.background='none'">🎨 Change Color</div>
+                                ">🎨 Change Color</div>
                                 
                                 <div class="todolist-option" data-action="delete" style="
                                     padding: 8px 12px;
                                     cursor: pointer;
                                     color: #ff6b6b;
                                     font-size: 12px;
-                                " onmouseover="this.style.background='#3a3a3a'" 
-                                   onmouseout="this.style.background='none'">🗑️ Delete List</div>
+                                ">🗑️ Delete List</div>
                             </div>
                         </div>
                         
@@ -1917,8 +2137,7 @@
                             line-height: 1;
                             transition: all 0.2s;
                             font-weight: bold;
-                        " onmouseover="this.style.background='#c82333'; this.style.transform='scale(1.1)'" 
-                           onmouseout="this.style.background='#dc3545'; this.style.transform='scale(1)'" 
+                        " 
                            title="Close">×</button>
                     </div>
                 </div>
@@ -2125,8 +2344,7 @@
                         line-height: 1;
                         transition: all 0.2s;
                         opacity: 0.7;
-                    " onmouseover="this.style.opacity='1'; this.style.background='rgba(200, 35, 51, 1)'" 
-                       onmouseout="this.style.opacity='0.7'; this.style.background='rgba(220, 53, 69, 0.8)'" 
+                    " 
                        title="Remove task">×</button>
                 </div>
             `;
@@ -2305,7 +2523,7 @@
                     cursor: pointer;
                     border-bottom: 1px solid #555;
                     transition: background 0.2s;
-                " onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'">
+                ">
                     ➕ Add Task
                 </div>
                 <div class="menu-item refresh-api-menu" style="
@@ -2314,7 +2532,7 @@
                     cursor: pointer;
                     border-bottom: 1px solid #555;
                     transition: background 0.2s;
-                " onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'">
+                ">
                     🔄 Check API Now
                 </div>
                 <div class="menu-item pin-todolist-menu" style="
@@ -2322,7 +2540,7 @@
                     color: #fff;
                     cursor: pointer;
                     transition: background 0.2s;
-                " onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'">
+                ">
                     ${todoList.pinned ? '📌 Unpin' : '📌 Pin'}
                 </div>
             `;
@@ -2585,8 +2803,7 @@
                             box-sizing: border-box;
                             outline: none;
                             transition: border-color 0.2s;
-                        " placeholder="Task name..." maxlength="50"
-                           onfocus="this.style.borderColor='#4CAF50'" onblur="this.style.borderColor='#555'">
+                        " placeholder="Task name..." maxlength="50">
                     </div>
 
                     <div style="margin-bottom: 14px;">

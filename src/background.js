@@ -374,6 +374,50 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
         throw err;
     }
 
+    // API v2 personalstats can return the requested stat in either the legacy
+    // flat form or a nested form. This request is filtered to one stat, so a
+    // single non-metadata numeric leaf is also safe to use as a fallback.
+    function extractPersonalStatValue(payload, statName) {
+        const normalizedStatName = statName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        const numericLeaves = [];
+
+        const visit = (value, key = '') => {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+                if (normalizedKey === normalizedStatName) {
+                    numericLeaves.unshift({ exact: true, value });
+                } else if (!/(timestamp|time|id|code|count|offset|limit)/i.test(key)) {
+                    numericLeaves.push({ exact: false, value });
+                }
+                return;
+            }
+
+            if (!value || typeof value !== 'object') return;
+
+            if (
+                typeof value.value === 'number' &&
+                [value.stat, value.name, value.key]
+                    .some(candidate =>
+                        typeof candidate === 'string' &&
+                        candidate.replace(/[^a-z0-9]/gi, '').toLowerCase() === normalizedStatName
+                    )
+            ) {
+                numericLeaves.unshift({ exact: true, value: value.value });
+            }
+
+            Object.entries(value).forEach(([childKey, childValue]) => visit(childValue, childKey));
+        };
+
+        visit(payload);
+        const exact = numericLeaves.find(entry => entry.exact);
+        if (exact) return exact.value;
+
+        const fallbackValues = numericLeaves
+            .filter(entry => !entry.exact)
+            .map(entry => entry.value);
+        return fallbackValues.length === 1 ? fallbackValues[0] : null;
+    }
+
     try {
         // Prepare results object
         const results = {
@@ -383,6 +427,8 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
             bars: null,
             cooldowns: null,
             refills: null,
+            xanaxDayStart: null,
+            cityItemsBoughtDayStart: null,
             items: null,
             profile: null,
             company: null,
@@ -419,6 +465,80 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
             } catch (error) {
                 console.error('❌ Background: Personal stats fetch failed:', error);
                 throw error;
+            }
+        }
+
+        // Fetch the lifetime Xanax total immediately before today's 00:00 UTC
+        // boundary. This preserves the existing Xanax tracking behaviour.
+        if (selections.includes('xanaxDayStart')) {
+            console.log('💊 Background: Fetching UTC day-start Xanax count...');
+            try {
+                const todayUtcStart = new Date();
+                todayUtcStart.setUTCHours(0, 0, 0, 0);
+                const beforeTodayUtc = Math.floor(todayUtcStart.getTime() / 1000) - 1;
+
+                const baselineResponse = await fetch(
+                    `https://api.torn.com/${endpoint}?selections=personalstats&stat=xantaken&timestamp=${beforeTodayUtc}&key=${apiKey}`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'User-Agent': 'Sidekick Chrome Extension Background'
+                        }
+                    }
+                );
+
+                if (!baselineResponse.ok) {
+                    console.warn('⚠️ Background: UTC day-start Xanax fetch failed:', baselineResponse.status);
+                } else {
+                    const baselineData = await baselineResponse.json();
+                    const dayStartValue = baselineData.personalstats?.xantaken;
+
+                    if (baselineData.error) {
+                        console.warn('⚠️ Background: UTC day-start Xanax API error:', baselineData.error);
+                    } else if (typeof dayStartValue === 'number') {
+                        results.xanaxDayStart = dayStartValue;
+                        console.log('✅ Background: UTC day-start Xanax count retrieved');
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Background: UTC day-start Xanax fetch failed (non-fatal):', error);
+            }
+        }
+
+        // cityitemsbought is the cumulative NPC city-shop purchase count.
+        // API v2 supports a historical personalstats snapshot at the UTC day
+        // boundary, so purchases made before Sidekick opens are still counted.
+        if (selections.includes('cityItemsBoughtDayStart')) {
+            console.log('🛒 Background: Fetching UTC day-start city item count...');
+            try {
+                const todayUtcStart = new Date();
+                todayUtcStart.setUTCHours(0, 0, 0, 0);
+                const beforeTodayUtc = Math.floor(todayUtcStart.getTime() / 1000) - 1;
+                const baselineResponse = await fetch(
+                    `https://api.torn.com/v2/user/personalstats?stat=cityitemsbought&timestamp=${beforeTodayUtc}&key=${apiKey}`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'User-Agent': 'Sidekick Chrome Extension Background'
+                        }
+                    }
+                );
+
+                if (!baselineResponse.ok) {
+                    console.warn('⚠️ Background: UTC day-start city item fetch failed:', baselineResponse.status);
+                } else {
+                    const baselineData = await baselineResponse.json();
+                    const dayStartValue = extractPersonalStatValue(baselineData, 'cityitemsbought');
+
+                    if (baselineData.error) {
+                        console.warn('⚠️ Background: UTC day-start city item API error:', baselineData.error);
+                    } else if (typeof dayStartValue === 'number') {
+                        results.cityItemsBoughtDayStart = dayStartValue;
+                        console.log('✅ Background: UTC day-start city item count retrieved');
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Background: UTC day-start city item fetch failed (non-fatal):', error);
             }
         }
 
@@ -688,6 +808,8 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
             !endpoint.startsWith('company/') &&
             !(selections?.includes('personalstats') || selections?.includes('bars') ||
                 selections?.includes('cooldowns') || selections?.includes('refills') ||
+                selections?.includes('xanaxDayStart') ||
+                selections?.includes('cityItemsBoughtDayStart') ||
                 selections?.includes('items') || selections?.includes('profile') ||
                 selections?.includes('money') || selections?.includes('logs'));
 
