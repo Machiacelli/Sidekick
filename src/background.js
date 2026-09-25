@@ -155,7 +155,36 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Handle messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    const safeRequest = request?.apiKey ? { ...request, apiKey: '[redacted]' } : request;
+    // Redact secrets before logging. Key properties we forward to third
+    // parties (the user's Torn API key, embedded in request bodies, and the
+    // FactionOps session JWT, sent via Authorization headers) must never land
+    // in the console.
+    const safeRequest = (() => {
+        let r;
+        try {
+            r = { ...request };
+            if (r.apiKey) r.apiKey = '[redacted]';
+            if (r.body) {
+                let parsed;
+                try { parsed = JSON.parse(r.body); } catch (_) { parsed = null; }
+                if (parsed && typeof parsed === 'object') {
+                    if (parsed.apiKey) parsed.apiKey = '[redacted]';
+                    if (parsed.token) parsed.token = '[redacted]';
+                    r.body = JSON.stringify(parsed);
+                } else {
+                    r.body = '[redacted]';
+                }
+            }
+            if (r.headers) {
+                const h = { ...r.headers };
+                if (h.Authorization) h.Authorization = '[redacted]';
+                r.headers = h;
+            }
+        } catch (_) {
+            r = { action: request?.action ?? 'unknown' };
+        }
+        return r;
+    })();
     console.log('📨 Background received message:', safeRequest);
 
     switch (request.action) {
@@ -239,7 +268,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
                     const response = await fetch(request.url, fetchOptions);
                     const responseText = await response.text();
-                    if (!response.ok) throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+                    if (!response.ok) {
+                        // Attach status + raw body so API-style callers can surface
+                        // server error messages (e.g. FactionOps 409/426 bodies).
+                        // Additive fields — existing callers only read success/error/data.
+                        const err = new Error(`Request failed: ${response.status} ${response.statusText}`);
+                        err.status = response.status;
+                        err.responseBody = responseText;
+                        throw err;
+                    }
 
                     if (request.responseType === 'text') {
                         sendResponse({
@@ -260,10 +297,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         });
                     }
                 } catch (error) {
-                    sendResponse({
+                    const errorResponse = {
                         success: false,
-                        error: error.name === 'AbortError' ? 'Request timed out' : error.message
-                    });
+                        error: error.name === 'AbortError' ? 'Request timed out' : error.message,
+                        // Status + body of failed requests — the FactionOps
+                        // target caller reads these to surface server reasons
+                        // (409 conflict, 426 version gate) and to re-auth +
+                        // replay on 401. Additive: existing callers only read
+                        // success/error/data and ignore them.
+                        status: error.status,
+                        responseBody: typeof error.responseBody === 'string'
+                            ? error.responseBody.slice(0, 500)
+                            : undefined
+                    };
+                    sendResponse(errorResponse);
                 } finally {
                     clearTimeout(timeoutId);
                 }

@@ -318,6 +318,15 @@
                 console.warn('⚠️ Extended Chain View module not available');
             }
 
+            // Initialize Travel Blocker Module
+            console.log("🚧 Sidekick: Initializing Travel Blocker...");
+            if (window.SidekickModules.TravelBlocker?.init) {
+                await window.SidekickModules.TravelBlocker.init();
+                console.log("✅ Sidekick: Travel Blocker initialized");
+            } else {
+                console.warn("⚠️ Travel Blocker module not available");
+            }
+
             // Initialize Timer Module
             console.log("⏰ Sidekick: Initializing Timer...");
             if (window.SidekickModules.Timer?.init) {

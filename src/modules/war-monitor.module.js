@@ -379,9 +379,11 @@ const WarMonitorModule = {
             elem.setAttribute(attr, val);
         }
 
-        if (dirtySort) {
-            this.sortMembers();
-        }
+        // Always attempt the sort — React rebuilds/reorders this list under us,
+        // and that changes nothing we track, so waiting for `dirtySort` left
+        // the list in Torn's order until the next status refresh. sortMembers
+        // is idempotent and skips the DOM write when order is already right.
+        this.sortMembers();
 
         // Cleanup disconnected elements
         for (const [id, ref] of this.memberLis) {
@@ -498,26 +500,74 @@ const WarMonitorModule = {
     sortMembers() {
         const uls = document.querySelectorAll('ul.members-list');
         uls.forEach(ul => {
-            const lis = Array.from(ul.childNodes).sort((a, b) => {
-                const sortA = parseInt(a.getAttribute('data-sortA') || 0);
-                const sortB = parseInt(b.getAttribute('data-sortA') || 0);
-                if (sortA !== sortB) return sortA - sortB;
+            try {
+                const slots = Array.from(ul.childNodes);
+                // Only member rows participate in the sort. The old code sorted
+                // `childNodes` blindly: text/comment nodes (React inserts
+                // <!-- --> markers) crashed the comparator mid-sort, leaving the
+                // list half-reordered — the "scrambled" war list.
+                const isMember = (n) => n.nodeType === 1 && n.tagName === 'LI' &&
+                    (n.classList.contains('enemy') || n.classList.contains('your'));
 
-                const locA = a.getAttribute('data-location') || '';
-                const locB = b.getAttribute('data-location') || '';
-                if (locA && locB && locA !== locB) return locA.localeCompare(locB);
+                const members = slots.filter(isMember);
+                if (members.length === 0) return;
 
-                const sort = a.getAttribute('data-sortA');
-                if (sort === '0' || sort === '1') {
-                    return parseInt(b.getAttribute('data-since')) - parseInt(a.getAttribute('data-since'));
-                } else {
-                    return parseInt(a.getAttribute('data-until')) - parseInt(b.getAttribute('data-until'));
-                }
-            });
+                // Attribute reads must be NaN-safe (NaN comparisons give
+                // unstable order) and rows without a sort level must sit at
+                // the BOTTOM — the old `|| 0` default put unprocessed/React-
+                // recreated rows ABOVE the Okay block, which is what
+                // scrambled the list every time React rebuilt it.
+                const UNKNOWN = 99;
+                const level = (li) => {
+                    const v = parseInt(li.getAttribute('data-sortA'));
+                    return Number.isFinite(v) ? v : UNKNOWN;
+                };
+                const attrInt = (li, name, fallback) => {
+                    const v = parseInt(li.getAttribute(name));
+                    return Number.isFinite(v) ? v : fallback;
+                };
 
-            const frag = document.createDocumentFragment();
-            lis.forEach(li => frag.appendChild(li));
-            ul.appendChild(frag);
+                const sorted = members.slice().sort((a, b) => {
+                    const la = level(a);
+                    const lb = level(b);
+                    if (la !== lb) return la - lb; // Okay(1) first, Hospital(2) next, travelers below
+
+                    const locA = a.getAttribute('data-location') || '';
+                    const locB = b.getAttribute('data-location') || '';
+                    if (locA && locB && locA !== locB) return locA.localeCompare(locB);
+
+                    // Same level: Okay rows by most recent status change
+                    // (newest on top); everything else by soonest `until` —
+                    // i.e. the hospital timer, soonest out first.
+                    return la === 1
+                        ? attrInt(b, 'data-since', 0) - attrInt(a, 'data-since', 0)
+                        : attrInt(a, 'data-until', UNKNOWN) - attrInt(b, 'data-until', UNKNOWN);
+                });
+
+                // Slot-preserving rewrite: sorted members fill the slots
+                // members already occupy; text nodes and structural rows
+                // (li.clear / li.title headers) keep their positions. Skips
+                // the DOM write when nothing changed, so a React re-render
+                // no longer causes pointless churn.
+                let i = 0;
+                let changed = false;
+                const rebuilt = slots.map((slot) => {
+                    if (isMember(slot)) {
+                        if (sorted[i] !== slot) changed = true;
+                        return sorted[i++];
+                    }
+                    return slot;
+                });
+                if (!changed) return;
+
+                const frag = document.createDocumentFragment();
+                rebuilt.forEach(n => frag.appendChild(n));
+                ul.replaceChildren(frag);
+            } catch (err) {
+                // A page-structure change must not take down the rest of the
+                // watch frame (location aggregation, cleanup) with it.
+                console.warn('[WarMonitor] sortMembers failed:', err);
+            }
         });
     },
 

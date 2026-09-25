@@ -417,7 +417,7 @@
           <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
             <div class="sk-row-info">
               <div class="sk-row-title">Travel Blocker</div>
-              <div class="sk-row-desc">Modular travel blocker for OC timing, bazaars, and drug cooldowns</div>
+              <div class="sk-row-desc">Blocks travel that conflicts with an OC window or drug cooldown. Paused automatically during an active war.</div>
               <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-travelblocker" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
             </div>
             <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-travel-blocker" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
@@ -429,6 +429,10 @@
                 <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;"><div class="sk-row-info"><div class="sk-row-title" style="font-size:11px;">OC Timing</div></div><label class="sk-tog"><input type="checkbox" id="skp-travelblocker-oc-watcher" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
                 <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;"><div class="sk-row-info"><div class="sk-row-title" style="font-size:11px;">Drug Cooldown</div></div><label class="sk-tog"><input type="checkbox" id="skp-travelblocker-drug-cooldown" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
                 <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;"><div class="sk-row-info"><div class="sk-row-title" style="font-size:11px;">War Watch</div></div><label class="sk-tog"><input type="checkbox" id="skp-travelblocker-war-watch" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+            </div>
+            <div class="sk-row" style="padding:4px;border:1px solid rgba(255,255,255,0.05);border-radius:4px;align-items:center;gap:8px;">
+              <div class="sk-row-info" style="flex:1;"><div class="sk-row-title" style="font-size:11px;">OC window buffer</div><div class="sk-row-desc" style="font-size:10px;">Extra minutes added to the round trip when checking OC timing</div></div>
+              <input type="number" class="sk-input" id="skp-travelblocker-oc-window" min="1" max="120" value="5" style="width:60px;">
             </div>
           </div>
 
@@ -862,7 +866,7 @@
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Extended Chain View</div><div class="sk-row-desc">Show more than 10 chain attacks on faction page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-chain-view" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Termed War Mode</div><div class="sk-row-desc">Removes Mug and Hospitalize options after an attack</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-termed-war"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">War Monitor</div><div class="sk-row-desc">Show travel status and hospital time and sort by hospital time on war page</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-monitor"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">War Target Caller</div><div class="sk-row-desc">Tag claimed players and add claim buttons</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-target-caller"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">FactionOps Target Caller</div><div class="sk-row-desc">Call targets and share claims live with FactionOps users in your faction</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-war-target-caller"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-war-chain">
           <div class="sk-sh">Chain Timer</div>
@@ -2046,8 +2050,7 @@
                 ['#skp-tog-travel-blocker', 'sidekick_travel_blocker', null, true],
                 ['#skp-travelblocker-oc-watcher', 'sidekick_travel_blocker', 'oc_watcher', true],
                 ['#skp-travelblocker-drug-cooldown', 'sidekick_travel_blocker', 'drug_cooldown', true],
-                ['#skp-travelblocker-war-watch', 'sidekick_travel_blocker', 'war_watch', true],
-                ['#skp-tog-racing-alert', 'sidekick_racing_alert', null, false],
+                ['#skp-travelblocker-war-watch', 'sidekick_travel_blocker', 'war_watch', true],                ['#skp-tog-racing-alert', 'sidekick_racing_alert', null, false],
                 ['#skp-tog-rehab-warning', 'sidekick_rehab_warning', null, false],
                 ['#skp-tog-blood-bag', 'sidekick_settings', 'blood-bag-reminder', false],
                 // Crimes
@@ -2343,6 +2346,30 @@
                     if (bbNewTab && bbSet.openInNewTab !== undefined) bbNewTab.checked = bbSet.openInNewTab;
                 }
             })();
+
+            // === Travel Blocker: special fields ===
+            const tbOcWindow = overlay.querySelector('#skp-travelblocker-oc-window');
+            if (tbOcWindow) {
+                (async () => {
+                    const d = await (CS() ? CS().get('sidekick_travel_blocker') : null) || {};
+                    if (d.ocWindowMin !== undefined) tbOcWindow.value = d.ocWindowMin;
+                })();
+                tbOcWindow.addEventListener('change', async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_travel_blocker') || {};
+                    let v = parseInt(tbOcWindow.value, 10);
+                    if (!Number.isFinite(v) || v < 1) v = 1;
+                    if (v > 120) v = 120;
+                    d.ocWindowMin = v;
+                    tbOcWindow.value = v;
+                    await CS().set('sidekick_travel_blocker', d);
+                    // Live re-evaluate: rules read the new buffer immediately.
+                    if (window.SidekickModules?.TravelBlocker?.isEnabled) {
+                        window.SidekickModules.TravelBlocker.settings.ocWindowMin = v;
+                        window.SidekickModules.TravelBlocker.scheduleEnforce?.();
+                    }
+                });
+            }
 
             // === Rehab Warning: special fields ===
             const rwEduThreshold = overlay.querySelector('#skp-rehab-edu-threshold');

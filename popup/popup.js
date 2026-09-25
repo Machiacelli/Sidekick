@@ -81,7 +81,7 @@
         { id: 'war-monitor', name: 'War Monitor', category: 'War', storageKey: 'sidekick_war_monitor', defaultEnabled: false },
         { id: 'extended-chain-view', name: 'Extended Chain View', category: 'War', storageKey: 'sidekick_extended_chain_view', defaultEnabled: false },
         { id: 'termed-war-mode', name: 'Termed War Mode', category: 'War', storageKey: 'sidekick_settings', subKey: 'termed-war-mode', defaultEnabled: false },
-        { id: 'war-target-caller', name: 'War Target Caller', category: 'War', storageKey: 'sidekick_war_target_caller', defaultEnabled: false },
+        { id: 'war-target-caller', name: 'FactionOps Target Caller', category: 'War', storageKey: 'sidekick_war_target_caller', defaultEnabled: false },
 
         { id: 'mission-tracker', name: 'Mission Tracker', category: 'Missions', storageKey: 'sidekick_settings', subKey: 'mission-tracker', defaultEnabled: false },
         { id: 'book-notifier', name: 'Book Notifier', category: 'Missions', storageKey: 'sidekick_settings', subKey: 'book-notifier', defaultEnabled: false },
