@@ -37,6 +37,7 @@
         displayFlashIntervalId: null,
         floatingPosition: { top: '10px', left: 'auto', right: '10px' },
         floatingDisplay: null,
+        floatingResizeObserver: null,
         monitorInterval: null,
         alertThresholdSeconds: 240, // 4 minutes
         hasAlerted: false,
@@ -234,13 +235,18 @@
                 cursor: move;
                 user-select: none;
                 resize: both;
-                overflow: auto;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: calc(3px * var(--sk-ct-scale, 1));
             `;
 
             this.floatingDisplay.innerHTML = `
-                <div style="font-weight: bold; margin-bottom: 4px; color: #FFC107;">⏱️ Chain Timer</div>
-                <div id="chain-time-display" style="font-size: 16px; color: #4CAF50;">--:--:--</div>
-                <div id="chain-status" style="font-size: 12px; color: #aaa; margin-top: 4px;">Monitoring...</div>
+                <div style="font-weight: bold; white-space: nowrap; color: #FFC107; font-size: calc(13px * var(--sk-ct-scale, 1));">⏱️ Chain Timer</div>
+                <div id="chain-time-display" style="font-size: calc(16px * var(--sk-ct-scale, 1)); color: #4CAF50; white-space: nowrap;">--:--:--</div>
+                <div id="chain-status" style="font-size: calc(12px * var(--sk-ct-scale, 1)); color: #aaa; white-space: nowrap;">Monitoring...</div>
             `;
 
             // Add hover effects
@@ -300,10 +306,39 @@
             });
 
             document.body.appendChild(this.floatingDisplay);
+
+            // ── Content scaling ─────────────────────────────────────────
+            // Native `resize: both` only changes the box dimensions; the
+            // inner text keeps its pixel font sizes and would stay the same
+            // size. Capture this box's natural size as a baseline and drive
+            // a --sk-ct-scale CSS variable (used by the children's calc()
+            // font sizes) whenever the user drags the resize handle.
+            const baseSize = {
+                w: this.floatingDisplay.offsetWidth || 1,
+                h: this.floatingDisplay.offsetHeight || 1
+            };
+
+            if (this.floatingResizeObserver) {
+                this.floatingResizeObserver.disconnect();
+            }
+            this.floatingResizeObserver = new ResizeObserver(() => {
+                if (!this.floatingDisplay) return;
+                const rw = this.floatingDisplay.offsetWidth / baseSize.w;
+                const rh = this.floatingDisplay.offsetHeight / baseSize.h;
+                // Geometric mean: resizing along either axis scales the
+                // text smoothly; clamp so it never gets absurd.
+                const scale = Math.min(3, Math.max(0.5, Math.sqrt(rw * rh)));
+                this.floatingDisplay.style.setProperty('--sk-ct-scale', scale.toFixed(3));
+            });
+            this.floatingResizeObserver.observe(this.floatingDisplay);
         },
 
         // Remove floating display
         removeFloatingDisplay() {
+            if (this.floatingResizeObserver) {
+                this.floatingResizeObserver.disconnect();
+                this.floatingResizeObserver = null;
+            }
             if (this.floatingDisplay) {
                 this.floatingDisplay.remove();
                 this.floatingDisplay = null;

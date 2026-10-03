@@ -176,6 +176,7 @@
                 title: title,
                 content: '',
                 color: '#4CAF50', // Default color
+                pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null, // page this notepad belongs to
                 x: 10 + (this.notepads.length * 20), // Offset new notepads
                 y: 10 + (this.notepads.length * 20),
                 width: Math.min(320, contentWidth - 40), // Wider default for wider sidebar
@@ -205,6 +206,16 @@
         },
 
         // Delete a notepad
+        // Delete all notepads that belong to a given page (called when the page is deleted)
+        purgePage(pageId) {
+            if (pageId == null) return;
+            const doomed = this.notepads.filter(np => np.pageId != null && String(np.pageId) === String(pageId));
+            if (doomed.length === 0) return;
+            this.notepads = this.notepads.filter(np => !(np.pageId != null && String(np.pageId) === String(pageId)));
+            this.saveNotepads();
+            console.log(`📝 Purged ${doomed.length} notepad(s) from deleted page`);
+        },
+
         deleteNotepad(id) {
             const notepad = this.notepads.find(n => n.id === id);
             if (notepad && confirm(`Delete notepad "${notepad.title}"?`)) {
@@ -256,12 +267,18 @@
         // Refresh display - render all notepads in sidebar
         refreshDisplay() {
             console.log('📝 Refreshing notepad display...');
+            const allPages = [];
+            (window.SidekickModules?.UI?.pages || []).forEach(pg => allPages.push(pg.contentEl));
+            if (allPages.length === 0) allPages.push(document.getElementById('sidekick-content'));
+
+            // Clear existing notepads on every page, but keep other content
+            allPages.forEach(area => {
+                if (!area) return;
+                area.querySelectorAll('.movable-notepad').forEach(np => np.remove());
+            });
+
             const contentArea = document.getElementById('sidekick-content');
             if (!contentArea) return;
-
-            // Clear existing notepads but keep other content
-            const existingNotepads = contentArea.querySelectorAll('.movable-notepad');
-            existingNotepads.forEach(np => np.remove());
 
             // Show placeholder if no notepads
             if (this.notepads.length === 0) {
@@ -289,7 +306,8 @@
 
         // Render a notepad as a pinnable window in the sidebar
         renderNotepad(notepad) {
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this notepad belongs to (falls back to active page for legacy data)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(notepad.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) return;
 
             // Remove placeholder if it exists

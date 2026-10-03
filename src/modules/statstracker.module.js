@@ -70,6 +70,9 @@
                     this.windowState = windowState;
                     this.isEnabled = windowState.isEnabled || false;
                     this.displayPeriod = windowState.displayPeriod || 'day';
+                } else {
+                    // First-ever open: remember which page the user created it on
+                    this.windowState.pageId = window.SidekickModules?.UI?.getActivePageId?.() ?? null;
                 }
             } catch (error) {
                 console.error("❌ Failed to load Stats Tracker settings:", error);
@@ -81,6 +84,8 @@
             try {
                 const settings = {
                     ...this.windowState,
+                    // Keep the owning page sticky: once set, the window re-opens there
+                    pageId: this.windowState.pageId ?? window.SidekickModules?.UI?.getActivePageId?.() ?? null,
                     isEnabled: this.isEnabled,
                     displayPeriod: this.displayPeriod
                 };
@@ -272,11 +277,15 @@
                 this.removeWindow();
             }
 
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this window belongs to (falls back to active page for legacy state)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(this.windowState.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) {
                 console.error("📊 Content area not found");
                 return;
             }
+            // Remember the page the window was opened on
+            this.windowState.pageId = window.SidekickModules?.UI?.getActivePageId?.() ?? this.windowState.pageId ?? null;
+            this.saveSettings();
 
             this.window = document.createElement('div');
             this.window.className = 'sidekick-stats-tracker-window';
@@ -598,6 +607,17 @@
                     Last updated: ${new Date(this.lastUpdated).toLocaleTimeString()}
                 </div>
             `;
+        },
+
+        // Remove window (and disable) if it belongs to a deleted page
+        async purgePage(pageId) {
+            if (pageId == null) return;
+            if (this.windowState.pageId != null && String(this.windowState.pageId) === String(pageId)) {
+                this.disable();
+                this.windowState.pageId = null; // so next open re-stamps current active page
+                await this.saveSettings();
+                console.log("📊 Stats Tracker purged (its page was deleted)");
+            }
         },
 
         // Remove window

@@ -103,10 +103,27 @@ const NotificationCenter = {
     }
 };
 
+// Export onto window so isolated-world modules (which gate on
+// `if (window.NotificationCenter)`) can reach the API. Previously this was a
+// bare top-level const, so those call sites silently never fired.
+window.NotificationCenter = NotificationCenter;
+
 // MANIFEST V3 FIX: Bridge between page context and content script
-// Listen for custom events from page-context modules
+// Listen for custom events from page-context modules.
+// MAIN-world dispatchers must send a STRINGIFIED detail (Chrome strips
+// non-serialized detail when CustomEvents cross worlds) — see
+// notification-bridge-page.js. Tolerate object details from same-world
+// dispatchers for backwards compatibility.
 window.addEventListener('sidekick:emitNotification', async (event) => {
-    const notification = event.detail;
+    let notification = event.detail;
+    if (typeof notification === 'string') {
+        try {
+            notification = JSON.parse(notification);
+        } catch (e) {
+            console.error('📬 Bridge: failed to parse stringified notification detail:', e);
+            return;
+        }
+    }
     console.log('📬 Bridge received notification request:', notification);
 
     // Emit using the real NotificationCenter (which has chrome.storage access)

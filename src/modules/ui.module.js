@@ -304,8 +304,16 @@
             // Append to body
             document.body.appendChild(this.sidebar);
 
-            // Render tabs
-            this.activePageIndex = Math.min(this.savedState?.activePage || 0, this.pages.length - 1);
+            // Render tabs — resolve the active page by its stable id when available
+            // (a positional index breaks when pages are deleted or reordered)
+            let startIdx = 0;
+            if (this.savedState?.activePageId != null) {
+                const i = this.pages.findIndex(pg => String(pg.id) === String(this.savedState.activePageId));
+                if (i >= 0) startIdx = i;
+            } else if (typeof this.savedState?.activePage === 'number') {
+                startIdx = Math.min(this.savedState.activePage, this.pages.length - 1);
+            }
+            this.activePageIndex = startIdx;
             this.renderPageTabs();
             this.switchPage(this.activePageIndex, true);
 
@@ -498,6 +506,23 @@
             return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         },
 
+        // ── Page-association helpers (used by window modules to keep items on their page) ──
+
+        // Stable id of the currently active page (or null before sidebar exists)
+        getActivePageId() {
+            return this.pages[this.activePageIndex]?.id ?? null;
+        },
+
+        // Content element for a given page id. Falls back to the active page's
+        // element for legacy items that were saved before page association existed.
+        getPageContentEl(pageId) {
+            if (pageId != null) {
+                const pg = this.pages.find(p => String(p.id) === String(pageId));
+                if (pg) return pg.contentEl;
+            }
+            return document.getElementById('sidekick-content');
+        },
+
         // Switch to a page by index
         switchPage(idx, silent = false) {
             this.pages.forEach((pg, i) => {
@@ -539,6 +564,10 @@
             if (!pg) return;
             if (!confirm(`Delete "${pg.name}" and all its modules?`)) return;
 
+            // Delete ALL stored items that belong to this page (windows, timers,
+            // lists, notepads) so they don't resurrect on the wrong page after refresh
+            this.purgePageItems(pg.id);
+
             // Remove all child module windows in this page
             while (pg.contentEl.firstChild) pg.contentEl.removeChild(pg.contentEl.firstChild);
             pg.contentEl.remove();
@@ -548,6 +577,26 @@
             this.switchPage(newActive, true);
             this.renderPageTabs();
             this.saveSidebarState();
+        },
+
+        // Delete every stored item belonging to a page (cascade on page delete).
+        // Each module exposes an optional purgePage(pageId); items without a pageId
+        // (pre-fix legacy data) are never touched.
+        purgePageItems(pageId) {
+            if (pageId == null) return;
+            const mods = window.SidekickModules || {};
+            // Multi-item modules (arrays of windows)
+            try { mods.Timer?.purgePage?.(pageId); } catch (e) { console.warn('Timer purge failed:', e); }
+            try { mods.LinkGroup?.purgePage?.(pageId); } catch (e) { console.warn('LinkGroup purge failed:', e); }
+            try { mods.AttackList?.purgePage?.(pageId); } catch (e) { console.warn('AttackList purge failed:', e); }
+            try { mods.TodoList?.purgePage?.(pageId); } catch (e) { console.warn('TodoList purge failed:', e); }
+            try { mods.Notepad?.purgePage?.(pageId); } catch (e) { console.warn('Notepad purge failed:', e); }
+            // Singleton-window modules
+            try { mods.StatsTracker?.purgePage?.(pageId); } catch (e) { console.warn('StatsTracker purge failed:', e); }
+            try { mods.StockAdvisor?.purgePage?.(pageId); } catch (e) { console.warn('StockAdvisor purge failed:', e); }
+            try { mods.Debt?.purgePage?.(pageId); } catch (e) { console.warn('Debt purge failed:', e); }
+            try { mods.TravelStocks?.purgePage?.(pageId); } catch (e) { console.warn('TravelStocks purge failed:', e); }
+            try { mods.AuctionTracker?.purgePage?.(pageId); } catch (e) { console.warn('AuctionTracker purge failed:', e); }
         },
 
         // ── Resize handle ─────────────────────────────────────────────────
@@ -1321,6 +1370,7 @@
                         visible: this.sidebarVisible,
                         width: this.sidebarWidth,
                         activePage: this.activePageIndex,
+                        activePageId: this.getActivePageId(), // stable id — survives page deletion/reorder
                         pages: this.pages.map(pg => ({ id: pg.id, name: pg.name }))
                     };
                     await window.SidekickModules.Core.ChromeStorage.set('sidekick_sidebar_state', state);

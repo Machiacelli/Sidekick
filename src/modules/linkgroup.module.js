@@ -152,6 +152,7 @@
                 name: name,
                 links: [],
                 color: '#607D8B',
+                pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null, // page this group belongs to
                 x: x,
                 y: y,
                 width: linkGroupWidth,
@@ -171,7 +172,9 @@
 
         // Render a link group window
         renderLinkGroup(linkGroup) {
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this group belongs to (falls back to active page
+            // for legacy groups saved before page association existed)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(linkGroup.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) return;
 
             // Remove existing element if it exists
@@ -539,6 +542,16 @@
             linkGroup.modified = new Date().toISOString();
             this.saveLinkGroups();
             this.renderLinkGroup(linkGroup);
+        },
+
+        // Delete all link groups that belong to a given page (called when the page is deleted)
+        purgePage(pageId) {
+            if (pageId == null) return;
+            const doomed = this.linkGroups.filter(lg => lg.pageId != null && String(lg.pageId) === String(pageId));
+            if (doomed.length === 0) return;
+            this.linkGroups = this.linkGroups.filter(lg => !(lg.pageId != null && String(lg.pageId) === String(pageId)));
+            this.saveLinkGroups();
+            console.log(`🔗 Purged ${doomed.length} link group(s) from deleted page`);
         },
 
         // Delete entire link group

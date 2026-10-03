@@ -32,6 +32,41 @@ const CrimeNotifierModule = {
         'big_als': "Big Al's Gun Shop"
     },
 
+    // Normalize a security label (from the settings panel's data-type
+    // attributes OR the Torn API's title strings) into a canonical type.
+    // "One camera"/"cameras" -> "cameras", "Checkpoint"/"checkpoint" ->
+    // "checkpoint", "One guard"/"guards" -> "guard", etc.
+    _normalizeSecurityType(value) {
+        const t = String(value).toLowerCase().trim();
+        if (t.includes('camera')) return 'cameras';
+        if (t.includes('checkpoint')) return 'checkpoint';
+        if (t.includes('guard')) return 'guard';
+        return t;
+    },
+
+    // Check whether a countermeasure (shopKey + API title) is selected.
+    // Tolerates BOTH storage formats:
+    //   - settings panel format: "<shopKey>_<data-type>" (e.g. "big_als_guards")
+    //   - API-title format:      "<shopKey>_<title>"     (e.g. "big_als_Two guards")
+    // (Historically these never matched, which silently disabled ALL alerts.)
+    _isSecuritySelected(shopKey, title) {
+        if (this.selectedShopSecurity.length === 0) return true; // empty = all
+        const normTitle = this._normalizeSecurityType(title);
+        const normShop = shopKey.toLowerCase();
+        for (const combo of this.selectedShopSecurity) {
+            const normCombo = String(combo).toLowerCase();
+            for (const key of Object.keys(this.SHOPS)) {
+                const prefix = key.toLowerCase() + '_';
+                if (normCombo.startsWith(prefix) && key.toLowerCase() === normShop) {
+                    if (this._normalizeSecurityType(normCombo.slice(prefix.length)) === normTitle) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    },
+
     // Initialize module
     async init() {
         console.log('🚨 Crime Notifier initializing...');
@@ -78,10 +113,15 @@ const CrimeNotifierModule = {
                     selectedSearchLocations: this.selectedSearchLocations.length
                 });
 
-                // Restart polling if settings changed while enabled
-                if (this.isEnabled && this.pollTimer) {
-                    this.disable();
-                    this.enable();
+                // Restart/cancel polling to match current settings.
+                // NOTE: previous code called this.disable() + this.enable()
+                // here, which PERSISTED isEnabled=false to storage and
+                // re-triggered this listener via storage.onChanged.
+                if (this.isEnabled) {
+                    if (this.pollTimer) this.stopPolling();
+                    if (!this.pollTimer) this.startPolling();
+                } else if (this.pollTimer) {
+                    this.stopPolling();
                 }
             }
         } catch (error) {
@@ -150,6 +190,13 @@ const CrimeNotifierModule = {
 
     // Start polling API
     async startPolling() {
+        // Guard against double-starting (init + toggle + settings changes
+        // can all race into this) — never leak a duplicate interval.
+        if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+            this.pollTimer = null;
+        }
+
         // Load previous state
         await this.loadPreviousState();
 
@@ -254,13 +301,13 @@ const CrimeNotifierModule = {
                 const shopName = this.SHOPS[shopKey];
                 const previousShop = this.previousShopsData[shopKey] || [];
 
-                // Find which countermeasures are selected for THIS shop
+                // Find which countermeasures are selected for THIS shop.
+                // Uses the tolerant matcher so both legacy data-type keys
+                // and API-title keys are recognized.
                 const selectedForThisShop = [];
                 for (let i = 0; i < shopData.length; i++) {
                     const currentSecurity = shopData[i];
-                    const comboKey = `${shopKey}_${currentSecurity.title}`;
-
-                    if (this.selectedShopSecurity.length === 0 || this.selectedShopSecurity.includes(comboKey)) {
+                    if (this._isSecuritySelected(shopKey, currentSecurity.title)) {
                         selectedForThisShop.push(i);
                     }
                 }

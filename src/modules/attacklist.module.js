@@ -108,6 +108,7 @@
                 id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 name: 'New Attack List',
                 targets: [],
+                pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null, // page this list belongs to
                 x: x,
                 y: y,
                 width: attackListWidth,
@@ -128,7 +129,8 @@
 
         // Render an attack list window
         renderAttackList(attackList) {
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this list belongs to (falls back to active page for legacy data)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(attackList.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) return;
 
             // Remove existing element if it exists
@@ -637,6 +639,16 @@
         },
 
         // Delete entire attack list
+        // Delete all attack lists that belong to a given page (called when the page is deleted)
+        purgePage(pageId) {
+            if (pageId == null) return;
+            const doomed = this.attackLists.filter(al => al.pageId != null && String(al.pageId) === String(pageId));
+            if (doomed.length === 0) return;
+            this.attackLists = this.attackLists.filter(al => !(al.pageId != null && String(al.pageId) === String(pageId)));
+            this.saveAttackLists();
+            console.log(`⚔️ Purged ${doomed.length} attack list(s) from deleted page`);
+        },
+
         deleteAttackList(id) {
             const element = document.getElementById(`sidekick-attacklist-${id}`);
             if (element) {

@@ -97,6 +97,15 @@
                 console.warn("⚠️ Event Ticker module not available");
             }
 
+            // Initialize Event Notifier Module (acknowledge-required event alerts)
+            console.log("🔔 Sidekick: Initializing Event Notifier...");
+            if (window.SidekickModules.EventNotifier?.init) {
+                await window.SidekickModules.EventNotifier.init();
+                console.log("✅ Sidekick: Event Notifier initialized");
+            } else {
+                console.warn("⚠️ Event Notifier module not available");
+            }
+
             // Initialize Link Group Module
             console.log("🔗 Sidekick: Initializing Link Group...");
             if (window.SidekickModules.LinkGroup?.init) {

@@ -53,6 +53,8 @@
     }
 
     // ── Module ────────────────────────────────────────────────────────────────
+    const STORAGE_KEY = 'sidekick_flighttracker';
+
     const FlightTrackerModule = {
         isInitialized: false,
 
@@ -66,6 +68,7 @@
             try {
                 await this._waitForCore();
                 this._setupPageObserver();
+                await this._restorePersisted();
                 this.isInitialized = true;
                 console.log('✅ Flight Tracker ready');
             } catch (e) {
@@ -79,6 +82,91 @@
                 const check = () => window.SidekickModules?.Core ? resolve() : setTimeout(check, 100);
                 check();
             });
+        },
+
+        // ── Persistence ─────────────────────────────────────────────────────────
+        // Survives refreshes + SPA navigation; deleted explicitly on Stop.
+        async _persist(playerId) {
+            const state = this.tracking.get(playerId);
+            if (!state) return;
+            try {
+                const raw = (await window.SidekickModules.Core.ChromeStorage.get(STORAGE_KEY)) || {};
+                const all = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (!all || typeof all !== 'object') return;
+                all[playerId] = {
+                    playerId,
+                    name: state.name,
+                    status: state.status,
+                    country: state.country,
+                    planeType: state.planeType,
+                    landingTime: state.landingTime,
+                    windowHidden: !!(state.windowEl && state.windowEl.style.display === 'none'),
+                };
+                await window.SidekickModules.Core.ChromeStorage.set(STORAGE_KEY, all);
+            } catch (e) {
+                console.warn('✈️ [FlightTracker] persist failed:', e);
+            }
+        },
+
+        async _removePersisted(playerId) {
+            try {
+                const raw = (await window.SidekickModules.Core.ChromeStorage.get(STORAGE_KEY)) || {};
+                const all = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (!all || typeof all !== 'object') return;
+                delete all[playerId];
+                await window.SidekickModules.Core.ChromeStorage.set(STORAGE_KEY, all);
+            } catch (e) {
+                console.warn('✈️ [FlightTracker] remove failed:', e);
+            }
+        },
+
+        // Restore tracked players on ANY Torn page (window + countdown, no DOM observer)
+        async _restorePersisted() {
+            let all;
+            try {
+                const raw = await window.SidekickModules.Core.ChromeStorage.get(STORAGE_KEY);
+                if (!raw) return;
+                all = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('✈️ [FlightTracker] restore parse failed:', e);
+                return;
+            }
+            if (!all || typeof all !== 'object') return;
+
+            for (const [playerId, saved] of Object.entries(all)) {
+                if (!saved || this.tracking.has(playerId)) continue;
+                const state = {
+                    name: saved.name || 'Unknown',
+                    status: saved.status || 'unknown',
+                    country: saved.country || null,
+                    planeType: saved.planeType || null,
+                    landingTime: saved.landingTime || null,
+                    countdownInterval: null,
+                    observer: null,
+                    windowEl: null,
+                    windowHidden: !!saved.windowHidden,
+                };
+                this.tracking.set(playerId, state);
+
+                // Drive the countdown purely from the absolute landingTime
+                if (state.landingTime && Date.now() < state.landingTime) {
+                    this._resumeCountdown(playerId);
+                }
+
+                this._openWindow(playerId, null);
+                if (state.windowHidden && state.windowEl) {
+                    state.windowEl.style.display = 'none';
+                }
+
+                // If we happen to land directly on this player's profile, attach
+                // the DOM observer so live status reading resumes.
+                const match = location.href.match(/profiles\.php.*XID=(\d+)/);
+                if (match && match[1] === playerId) {
+                    this._attachStatusObserver(playerId);
+                }
+            }
+
+            console.log(`✈️ [FlightTracker] Restored ${this.tracking.size} tracked player(s)`);
         },
 
         // Watch for Torn's SPA navigation (URL changes without full reload)
@@ -100,6 +188,12 @@
                 const playerId = match[1];
                 // Inject button once the link list is ready
                 this._injectButton(playerId);
+                // If this player was restored from persistence, resume live DOM reading
+                const state = this.tracking.get(playerId);
+                if (state && !state.observer) {
+                    this._attachStatusObserver(playerId);
+                    this._readStatus(playerId);
+                }
             }
         },
 
@@ -315,6 +409,8 @@
                     } else {
                         state.windowEl.style.display = 'none';
                     }
+                    state.windowHidden = state.windowEl.style.display === 'none';
+                    this._persist(playerId);
                 } else {
                     this._openWindow(playerId, btn);
                 }
@@ -335,6 +431,7 @@
                 countdownInterval: null,
                 observer: null,
                 windowEl: null,
+                windowHidden: false,
             };
             this.tracking.set(playerId, state);
             this._setButtonState(btn, true);
@@ -343,15 +440,20 @@
             this._readStatus(playerId);
             this._openWindow(playerId, btn);
 
-            // Watch DOM for status changes (Torn updates status text dynamically)
+            // Live status reading — profile page only (it's the status source)
+            this._attachStatusObserver(playerId);
+
+            // Persistence replaces the old beforeunload kill-switch: explicit Stop only.
+        },
+
+        _attachStatusObserver(playerId) {
+            const state = this.tracking.get(playerId);
+            if (!state || state.observer) return;
             const observer = new MutationObserver(this._debounce(() => {
                 this._readStatus(playerId);
             }, 400));
             observer.observe(document.body, { childList: true, subtree: true, characterData: true });
             state.observer = observer;
-
-            // Cleanup if user navigates away
-            window.addEventListener('beforeunload', () => this._stopTracking(playerId), { once: true });
         },
 
         // Read status from DOM — also falls back to 'home' when no travel text found
@@ -371,6 +473,7 @@
                     state.landingTime = null;
                 }
                 this._refreshWindow(playerId);
+                this._persist(playerId);
                 return;
             }
 
@@ -385,6 +488,7 @@
                     state.landingTime = null;
                 }
                 this._refreshWindow(playerId);
+                this._persist(playerId);
                 return;
             }
 
@@ -407,6 +511,7 @@
             }
 
             this._refreshWindow(playerId);
+            this._persist(playerId);
         },
 
         // Scan page DOM for travel status text and plane type
@@ -571,10 +676,21 @@
             state.landingTime = Date.now() + secs * 1000;
             console.log(`✈️ [FlightTracker] Countdown started: ${country} ${planeType} → ${secs}s`);
 
+            this._resumeCountdown(playerId);
+            this._persist(playerId);
+        },
+
+        // Interval driven purely from the absolute landingTime — works on any page
+        _resumeCountdown(playerId) {
+            const state = this.tracking.get(playerId);
+            if (!state || !state.landingTime || state.countdownInterval) return;
+
             state.countdownInterval = setInterval(() => {
                 this._refreshWindow(playerId);
                 if (state.landingTime && Date.now() >= state.landingTime) {
                     this._clearCountdown(state);
+                    // Landed — reflect final state but keep tracking until user stops
+                    this._persist(playerId);
                 }
             }, 1000);
         },
@@ -622,6 +738,8 @@
             win.innerHTML = this._buildWindowHTML(playerId);
             document.body.appendChild(win);
             state.windowEl = win;
+            state.windowHidden = typeof state.windowHidden === 'boolean' ? state.windowHidden : false;
+            if (state.windowHidden) win.style.display = 'none';
 
             // Position helper — clamps to current viewport
             const positionWindow = () => {
@@ -742,6 +860,11 @@
             });
             win.querySelector('.ft-hide-btn')?.addEventListener('click', () => {
                 win.style.display = 'none';
+                const state = this.tracking.get(playerId);
+                if (state) {
+                    state.windowHidden = true;
+                    this._persist(playerId);
+                }
             });
         },
 
@@ -756,6 +879,7 @@
             }
             state.windowEl?.remove();
             this.tracking.delete(playerId);
+            this._removePersisted(playerId);
 
             const btn = document.querySelector('.sidekick-flight-tracker-btn');
             if (btn) this._setButtonState(btn, false);

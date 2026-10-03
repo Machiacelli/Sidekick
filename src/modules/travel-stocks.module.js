@@ -400,13 +400,20 @@ const TravelStocksModule = {
                 color: #ffffff;
                 font-size: 11px;
             }
+            /* ---- Profit color coding ---- */
             .profit-positive {
                 color: #4ade80;
-                font-weight: 600;
+                font-weight: 700;
             }
             .profit-positive::before {
                 content: '↑ ';
                 opacity: 0.7;
+            }
+            .travel-table .profit-positive {
+                background: rgba(74, 222, 128, 0.08);
+            }
+            .travel-table td.profit-positive {
+                border-radius: 4px;
             }
             .profit-negative {
                 color: #f87171;
@@ -416,6 +423,9 @@ const TravelStocksModule = {
                 content: '↓ ';
                 opacity: 0.7;
             }
+            .travel-table .profit-negative {
+                background: rgba(248, 113, 113, 0.06);
+            }
             .profit-zero {
                 color: #94a3b8;
                 font-weight: 500;
@@ -423,6 +433,39 @@ const TravelStocksModule = {
             .profit-unknown {
                 color: rgba(255,255,255,0.3);
                 font-style: italic;
+            }
+            /* Tiered profit highlights: excellent/good deals pop more */
+            .travel-table tr.travel-row-excellent td {
+                background: rgba(74, 222, 128, 0.14) !important;
+                border-left: 3px solid #4ade80;
+            }
+            .travel-table tr.travel-row-good td {
+                border-left: 3px solid rgba(74, 222, 128, 0.5);
+            }
+            .travel-table tr.travel-row-bad td {
+                border-left: 3px solid rgba(248, 113, 113, 0.35);
+            }
+            /* Stock quantity heat: high stock = easy buying, show it */
+            .travel-table td.travel-stock-high {
+                color: #4ade80;
+                font-weight: 700;
+            }
+            .travel-table td.travel-stock-low {
+                color: #f87171;
+                font-weight: 600;
+            }
+            /* Country badge instead of plain text */
+            .travel-country-badge {
+                display: inline-block;
+                padding: 1px 6px;
+                border-radius: 8px;
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                background: rgba(255,152,0,0.15);
+                color: #FF9800;
+                border: 1px solid rgba(255,152,0,0.25);
+                white-space: nowrap;
             }
         `;
         document.head.appendChild(style);
@@ -574,8 +617,11 @@ const TravelStocksModule = {
             window.SidekickModules.Core.WindowManager.registerWindow(win, 'travel-stocks');
         }
 
-        // Add to DOM - use sidebar content area directly  
-        const contentArea = document.getElementById('sidekick-content');
+        // Add to DOM - use the page this window belongs to (sticky once set)
+        const savedWinState = await ChromeStorage.get('sidekick_travelStocksWindowState') || {};
+        // Sticky page: keep the previously saved page, else stamp the current active page
+        this._pageId = savedWinState.pageId ?? window.SidekickModules?.UI?.getActivePageId?.() ?? null;
+        const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(this._pageId) || document.getElementById('sidekick-content');
         if (contentArea) {
             contentArea.appendChild(win);
         } else {
@@ -801,12 +847,27 @@ const TravelStocksModule = {
         resizeObserver.observe(win);
     },
 
+    // Delete this window if it lives on a deleted page (called when the page is deleted)
+    async purgePage(pageId) {
+        if (pageId == null) return;
+        const ChromeStorage = window.SidekickModules.Core.ChromeStorage;
+        const ws = await ChromeStorage.get('sidekick_travelStocksWindowState') || {};
+        if (ws.pageId != null && String(ws.pageId) === String(pageId)) {
+            this.state.window?.remove();
+            this.state.window = null;
+            this._pageId = null;
+            await ChromeStorage.set('sidekick_travelStocksWindowState', { ...ws, isOpen: false, pageId: null });
+            console.log('💰 Travel Stocks window purged (its page was deleted)');
+        }
+    },
+
     // Save window state
     async saveWindowState(win, isOpen = true) {
         try {
             const ChromeStorage = window.SidekickModules.Core.ChromeStorage;
             const state = {
                 isOpen: isOpen,
+                pageId: this._pageId ?? window.SidekickModules?.UI?.getActivePageId?.() ?? null, // sticky
                 x: parseInt(win.style.left) || 10,
                 y: parseInt(win.style.top) || 10,
                 width: win.offsetWidth,
@@ -1081,17 +1142,27 @@ const TravelStocksModule = {
             for (const r of filtered) {
                 const tr = document.createElement('tr');
                 tr.dataset.itemId = String(r.id);
-                tr.style.color = '#ffffff';
+                // Tier the row by profit so hot deals stand out at a glance
+                const mult = this.settings.multiplier || 1;
+                if (typeof r.profit === 'number') {
+                    if (r.profit >= 10000 * mult) tr.className = 'travel-row-excellent';
+                    else if (r.profit > 0) tr.className = 'travel-row-good';
+                    else if (r.profit < 0) tr.className = 'travel-row-bad';
+                }
+                // Stock heat
+                const stockClass = (typeof r.qty === 'number')
+                    ? (r.qty >= 500 ? 'travel-stock-high' : (r.qty > 0 && r.qty < 100 ? 'travel-stock-low' : ''))
+                    : '';
                 tr.innerHTML = `
-                    <td style="color: #ffffff;">${this.esc(r.country)}</td>
+                    <td style="color: #ffffff;"><span class="travel-country-badge">${this.esc(r.country)}</span></td>
                     <td style="color: #ffffff;">
                         <a href="https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID=${r.id}" target="_blank" style="color: #90caf9; text-decoration: none; display: block;">
                             ${this.esc(r.name)}
                         </a>
                     </td>
                     <td class="num" style="color: #ffffff;">${this.fmtMoney(r.cost)}</td>
-                    <td class="num" data-profit="${r.profit || ''}" style="color: #ffffff;">${this.fmtProfit(r.profit)}</td>
-                    <td class="num" style="color: #ffffff; padding-right: 5px;">${typeof r.qty === 'number' ? r.qty : ''}</td>
+                    <td class="num ${this.profitClass(r.profit)}" data-profit="${r.profit || ''}">${this.fmtProfit(r.profit)}</td>
+                    <td class="num ${stockClass}" style="color: #ffffff; padding-right: 5px;">${typeof r.qty === 'number' ? r.qty.toLocaleString() : ''}</td>
                 `;
                 tbody.appendChild(tr);
             }
@@ -1176,6 +1247,21 @@ const TravelStocksModule = {
                         tds[3].textContent = this.fmtProfit(profit);
                         tds[3].className = 'num ' + this.profitClass(profit);
                         tds[3].dataset.profit = String(profit);
+                        // Re-tier the whole row now that real profit is known
+                        const mult2 = this.settings.multiplier || 1;
+                        if (profit >= 10000 * mult2) rowEl.className = 'travel-row-excellent';
+                        else if (profit > 0) rowEl.className = 'travel-row-good';
+                        else if (profit < 0) rowEl.className = 'travel-row-bad';
+                        // Stock heat refresh (qty cell is index 4)
+                        const qtd = tds[4];
+                        if (qtd) {
+                            const qtyRaw = parseInt((qtd.textContent || '').replace(/[^0-9]/g, ''), 10);
+                            qtd.classList.remove('travel-stock-high', 'travel-stock-low');
+                            if (Number.isFinite(qtyRaw)) {
+                                if (qtyRaw >= 500) qtd.classList.add('travel-stock-high');
+                                else if (qtyRaw > 0 && qtyRaw < 100) qtd.classList.add('travel-stock-low');
+                            }
+                        }
                         console.log(`💰 AFTER update - cell[3] content: "${tds[3].textContent}", class: ${tds[3].className}`);
                     } else {
                         console.error(`💰 ERROR: Cell[3] not found! Row has ${tds.length} cells`);

@@ -220,6 +220,15 @@
     background:var(--surface2);border:1px solid var(--border2);border-radius:10px;
     padding:14px 16px;margin:6px 0 10px;animation:skShelfIn .18s ease;
 }
+.sk-events-grid{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;
+}
+.sk-events-grid .sk-row{margin-bottom:0;}
+.sk-events-grid .sk-row .sk-row-desc{
+    white-space:normal;overflow:visible;text-overflow:clip;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden;
+}
 @keyframes skShelfIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
 .sk-status{padding:9px 12px;border-radius:8px;background:rgba(95,204,106,.08);border:1px solid rgba(95,204,106,.18);font-size:12px;color:var(--green);text-align:center;margin-top:4px;}.sk-shop-grid {
     display: grid;
@@ -380,11 +389,12 @@
         </div>
         <div class="sk-subtab-panel" id="skp-tab-notifications">
           <div class="sk-sh">In-Page Notifications</div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Notification Sounds</div><div class="sk-row-desc">Play a sound when in-page notifications appear</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Auto-dismiss</div><div class="sk-row-desc">Automatically hide notifications after a timeout</div></div><label class="sk-tog"><input type="checkbox" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Notification Sounds</div><div class="sk-row-desc">Play a sound when in-page notifications appear</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-notif-sound"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Auto-dismiss</div><div class="sk-row-desc">Automatically hide notifications after the duration below. Turn off to require clicking each notification to dismiss it</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-notif-autodismiss" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-sh" style="margin-top:14px;">Notification Duration</div>
-          <div class="sk-slider-row"><input type="range" min="2" max="10" value="5" class="skp-slider" data-out="skp-notif-val" data-suffix="s"><span class="sk-slider-val" id="skp-notif-val">5s</span></div>
-          <div class="sk-hint">How long notifications stay visible before auto-dismissing</div>
+          <div class="sk-slider-row"><input type="range" min="2" max="10" value="5" class="skp-slider" id="skp-notif-duration" data-out="skp-notif-val" data-suffix="s"><span class="sk-slider-val" id="skp-notif-val">5s</span></div>
+          <div class="sk-hint">How long notifications stay visible before auto-dismissing (only used when Auto-dismiss is on)</div>
+          <div class="sk-status" id="skp-notif-status" style="display:none;"></div>
           <div class="sk-sh" style="margin-top:14px;">System Notifications</div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Browser Desktop Notifications</div><div class="sk-row-desc">Allow Sidekick to send system-level notifications</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-browser-notif" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
@@ -905,6 +915,34 @@
         <div class="sk-subtab-panel active" id="skp-tab-ev-calendar">
           <div class="sk-sh">Event Calendar</div>
           <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Enable Event Calendar</div><div class="sk-row-desc">Show upcoming events in a calendar widget</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-event-calendar" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-sh" style="margin-top:18px;">Event Notifications</div>
+          <div class="sk-row" style="align-items:flex-start;gap:12px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Enable Event Notifications</div>
+              <div class="sk-row-desc">Show an acknowledge-required alert banner before selected Torn events start. It also sends a system notification if Browser Desktop Notifications is on</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-event-notifications" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Event List &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-event-notifier"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-event-notifications" style="display:none;">
+            <div class="sk-sh" style="margin-top:0;font-size:10px;">Alert Timing</div>
+            <label class="sk-field-label" for="skp-event-lead-hours">Notify this many hours before the event starts</label>
+            <input type="number" class="sk-input" id="skp-event-lead-hours" min="1" max="168" step="1" placeholder="24">
+            <div class="sk-hint" id="skp-event-lead-days">&#8776; 1 day before start</div>
+            <div class="sk-btn-row" style="gap:6px;">
+              <button class="sk-btn sk-btn-ghost" type="button" data-lead-preset="6">6h</button>
+              <button class="sk-btn sk-btn-ghost" type="button" data-lead-preset="12">12h</button>
+              <button class="sk-btn sk-btn-ghost" type="button" data-lead-preset="24">1 day</button>
+              <button class="sk-btn sk-btn-ghost" type="button" data-lead-preset="72">3 days</button>
+              <button class="sk-btn sk-btn-ghost" type="button" data-lead-preset="168">7 days</button>
+            </div>
+            <div class="sk-sh" style="margin-top:14px;">Choose which events trigger an alert</div>
+            <div id="skp-event-notifier-events" class="sk-events-grid"></div>
+            <div class="sk-btn-row" style="gap:6px;margin-top:8px;">
+              <button class="sk-btn sk-btn-ghost" type="button" data-en-bulk="all">Select all</button>
+              <button class="sk-btn sk-btn-ghost" type="button" data-en-bulk="none">Clear all</button>
+            </div>
+          </div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-ev-egg">
           <div class="sk-sh">Easter</div>
@@ -1017,7 +1055,13 @@
         </div>
 
         <div class="sk-subtab-panel" id="skp-tab-trade-export">
-          <div class="sk-sh">Export</div>
+          <div class="sk-sh">Receipt Message</div>
+          <div class="sk-info">Customize the message copied by the trade page's receipt button. Placeholders: <b>[[seller_name]]</b> — name of the seller, <b>[[total]]</b> — total price of the items you are buying. The items in the trade are always listed below the message.</div>
+          <label class="sk-field-label" for="skp-trade-receipt-template">Receipt message template</label>
+          <textarea class="sk-trade-export-preview" id="skp-trade-receipt-template" style="height:90px;"></textarea>
+          <div class="sk-status" id="skp-trade-receipt-status" style="display:none;"></div>
+
+          <div class="sk-sh" style="margin-top:18px;">Export</div>
           <div class="sk-info">The readable list is intended for other players. The JSON file can be imported into Sidekick without re-entering every rate.</div>
           <label class="sk-field-label" for="skp-trade-export-profile">Price list to export or replace</label>
           <select class="sk-select" id="skp-trade-export-profile">
@@ -1236,7 +1280,9 @@
                         profiles: {
                             public: normalizeProfile(source.profiles?.public),
                             friendly: normalizeProfile(source.profiles?.friendly)
-                        }
+                        },
+                        receiptTemplate: textValue(source.receiptTemplate) ||
+                            'Hello [[seller_name]], I am buying your items in our trade for a total of $[[total]]. Thank you!'
                     };
                 };
 
@@ -1314,6 +1360,8 @@
                     displayEnabled: overlay.querySelector('#skp-trade-enabled'),
                     displayMarket: overlay.querySelector('#skp-trade-show-market'),
                     displayBuy: overlay.querySelector('#skp-trade-show-buy'),
+                    receiptTemplate: overlay.querySelector('#skp-trade-receipt-template'),
+                    receiptStatus: overlay.querySelector('#skp-trade-receipt-status'),
                     displayTotals: overlay.querySelector('#skp-trade-show-totals'),
                     defaultProfile: overlay.querySelector('#skp-trade-default-profile'),
                     profileButtons: [...overlay.querySelectorAll('[data-trade-profile]')],
@@ -1796,6 +1844,7 @@
                 elements.displayBuy.checked = state.display.showBuyPrice;
                 elements.displayTotals.checked = state.display.showTotals;
                 elements.defaultProfile.value = state.display.defaultProfile;
+                if (elements.receiptTemplate) elements.receiptTemplate.value = state.receiptTemplate;
 
                 [
                     [elements.displayEnabled, 'enabled'],
@@ -1811,6 +1860,16 @@
                 elements.defaultProfile?.addEventListener('change', () => {
                     state.display.defaultProfile = elements.defaultProfile.value === 'friendly' ? 'friendly' : 'public';
                     schedulePersist();
+                });
+                elements.receiptTemplate?.addEventListener('input', () => {
+                    state.receiptTemplate = elements.receiptTemplate.value;
+                    clearTimeout(saveTimer);
+                    saveTimer = setTimeout(() => {
+                        persist().then(() => showStatus(elements.receiptStatus, 'Receipt message saved')).catch(error => {
+                            console.error('Failed to save receipt template:', error);
+                            showStatus(elements.receiptStatus, 'Could not save the receipt message', true);
+                        });
+                    }, 600);
                 });
 
                 elements.profileButtons.forEach(button => {
@@ -2075,6 +2134,7 @@
                 ['#skp-tog-book-notifier', 'sidekick_settings', 'book-notifier', false],
                 // Events
                 ['#skp-tog-event-calendar', 'sidekick_settings', 'event-calendar', false],
+                ['#skp-tog-event-notifier', 'sidekick_event_notifier', null, false],
                 ['#skp-tog-easter', 'sidekick_egg_helper', null, false],
                 ['#skp-tog-halloween', 'sidekick_halloween', null, false],
                 ['#skp-tog-christmas-zoom', 'sidekick_settings', 'christmas_zoom', false],
@@ -2151,6 +2211,16 @@
                                 await window.SidekickModules.BunkerBucks.enable();
                             } else {
                                 await window.SidekickModules.BunkerBucks.disable();
+                            }
+                        }
+
+                        // Without this, the Crime Notifier only starts polling
+                        // after a full page reload.
+                        if (subKey === 'crime-notifier' && window.SidekickModules?.CrimeNotifier) {
+                            if (inp.checked) {
+                                await window.SidekickModules.CrimeNotifier.enable();
+                            } else {
+                                await window.SidekickModules.CrimeNotifier.disable();
                             }
                         }
 
@@ -2272,7 +2342,44 @@
                 })();
             }
 
-            // === Browser desktop notifications ===
+            // === In-page notification prefs: sound / auto-dismiss / duration ===
+            const notifSoundInp = overlay.querySelector('#skp-tog-notif-sound');
+            const notifAutoDismissInp = overlay.querySelector('#skp-tog-notif-autodismiss');
+            const notifDurationSlider = overlay.querySelector('#skp-notif-duration');
+            const notifDurationOut = overlay.querySelector('#skp-notif-val');
+            if (notifSoundInp || notifAutoDismissInp || notifDurationSlider) {
+                (async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_notification_prefs') || {};
+                    if (notifSoundInp) notifSoundInp.checked = d.soundEnabled === true;
+                    if (notifAutoDismissInp) notifAutoDismissInp.checked = d.autoDismiss !== false; // default ON
+                    if (notifDurationSlider) {
+                        const secs = Math.round((d.duration || 5000) / 1000);
+                        notifDurationSlider.value = Math.min(10, Math.max(2, secs));
+                        if (notifDurationOut) notifDurationOut.textContent = notifDurationSlider.value + 's';
+                    }
+                })();
+                const saveNotifPrefs = async () => {
+                    if (!CS()) return;
+                    const d = await CS().get('sidekick_notification_prefs') || {};
+                    if (notifSoundInp) d.soundEnabled = notifSoundInp.checked;
+                    if (notifAutoDismissInp) d.autoDismiss = notifAutoDismissInp.checked;
+                    if (notifDurationSlider) d.duration = parseInt(notifDurationSlider.value, 10) * 1000;
+                    await CS().set('sidekick_notification_prefs', d);
+                };
+                if (notifSoundInp) notifSoundInp.addEventListener('change', saveNotifPrefs);
+                if (notifAutoDismissInp) notifAutoDismissInp.addEventListener('change', saveNotifPrefs);
+                if (notifDurationSlider) {
+                    // Live label update while dragging
+                    notifDurationSlider.addEventListener('input', () => {
+                        if (notifDurationOut) notifDurationOut.textContent = notifDurationSlider.value + 's';
+                    });
+                    // Persist on release
+                    notifDurationSlider.addEventListener('change', saveNotifPrefs);
+                }
+            }
+
+            // === Browser desktop notifications toggle ===
             const browserNotifInp = overlay.querySelector('#skp-tog-browser-notif');
             if (browserNotifInp) {
                 (async () => {
@@ -2285,6 +2392,112 @@
                     const d = await CS().get('sidekick_notification_prefs') || {};
                     d.windowsNotifications = browserNotifInp.checked;
                     await CS().set('sidekick_notification_prefs', d);
+                });
+            }
+
+            // === Event Notifier: master toggle, lead time, per-event list ===
+            const evNotifToggle = overlay.querySelector('#skp-tog-event-notifier');
+            if (evNotifToggle) {
+                const EN_KEY = 'sidekick_event_notifier';
+                const evList = overlay.querySelector('#skp-event-notifier-events');
+                const leadInput = overlay.querySelector('#skp-event-lead-hours');
+                const leadDaysHint = overlay.querySelector('#skp-event-lead-days');
+
+                // Source of truth for the event list: EventTicker's static array
+                const tickerEvents = (window.SidekickModules?.EventTicker?.events || []);
+                const normalizeEventName = (name) =>
+                    String(name || '').toLowerCase().trim().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+
+                const updateLeadHint = () => {
+                    if (!leadDaysHint || !leadInput) return;
+                    const h = Math.max(1, parseInt(leadInput.value, 10) || 0);
+                    const d = (h / 24).toFixed(1).replace(/\.0$/, '');
+                    leadDaysHint.textContent = `≈ ${d} day${d !== '1' ? 's' : ''} before start`;
+                };
+
+                const saveEnSettings = async (patch) => {
+                    if (!CS()) return;
+                    const d = await CS().get(EN_KEY) || {};
+                    Object.assign(d, patch);
+                    await CS().set(EN_KEY, d);
+                    // Live-update the running module (storage listener also covers it)
+                    const en = window.SidekickModules?.EventNotifier;
+                    if (en) {
+                        if (patch.leadTimeHours !== undefined) en.leadTimeHours = patch.leadTimeHours;
+                        if (patch.events !== undefined) en.eventsEnabled = { ...patch.events };
+                        if (patch.isEnabled !== undefined) en.isEnabled = patch.isEnabled;
+                        en.refreshNow?.();
+                    }
+                };
+
+                const renderEventList = async () => {
+                    if (!evList) return;
+                    const data = CS() ? (await CS().get(EN_KEY) || {}) : {};
+                    const enabledMap = (data.events && typeof data.events === 'object') ? data.events : {};
+                    evList.replaceChildren();
+                    for (const ev of tickerEvents) {
+                        const key = normalizeEventName(ev.name);
+                        const row = document.createElement('div');
+                        row.className = 'sk-row';
+                        row.style.marginTop = '4px';
+                        row.innerHTML = `
+                            <div class="sk-row-info">
+                                <div class="sk-row-title">${ev.name}</div>
+                                <div class="sk-row-desc">${ev.feature || 'Torn event'}</div>
+                            </div>
+                            <label class="sk-tog"><input type="checkbox" data-en-event="${key}" ${enabledMap[key] === true ? 'checked' : ''}><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+                        `;
+                        evList.appendChild(row);
+                    }
+                    evList.querySelectorAll('input[data-en-event]').forEach(inp => {
+                        inp.addEventListener('change', async () => {
+                            const d = CS() ? (await CS().get(EN_KEY) || {}) : {};
+                            const events = (d.events && typeof d.events === 'object') ? d.events : {};
+                            events[inp.dataset.enEvent] = inp.checked;
+                            await saveEnSettings({ events });
+                        });
+                    });
+                };
+
+                // Lead time: load, hint, save (debounced), presets
+                (async () => {
+                    if (!CS()) return;
+                    const d = await CS().get(EN_KEY) || {};
+                    if (leadInput) leadInput.value = d.leadTimeHours || 24;
+                    updateLeadHint();
+                    await renderEventList();
+                })();
+
+                if (leadInput) {
+                    let leadTimer;
+                    leadInput.addEventListener('input', () => {
+                        updateLeadHint();
+                        clearTimeout(leadTimer);
+                        leadTimer = setTimeout(() => {
+                            const h = Math.min(168, Math.max(1, parseInt(leadInput.value, 10) || 24));
+                            saveEnSettings({ leadTimeHours: h });
+                        }, 400);
+                    });
+                }
+                overlay.querySelectorAll('[data-lead-preset]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        if (leadInput) leadInput.value = btn.dataset.leadPreset;
+                        updateLeadHint();
+                        saveEnSettings({ leadTimeHours: parseInt(btn.dataset.leadPreset, 10) });
+                    });
+                });
+                overlay.querySelector('[data-en-bulk="all"]')?.addEventListener('click', () => {
+                    const events = {};
+                    tickerEvents.forEach(ev => { events[normalizeEventName(ev.name)] = true; });
+                    saveEnSettings({ events }).then(renderEventList);
+                });
+                overlay.querySelector('[data-en-bulk="none"]')?.addEventListener('click', () => {
+                    saveEnSettings({ events: {} }).then(renderEventList);
+                });
+
+                // Master toggle change → notify running module beyond TOGGLE_MAP save
+                evNotifToggle.addEventListener('change', () => {
+                    saveEnSettings({ isEnabled: evNotifToggle.checked });
                 });
             }
 

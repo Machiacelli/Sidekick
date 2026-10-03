@@ -30,7 +30,22 @@
         baseTop: 20, // Fixed top position for new notifications
         minSpacing: 15, // Minimum spacing between notifications
 
-        show(title, message, type = 'info', duration = 4000) {
+        // Read user prefs once per show() — cheap (storage is local) and always fresh
+        async getPrefs() {
+            try {
+                return (await ChromeStorage.get('sidekick_notification_prefs')) || {};
+            } catch (e) {
+                return {};
+            }
+        },
+
+        // show(title, message, type, duration) — regular toast.
+        // Resolution order for duration: explicit arg > stored pref > 4000ms default.
+        // If autoDismiss pref is false and no explicit duration arg given, the
+        // toast stays until clicked (sticky / acknowledge-required).
+        // opts: { sticky: true } — force sticky regardless of prefs (used by
+        // acknowledge-required alerts like the event notifier).
+        async show(title, message, type = 'info', duration, opts = {}) {
             // Prevent duplicate notifications with same message
             const existingNotification = this.notifications.find(n =>
                 n.element && n.element.textContent.includes(message)
@@ -40,15 +55,22 @@
                 return;
             }
 
+            const prefs = await this.getPrefs();
+
             // Play notification sound if enabled
             this.playNotificationSound();
+
+            // Decide whether this notification auto-dismisses
+            let autoDismiss = prefs.autoDismiss !== false; // default true
+            let finalDuration = typeof duration === 'number' ? duration : (prefs.duration || 4000);
+            if (duration === undefined && prefs.autoDismiss === false) autoDismiss = false;
+            if (opts.sticky) autoDismiss = false;
 
             const notification = document.createElement('div');
             notification.className = `sidekick-notification ${type}`;
 
             // Create unique ID for this notification
             const notificationId = Date.now() + Math.random();
-            notification.dataset.notificationId = notificationId;
 
             notification.innerHTML = `
                 <div style="font-weight: bold; margin-bottom: 4px;">${title}</div>
@@ -106,10 +128,17 @@
                 position: newPosition
             });
 
-            // Auto remove with repositioning
-            setTimeout(() => {
-                this.removeNotification(notificationId);
-            }, duration);
+            // Auto remove with repositioning — only when auto-dismiss is active.
+            // Sticky notifications (opts.sticky or autoDismiss pref off) stay
+            // until clicked (acknowledge-required behaviour).
+            if (autoDismiss) {
+                setTimeout(() => {
+                    this.removeNotification(notificationId);
+                }, finalDuration);
+            } else {
+                // Visual hint that this one requires a click
+                notification.title = 'Click to dismiss';
+            }
         },
         async playNotificationSound() {
             try {

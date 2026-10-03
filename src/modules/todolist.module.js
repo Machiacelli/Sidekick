@@ -185,26 +185,38 @@
                             }
                         }
 
+                        // Load API baselines BEFORE resetting so resetDailyTasksData can
+                        // capture yesterday's final cumulative values for smart recovery.
+                        const savedBaselinesForReset = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_baselines');
+                        if (savedBaselinesForReset) {
+                            this.apiBaselines = savedBaselinesForReset;
+                            console.log('💊 Loaded API baselines for reset:', this.apiBaselines);
+                        }
+
                         // Force reset immediately (resetDailyTasksData persists state).
                         await this.resetDailyTasksData();
 
                         console.log("📋 Reset applied and saved - all tasks are now incomplete");
                     } else {
-                        // Same day - load saved data and preserve state
+                        // Same day - restore ONLY whitelisted progress fields from storage.
+                        // NEVER Object.assign the stored blob over the live task definition:
+                        // chrome.storage JSON-serializes RegExp (logPatterns) to {}, which
+                        // would clobber the compiled regexes and crash every API check.
                         for (const taskKey in this.dailyTasks) {
-                            if (saved[taskKey]) {
-                                // Preserve the saved state while keeping the task structure
-                                const configuredMaxCount = this.dailyTasks[taskKey].maxCount;
-                                Object.assign(this.dailyTasks[taskKey], saved[taskKey]);
-
-                                // Stored progress must not restore an obsolete
-                                // completion target after the module is updated.
-                                if (configuredMaxCount !== undefined) {
-                                    this.dailyTasks[taskKey].maxCount = configuredMaxCount;
+                            const task = this.dailyTasks[taskKey];
+                            const savedTask = saved[taskKey];
+                            if (savedTask && typeof savedTask === 'object') {
+                                if (typeof savedTask.completed === 'boolean') {
+                                    task.completed = savedTask.completed;
+                                }
+                                if (typeof savedTask.currentCount === 'number') {
+                                    task.currentCount = savedTask.currentCount;
+                                }
+                                if (typeof savedTask.visible === 'boolean') {
+                                    task.visible = savedTask.visible;
                                 }
 
                                 // Validate completed state for tasks with maxCount (like xanax)
-                                const task = this.dailyTasks[taskKey];
                                 if (task.maxCount !== undefined) {
                                     const currentCount = task.currentCount || 0;
                                     const shouldBeCompleted = currentCount >= task.maxCount;
@@ -234,6 +246,17 @@
                             console.log(`📋 ${task.name}: completed=${task.completed}${countInfo}`);
                         }
                     }
+                } else if (saved) {
+                    // Saved completions exist but the reset marker is missing — the stored
+                    // state is stale (partial clear / storage divergence). The marker is the
+                    // single source of truth for which day the data belongs to, so reset.
+                    console.log("⚠️ Saved daily tasks found but reset marker missing - treating as stale data");
+                    for (const taskKey in this.dailyTasks) {
+                        if (saved[taskKey] && typeof saved[taskKey].visible === 'boolean') {
+                            this.dailyTasks[taskKey].visible = saved[taskKey].visible;
+                        }
+                    }
+                    await this.resetDailyTasksData();
                 } else {
                     console.log("📭 No saved daily tasks found, using defaults");
                     this.lastResetDate = null; // This will trigger a reset check
@@ -278,7 +301,13 @@
                 }
 
                 await window.SidekickModules.Core.ChromeStorage.set('sidekick_dailytasks', dataToSave);
-                await window.SidekickModules.Core.ChromeStorage.set('sidekick_dailytasks_reset', this.lastResetDate?.toISOString() || new Date().toISOString());
+                // NEVER fabricate a reset marker: stamping "now" while lastResetDate is
+                // null would mark stale (yesterday's) completions as belonging to today,
+                // permanently blocking the daily reset. The marker must only ever record
+                // the date the tasks were actually reset on.
+                if (this.lastResetDate instanceof Date && !isNaN(this.lastResetDate.getTime())) {
+                    await window.SidekickModules.Core.ChromeStorage.set('sidekick_dailytasks_reset', this.lastResetDate.toISOString());
+                }
                 // Save API baselines for daily progress tracking
                 await window.SidekickModules.Core.ChromeStorage.set('sidekick_api_baselines', this.apiBaselines);
 
@@ -440,11 +469,18 @@
                     console.log('✅ No daily reset needed - same UTC day');
                 }
             } else {
-                // First time - set the reset date to current UTC date
-                console.log('⏰ First time setup - setting initial daily reset date');
-                this.lastResetDate = currentUTCDate;
-                this.saveDailyTasks();
-                console.log('⏰ Initial daily reset date set:', currentUTCDate.toISOString());
+                // First time (lastResetDate unknown) - reset any completions before
+                // stamping today's date, otherwise stale tasks would be adopted as today's.
+                console.log('⏰ First time setup - clearing any daily completions and setting initial daily reset date');
+                const shouldReset = Object.values(this.dailyTasks).some(task => task.completed || (task.currentCount || 0) > 0);
+                if (shouldReset) {
+                    console.log('⏰ Stale completions found - performing full reset');
+                    this.resetDailyTasks();
+                } else {
+                    this.lastResetDate = currentUTCDate;
+                    this.saveDailyTasks();
+                    console.log('⏰ Initial daily reset date set:', currentUTCDate.toISOString());
+                }
             }
         },
 
@@ -1218,13 +1254,11 @@
                 if (task.detectFromLogs && task.logPatterns) {
                     console.log(`🔍 Starting ${task.name} detection from logs...`);
 
-                    // Try both UTC and local timezone calculations
-                    const countUTC = this.countItemUsageFromLogs(logData, todayUTCStartTimestamp, task.logPatterns, task.name, 'UTC');
-                    const countLocal = this.countItemUsageFromLogs(logData, alternativeTimestamp, task.logPatterns, task.name, 'LOCAL');
-
-                    // Use the higher count (in case timezone calculation is wrong)
-                    const itemCount = Math.max(countUTC, countLocal);
-                    console.log(`${task.icon} Final ${task.name} count: UTC=${countUTC}, Local=${countLocal}, Using=${itemCount}`);
+                    // Torn's day boundary is UTC: only use the UTC-midnight window.
+                    // A local-midnight window would re-credit yesterday-evening logs
+                    // and re-complete tasks right after the 00:00 UTC reset.
+                    const itemCount = this.countItemUsageFromLogs(logData, todayUTCStartTimestamp, task.logPatterns, task.name, 'UTC');
+                    console.log(`${task.icon} Final ${task.name} count (UTC window): ${itemCount}`);
 
                     if (task.maxCount) {
                         // Multi-completion task (like xanax)
@@ -1425,9 +1459,15 @@
                     }
 
                     // Fallback to text patterns if no numeric match (legacy format)
+                    // Guard: chrome.storage JSON-serializes RegExp to {}, so a corrupted
+                    // pattern must never crash the whole API update loop.
                     if (!foundItem && logPatterns) {
                         for (let i = 0; i < logPatterns.length; i++) {
                             const pattern = logPatterns[i];
+                            if (!(pattern instanceof RegExp)) {
+                                console.warn(`⚠️ Skipping invalid (non-RegExp) pattern for ${itemName} at index ${i}`);
+                                continue;
+                            }
                             if (pattern.test(logText)) {
                                 foundItem = true;
                                 matchedPattern = `Text Pattern ${i + 1}: ${pattern.toString()}`;
@@ -1956,6 +1996,7 @@
                 name: 'New Todo List',
                 tasks: [],
                 color: '#4CAF50',  // Default color
+                pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null, // page this list belongs to
                 x: x,
                 y: y,
                 width: todoListWidth,
@@ -1976,7 +2017,8 @@
 
         // Render a todo list window
         renderTodoList(todoList) {
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this list belongs to (falls back to active page for legacy data)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(todoList.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) return;
 
             // Remove existing element if it exists
@@ -3022,6 +3064,16 @@
         },
 
         // Delete entire todo list
+        // Delete all todo lists that belong to a given page (called when the page is deleted)
+        purgePage(pageId) {
+            if (pageId == null) return;
+            const doomed = this.todoLists.filter(tl => tl.pageId != null && String(tl.pageId) === String(pageId));
+            if (doomed.length === 0) return;
+            this.todoLists = this.todoLists.filter(tl => !(tl.pageId != null && String(tl.pageId) === String(pageId)));
+            this.saveTodoLists();
+            console.log(`📋 Purged ${doomed.length} todo list(s) from deleted page`);
+        },
+
         deleteTodoList(id) {
             const element = document.getElementById(`sidekick-todolist-${id}`);
             if (element) {

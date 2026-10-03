@@ -63,6 +63,8 @@
                 showTotals: display.showTotals !== false,
                 defaultProfile: display.defaultProfile === 'friendly' ? 'friendly' : 'public'
             },
+            receiptTemplate: normalizeText(source.receiptTemplate) ||
+                'Hello [[seller_name]], I am buying your items in our trade for a total of $[[total]]. Thank you!', 
             profiles: {
                 public: normalizeProfile(source.profiles?.public),
                 friendly: normalizeProfile(source.profiles?.friendly)
@@ -388,6 +390,7 @@
             return {
                 marketTotal,
                 buyTotal: null,
+                buyPerItem: null,
                 ruleLabel: profile.categories?.[category]?.enabled === false ? 'Category not for trade' : 'Not for trade',
                 exceptionMatch,
                 notForTrade: true
@@ -398,17 +401,18 @@
             return {
                 marketTotal,
                 buyTotal: toWholeDollars(multiplyFixedPrice(exceptionMatch.exception.value, item.quantity)),
+                buyPerItem: item.quantity > 1 ? toWholeDollars(multiplyFixedPrice(exceptionMatch.exception.value, 1)) : null,
                 ruleLabel: 'Fixed item price',
                 exceptionMatch
             };
         }
 
         if (item.isRw && !exceptionMatch) {
-            return { marketTotal: null, buyTotal: null, ruleLabel: 'RW price required', exceptionMatch: null };
+            return { marketTotal: null, buyTotal: null, buyPerItem: null, ruleLabel: 'RW price required', exceptionMatch: null };
         }
 
         if (marketValue === null) {
-            return { marketTotal: null, buyTotal: null, ruleLabel: 'Market value unavailable', exceptionMatch };
+            return { marketTotal: null, buyTotal: null, buyPerItem: null, ruleLabel: 'Market value unavailable', exceptionMatch };
         }
 
         const rate = exceptionMatch?.exception?.rule === 'percentage'
@@ -417,6 +421,7 @@
         return {
             marketTotal,
             buyTotal: toWholeDollars(multiplyMarketValue(item.catalogItem.marketValue, item.quantity, rate)),
+            buyPerItem: item.quantity > 1 ? toWholeDollars(multiplyMarketValue(item.catalogItem.marketValue, 1, rate)) : null,
             ruleLabel: `${rate}%`,
             exceptionMatch
         };
@@ -443,6 +448,10 @@
             .sk-ta-profile{padding:5px 12px;border:0;border-right:1px solid #555;background:#333;color:#aaa;font:600 11px Arial,sans-serif;cursor:pointer;}
             .sk-ta-profile:last-child{border-right:0;}
             .sk-ta-profile.active{background:linear-gradient(135deg,#75d77e,#ffad5a);color:#111;}
+            .sk-ta-receipt-btn{padding:5px 12px;border:1px solid rgba(125,221,117,.45);border-radius:4px;background:rgba(125,221,117,.12);color:#7ddd75;font:600 11px Arial,sans-serif;cursor:pointer;white-space:nowrap;}
+            .sk-ta-receipt-btn:hover{background:rgba(125,221,117,.25);color:#fff;}
+            .sk-ta-template-btn{padding:5px 10px;border:1px solid #555;border-radius:4px;background:#333;color:#aaa;font:600 10px Arial,sans-serif;cursor:pointer;white-space:nowrap;}
+            .sk-ta-template-btn:hover{background:#444;color:#fff;}
             .sk-ta-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#444;}
             .sk-ta-side{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#292929;padding:8px 10px;min-width:0;}
             .sk-ta-side span{color:#aaa;}
@@ -523,7 +532,10 @@
             buy.className = 'sk-ta-buy';
             const action = item.side === 'left' ? 'You receive' : 'You pay';
             const priceList = activeProfile === 'public' ? 'Public' : 'Friendly';
-            buy.textContent = `${action}: ${formatMoney(valuation.buyTotal)} `;
+            const perItem = valuation.buyPerItem
+                ? ` (${formatMoney(valuation.buyPerItem)} each)`
+                : '';
+            buy.textContent = `${action}: ${formatMoney(valuation.buyTotal)}${perItem} `;
             const rule = document.createElement('span');
             rule.className = 'sk-ta-rule';
             rule.textContent = `(${priceList} ${valuation.ruleLabel})`;
@@ -563,6 +575,49 @@
         return normalizeText(trade.querySelector(`:scope > .user.${side} > .title-black`)?.textContent) || (side === 'left' ? 'Your side' : 'Other player');
     }
 
+    function renderReceiptMessage(sellerName, total) {
+        return settings.receiptTemplate
+            .replaceAll('[[seller_name]]', sellerName)
+            .replaceAll('[[total]]', total);
+    }
+
+    async function copyReceiptMessage(collected, valuations) {
+        const sellerName = sideTitle(collected.trade, 'right');
+        const hasItems = valuations.right.buyItems.length || valuations.right.notForTrade.length || collected.right.length;
+        if (!hasItems) {
+            alert('There are no items on their side of the trade.');
+            return;
+        }
+        if (valuations.right.buyMissing) {
+            alert('Their side still has items without a price — set them before copying the receipt.');
+            return;
+        }
+        if (valuations.right.notForTrade.length) {
+            alert('Their side contains not-for-trade items — remove them before copying the receipt.');
+            return;
+        }
+        if (!valuations.right.buyItems.length) {
+            alert('Their side has no priced items yet — the total would be $0.');
+            return;
+        }
+        const message = renderReceiptMessage(sellerName, formatDecimal(valuations.right.buy));
+        await navigator.clipboard.writeText(message);
+        window.SidekickModules?.Core?.NotificationSystem?.show?.('📋 Receipt message copied to clipboard!', 'success');
+    }
+
+    async function editReceiptTemplate() {
+        const current = settings.receiptTemplate;
+        const requested = prompt(
+            'Customize the receipt message.\n\nPlaceholders:\n[[seller_name]] — name of the seller\n[[total]] — total price of the items you are buying',
+            current
+        );
+        if (requested === null || normalizeText(requested) === normalizeText(current)) return;
+        settings.receiptTemplate = normalizeText(requested) || current;
+        const storage = window.SidekickModules.Core.ChromeStorage;
+        await storage.set(SETTINGS_KEY, settings);
+        window.SidekickModules?.Core?.NotificationSystem?.show?.('✎ Receipt message template saved.', 'success');
+    }
+
     function setText(element, text) {
         if (element.textContent !== text) element.textContent = text;
     }
@@ -580,6 +635,8 @@
             panel.innerHTML = `
                 <div class="sk-ta-panel-head">
                     <div class="sk-ta-panel-title">Sidekick Trade Calculator</div>
+                    <button type="button" class="sk-ta-receipt-btn" data-action="copy-receipt">Copy receipt msg</button>
+                    <button type="button" class="sk-ta-template-btn" data-action="edit-template" title="Customize the receipt message placeholders">✎</button>
                     <div class="sk-ta-profile-label">Price list:</div>
                     <div class="sk-ta-profiles" role="group" aria-label="Price list">
                         <button type="button" class="sk-ta-profile" data-profile="public">Public</button>
@@ -593,6 +650,13 @@
                 <div class="sk-ta-result" data-result="none"><div class="sk-ta-result-label"></div><strong></strong></div>
             `;
             collected.trade.insertAdjacentElement('afterend', panel);
+            panel.querySelector('[data-action="copy-receipt"]')?.addEventListener('click', event => {
+                event.preventDefault();
+                copyReceiptMessage(collected, valuations).catch(error => {
+                    console.error('[TradeAssistant] Failed to copy receipt message:', error);
+                    alert('Could not copy the receipt message.');
+                });
+            });
             panel.querySelectorAll('.sk-ta-profile').forEach(button => {
                 button.addEventListener('click', () => {
                     activeProfile = button.dataset.profile === 'friendly' ? 'friendly' : 'public';
@@ -672,6 +736,8 @@
                 collected[side].forEach(item => {
                     const valuation = valueTradeItem(item, profile);
                     renderItemValue(item, valuation);
+                    item._buyTotal = valuation.buyTotal ? formatDecimal(valuation.buyTotal) : '';
+                    item._buyPerItem = valuation.buyPerItem ? formatDecimal(valuation.buyPerItem) : '';
                     if (valuation.marketTotal) valuations[side].marketItems.push(valuation.marketTotal);
                     else valuations[side].marketMissing += 1;
                     if (valuation.notForTrade) valuations[side].notForTrade.push(item.label);

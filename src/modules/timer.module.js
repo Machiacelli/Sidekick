@@ -1038,6 +1038,7 @@
                         height: timer.height,
                         pinned: timer.pinned,
                         docked: timer.docked,
+                        pageId: timer.pageId ?? null,
                         undockX: timer.undockX,
                         undockY: timer.undockY,
                         created: timer.created,
@@ -1158,6 +1159,7 @@
                 isRunning: false,
                 type: 'countdown',
                 color: '#666', // Neutral color for blank timer
+                pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null, // page this timer belongs to
                 x: x,
                 y: y,
                 width: timerWidth,
@@ -1372,8 +1374,9 @@
             timerElement.id = `sidekick-timer-${timer.id}`;  // Add the missing ID!
             timerElement.dataset.timerId = timer.id;
 
-            // Get content area for positioning within sidepanel
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this timer belongs to (falls back to active page
+            // for legacy timers saved before page association existed)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(timer.pageId) || document.getElementById('sidekick-content');
 
             // Note: undocked timers are styled after the shared HTML is built below.
 
@@ -2822,6 +2825,25 @@
                     `${cooldownNames[cooldownType] || cooldownType} cooldown removed`
                 );
             }
+        },
+
+        // Delete all timers that belong to a given page (called when the page is deleted)
+        purgePage(pageId) {
+            if (pageId == null) return;
+            const doomed = this.timers.filter(t => t.pageId != null && String(t.pageId) === String(pageId));
+            if (doomed.length === 0) return;
+            doomed.forEach(t => {
+                if (this.intervals.has(t.id)) {
+                    clearInterval(this.intervals.get(t.id));
+                    this.intervals.delete(t.id);
+                }
+                for (const [cooldownType, timerId] of Object.entries(this.cooldownWindowMap || {})) {
+                    if (timerId === t.id) delete this.cooldownWindowMap[cooldownType];
+                }
+            });
+            this.timers = this.timers.filter(t => !(t.pageId != null && String(t.pageId) === String(pageId)));
+            this.saveTimers();
+            console.log(`⏰ Purged ${doomed.length} timer(s) from deleted page`);
         },
 
         // Delete timer

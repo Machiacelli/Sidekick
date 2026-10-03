@@ -54,6 +54,16 @@
             height: 500,
         },
 
+        // Close this window if it belongs to a deleted page
+        async purgePage(pageId) {
+            if (pageId == null) return;
+            if (this._winState.pageId != null && String(this._winState.pageId) === String(pageId)) {
+                this._close();
+                this._winState.pageId = null; // so next open re-stamps current active page
+                await this._saveState();
+            }
+        },
+
         // ── Init ───────────────────────────────────────────────────────────────
         async init() {
             if (this.isInitialized) return;
@@ -78,6 +88,8 @@
             if (!this.isInitialized) await this.init();
 
             this._winState.open = true;
+            // Sticky page: keep previously saved page, else stamp the current active page
+            this._winState.pageId = this._winState.pageId ?? window.SidekickModules?.UI?.getActivePageId?.() ?? null;
             await this._saveState();
             if (this._win && document.contains(this._win)) {
                 // bring to front
@@ -470,7 +482,8 @@ min-height: 120px;
 
             const win = document.createElement('div');
             win.id = WIN_ID;
-            const contentArea = document.getElementById('sidekick-content');
+            // Route to the page this window belongs to (sticky once saved; active page on first open)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(this._winState.pageId) || document.getElementById('sidekick-content');
             const maxW = contentArea ? contentArea.clientWidth : window.innerWidth;
             const maxH = contentArea ? contentArea.clientHeight : window.innerHeight;
 
@@ -509,7 +522,6 @@ min-height: 120px;
             } else {
                 document.body.appendChild(win);
             }
-
             // Register with WindowManager if available
             if (window.SidekickModules?.Core?.WindowManager) {
                 window.SidekickModules.Core.WindowManager.registerWindow(win, 'Auction Tracker');

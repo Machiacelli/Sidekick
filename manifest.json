@@ -17,7 +17,6 @@
         "https://tornprobability.com/*",
         "https://weav3r.dev/*",
         "https://gitlab.com/*",
-        "https://*.workers.dev/*",
         "https://tornwar.com/*"
     ],
     "icons": {
@@ -42,6 +41,7 @@
                 "src/modules/timer.module.js",
                 "src/modules/clock.module.js",
                 "src/modules/event-ticker.module.js",
+                "src/modules/event-notifier.module.js",
                 "src/modules/linkgroup.module.js",
                 "src/modules/attacklist.module.js",
                 "src/modules/todolist.module.js",
@@ -150,6 +150,19 @@
             ],
             "js": [
                 "src/modules/auto-gym-switch-inject.js"
+            ],
+            "world": "MAIN",
+            "run_at": "document_start"
+        },
+        {
+            "matches": [
+                "https://www.torn.com/loader.php?sid=attack*",
+                "https://torn.com/loader.php?sid=attack*",
+                "https://www.torn.com/page.php?sid=attack*",
+                "https://torn.com/page.php?sid=attack*"
+            ],
+            "js": [
+                "src/modules/war-target-caller-inject.js"
             ],
             "world": "MAIN",
             "run_at": "document_start"

@@ -1238,10 +1238,12 @@
             const entry = this.debtsAndLoans.find(e => e.id === entryId);
             if (!entry) return;
 
-            const amount = prompt(`Enter repayment amount for ${entry.playerName}:`);
-            if (amount && !isNaN(parseFloat(amount))) {
+            // Shorthand supported: 500k = 500,000 — 2.5m = 2,500,000 — 1b = 1,000,000,000
+            const amount = prompt(`Enter repayment amount for ${entry.playerName}:\n`);
+            const parsed = this.parseShorthand(amount);
+            if (amount && !isNaN(parsed) && parsed > 0) {
                 const message = prompt('Optional message/note:', '');
-                this.addRepayment(entryId, parseFloat(amount), message || '', false);
+                this.addRepayment(entryId, parsed, message || '', false);
             }
         },
 
@@ -1374,7 +1376,11 @@
         async showDebtTrackerWindow() {
             console.log('💰 Creating debt tracker in sidebar');
 
-            const contentArea = document.getElementById('sidekick-content');
+            // Load saved state first to determine the owning page
+            const state = await this.loadWindowState();
+
+            // Route to the page this window belongs to (sticky once saved; active page on first open)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(state?.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) {
                 console.error('💰 Sidebar content area not found');
                 return;
@@ -1387,9 +1393,6 @@
                 return; // Toggle behavior
             }
 
-            // Load current state to get pin status
-            const state = await this.loadWindowState();
-
             // Remove placeholder if it exists
             const placeholder = contentArea.querySelector('.sidekick-placeholder');
             if (placeholder) {
@@ -1397,7 +1400,7 @@
             }
 
             // Load saved state for position and size
-            const savedState = await this.loadWindowState();
+            const savedState = state;
 
             const contentWidth = contentArea.clientWidth || 480;
             const contentHeight = contentArea.clientHeight || 500;
@@ -2389,12 +2392,103 @@
             const entry = this.debtsAndLoans.find(e => e.id === entryId);
             if (!entry) return;
 
-            // Simple prompt for now - could be enhanced with a full dialog
-            const amount = prompt(`Add payment for ${entry.playerName}:\nCurrent balance: $${entry.currentAmount.toLocaleString()}\n\nPayment amount:`);
-            if (amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0) {
-                this.addRepayment(entryId, parseFloat(amount), 'Manual payment', false);
-                this.populateDebtTrackerWindow();
+            // Remove existing dialog if present
+            const existing = document.getElementById('sidekick-payment-dialog');
+            if (existing) {
+                existing.remove();
+                return;
             }
+
+            const dialog = document.createElement('div');
+            dialog.id = 'sidekick-payment-dialog';
+            dialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 340px;
+                background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
+                border: 1px solid #444;
+                border-radius: 8px;
+                z-index: 9999999;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+                color: #fff;
+                font-family: Arial, sans-serif;
+                overflow: hidden;
+            `;
+
+            dialog.innerHTML = `
+                <div style="background: rgba(0,0,0,0.3); padding: 12px 16px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; color: #2196f3; font-size: 15px;">Add Payment</h3>
+                    <button id="payment-dialog-close" style="background: #d32f2f; border: none; color: #fff; width: 22px; height: 22px; border-radius: 4px; cursor: pointer; font-size: 15px;">×</button>
+                </div>
+                <div style="padding: 16px;">
+                    <div style="margin-bottom: 6px; font-size: 13px;">
+                        <strong>${entry.playerName}</strong> — Current balance: <strong>$${entry.currentAmount.toLocaleString()}</strong>
+                    </div>
+                    <label style="display: block; margin: 12px 0 5px; font-weight: bold; font-size: 12px;">Payment Amount ($):</label>
+                    <input type="text" id="payment-amount" placeholder="e.g. 500k, 2.5m, 1b or 250000" style="
+                        width: 100%;
+                        box-sizing: border-box;
+                        padding: 8px;
+                        border: 1px solid #666;
+                        border-radius: 4px;
+                        background: rgba(255,255,255,0.1);
+                        color: #fff;
+                        font-size: 14px;
+                    ">
+                    <div id="payment-amount-preview" style="font-size: 11px; color: #ffa726; margin-top: 4px; min-height: 14px;"></div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px;">
+                        <button id="payment-dialog-cancel" style="background: #666; border: 1px solid #888; color: #fff; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 13px;">Cancel</button>
+                        <button id="payment-dialog-submit" style="background: #2196f3; border: 1px solid #42a5f5; color: #fff; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 13px;">Add Payment</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dialog);
+
+            const amountInput = dialog.querySelector('#payment-amount');
+            const preview = dialog.querySelector('#payment-amount-preview');
+            const closeDialog = () => dialog.remove();
+
+            dialog.querySelector('#payment-dialog-close')?.addEventListener('click', closeDialog);
+            dialog.querySelector('#payment-dialog-cancel')?.addEventListener('click', closeDialog);
+
+            const submitPayment = () => {
+                const parsed = this.parseShorthand(amountInput.value);
+                if (parsed && !isNaN(parsed) && parsed > 0) {
+                    this.addRepayment(entryId, parsed, 'Manual payment', false);
+                    this.populateDebtTrackerWindow();
+                    closeDialog();
+                } else {
+                    alert('Please enter a valid payment amount.');
+                }
+            };
+
+            dialog.querySelector('#payment-dialog-submit')?.addEventListener('click', submitPayment);
+
+            // Expand completed shorthand (e.g. "2.5m") into the full number right away
+            const expandAmount = () => {
+                const val = amountInput.value.trim();
+                if (!val) { preview.textContent = ''; return; }
+                const parsed = this.parseShorthand(val);
+                if (!isNaN(parsed) && parsed > 0) {
+                    // If input was shorthand (e.g. 500k), replace with full number immediately
+                    if (/^[\d.]+\s*[kmb]$/i.test(val)) {
+                        amountInput.value = Math.round(parsed).toString();
+                    }
+                    preview.textContent = `= $${Math.round(parsed).toLocaleString()}`;
+                } else {
+                    preview.textContent = '';
+                }
+            };
+            amountInput.addEventListener('input', expandAmount);
+            amountInput.addEventListener('blur', expandAmount);
+            amountInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); submitPayment(); }
+            });
+
+            setTimeout(() => amountInput.focus(), 100);
         },
 
         showIncreaseLoanDialog(entryId) {
@@ -2407,10 +2501,12 @@
                 return;
             }
 
-            const increaseAmount = prompt(`Increase loan amount for ${entry.playerName}:\nCurrent loan: $${entry.originalAmount.toLocaleString()}\nCurrent balance: $${entry.currentAmount.toLocaleString()}\n\nIncrease amount:`);
+            // Shorthand supported: 500k = 500,000 — 2.5m = 2,500,000 — 1b = 1,000,000,000
+            const increaseAmount = prompt(`Increase loan amount for ${entry.playerName}:\nCurrent loan: $${entry.originalAmount.toLocaleString()}\nCurrent balance: $${entry.currentAmount.toLocaleString()}\n\nIncrease amount:\n(e.g. 500k, 2.5m, 1b)`);
+            const parsed = this.parseShorthand(increaseAmount);
 
-            if (increaseAmount && !isNaN(parseFloat(increaseAmount)) && parseFloat(increaseAmount) > 0) {
-                const increase = parseFloat(increaseAmount);
+            if (increaseAmount && !isNaN(parsed) && parsed > 0) {
+                const increase = parsed;
 
                 // Update the loan amounts
                 entry.originalAmount += increase;
@@ -2530,10 +2626,22 @@ ${entry.frozen ? '\nStatus: FROZEN' : ''}`;
             }, 3000);
         },
 
+        // Remove tracker window if it belongs to a deleted page
+        async purgePage(pageId) {
+            if (pageId == null) return;
+            const state = await this.loadWindowState();
+            if (state.pageId != null && String(state.pageId) === String(pageId)) {
+                document.querySelector('.sidekick-debt-tracker')?.remove();
+                this.isDebtTrackerOpen = false;
+                await window.SidekickModules.Core.ChromeStorage.set('debt_tracker_window_state', { isOpen: false, pageId: null });
+                console.log('💰 Debt tracker purged (its page was deleted)');
+            }
+        },
+
         // Save window state for persistence (shared across all tabs)
         async saveWindowState(isOpen, element = null) {
             try {
-                const state = { isOpen };
+                const state = { isOpen, pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null };
 
                 if (element && isOpen) {
                     const contentArea = document.getElementById('sidekick-content');

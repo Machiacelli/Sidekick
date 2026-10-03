@@ -32,6 +32,22 @@ const WarTargetCallerModule = {
     REQUEST_TIMEOUT_MS: 12000,
     CLIENT_NAME: 'sidekick',
 
+    // ── Claim time limits (policy: every call maxes out at 20 min) ────
+    CALL_MAX_MS: 20 * 60 * 1000,       // a claim older than this is dead
+    CALL_MIN_HOSPITAL_MS: 20 * 60 * 1000, // hospitalized > 20 min remaining can't be called
+    sweepTimer: null,                    // local expiry sweep (see startExpirySweep)
+
+    // ── Faction gate ─────────────────────────────────────────────────
+    // Only members of this faction may use the tornwar.com war room. Everyone
+    // else falls back to "copy mode": the ✔️ button still appears on enemy
+    // rows, but clicking it ONLY copies the claim message to the clipboard —
+    // no server auth, no polling, no shared claim state.
+    REQUIRED_FACTION_NAME: 'Dead Fragment',
+    factionCheckDone: false,   // result cached for the page session
+    isDeadFragment: false,     // false until proven true — fail CLOSED to copy mode
+    factionCheckPromise: null,  // single-flight guard so enable()/re-enables share one lookup
+
+
     auth: null, // { token, playerId, playerName, factionId } — memory only, per page load
     calls: {},  // authoritative server state: targetId -> { calledBy:{id,name}, calledAt, isDeal }
     rowNameById: new Map(), // targetId -> display name scraped from the war panel rows
@@ -72,6 +88,17 @@ const WarTargetCallerModule = {
             }
         });
 
+        // Auto-release after a successful attack. The MAIN-world injector
+        // (war-target-caller-inject.js, attack pages only) patches fetch/XHR
+        // and relays Torn's own attack-resolution JSON via a CustomEvent with
+        // a STRINGIFIED detail (repo rule #4 — non-primitive details are
+        // stripped crossing worlds). Registered here so it works on ALL
+        // pages, not just factions.php: claims are only ever made there, but
+        // the attack happens on loader.php?sid=attack, a different page load.
+        document.addEventListener('sidekick:attack-result', (e) => {
+            this.handleAttackResult(e.detail);
+        });
+
         console.log('🎯 FactionOps Target Caller initialized');
     },
 
@@ -84,19 +111,68 @@ const WarTargetCallerModule = {
         }
     },
 
-    enable() {
+    async enable() {
         this.isEnabled = true;
         this.injectStyles();
 
         if (window.location.href.includes('factions.php')) {
+            // Faction gate runs BEFORE any tornwar.com traffic. Non-members
+            // (and anyone whose faction can't be determined) get the local
+            // copy-to-clipboard mode instead of the shared war room.
+            await this.ensureFactionChecked();
             this.startMembersObserver();
-            this.startPolling();
+            if (this.isDeadFragment) {
+                this.startPolling();
+                this.startExpirySweep();
+            } else {
+                console.log('🎯 FactionOps Target Caller: not in ' + this.REQUIRED_FACTION_NAME + ' — copy-paste mode (claims are copied to your clipboard only, not shared)');
+            }
         }
+    },
+
+    /**
+     * Resolve (once per page load) whether the user is in the required
+     * faction, via the user's own Torn API key through the background
+     * fetchTornApi proxy. Fail-closed: any error, missing key, or a
+     * factionless profile yields copy mode — we must never send a
+     * non-member's claims to the FactionOps server.
+     */
+    async ensureFactionChecked() {
+        if (this.factionCheckDone) return this.isDeadFragment;
+        if (this.factionCheckPromise) return this.factionCheckPromise;
+
+        this.factionCheckPromise = (async () => {
+            const Core = window.SidekickModules.Core;
+            let factionName = null;
+            try {
+                const apiKey = await Core.ChromeStorage.get(Core.STORAGE_KEYS.API_KEY);
+                if (apiKey) {
+                    const res = await Core.SafeMessageSender.sendToBackground({
+                        action: 'fetchTornApi',
+                        apiKey,
+                        selections: ['profile'],
+                    });
+                    if (res?.success) {
+                        factionName = res.profile?.faction?.faction_name || null;
+                    }
+                }
+            } catch (error) {
+                console.warn('🎯 FactionOps Target Caller: faction check failed — defaulting to copy-paste mode:', error?.message || error);
+            }
+
+            this.isDeadFragment = !!factionName &&
+                String(factionName).trim().toLowerCase() === this.REQUIRED_FACTION_NAME.toLowerCase();
+            this.factionCheckDone = true;
+            return this.isDeadFragment;
+        })();
+
+        return this.factionCheckPromise;
     },
 
     disable() {
         this.isEnabled = false;
         this.stopPolling();
+        this.stopExpirySweep();
 
         if (this.membersObserver) {
             this.membersObserver.disconnect();
@@ -108,6 +184,7 @@ const WarTargetCallerModule = {
 
         // Remove visuals
         document.querySelectorAll('.sk-wtc-badge, .sk-wtc-btn').forEach(el => el.remove());
+        document.querySelectorAll('.sk-wtc-row-anchor').forEach(el => el.classList.remove('sk-wtc-row-anchor'));
     },
 
     injectStyles() {
@@ -133,15 +210,50 @@ const WarTargetCallerModule = {
                 transform: scale(0.9);
             }
             .sk-wtc-badge {
+                /* Overlays EXACTLY the level + score columns (edges measured
+                   in JS from those cells); status/attack stay uncovered. The
+                   whole overlay is one hit target: dblclick = attack,
+                   right-click = release (own claims). Name truncates with an
+                   ellipsis — it does not need to fit. */
+                position: absolute;
+                top: 0;
+                right: 0;
+                height: 100%;
+                z-index: 5;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
                 font-size: 12px;
-                margin-right: 3px;
-                vertical-align: middle;
-                line-height: 1;
+                font-weight: 700;
+                letter-spacing: 0.3px;
+                padding: 0 6px;
+                box-sizing: border-box;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                line-height: 1.3;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            }
+            .sk-wtc-badge span.sk-wtc-name {
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            /* Rows must establish a positioning context for the badge and
+               the claim button — done in JS on the li (addBadgeAnchor).
+               overflow:hidden clips the badge's text at the row's own
+               bounds so a long caller name can never bleed into the rows
+               above or below. */
+            .sk-wtc-row-anchor {
+                position: relative !important;
+                overflow: hidden;
             }
             .sk-wtc-error {
                 /* !important — per-caller colours are set inline on the badge,
                    and inline styles would otherwise hide the error tint. */
                 color: #ff4d4d !important;
+                border-color: #ff4d4d !important;
+                background: rgba(80, 0, 0, 0.7) !important;
             }
         `;
         document.head.appendChild(style);
@@ -150,6 +262,15 @@ const WarTargetCallerModule = {
     // ------------------------------------------------------------------
     // Server plumbing (all via background `proxyFetch`)
     // ------------------------------------------------------------------
+
+    /** True when this page's copy of the extension API is gone — happens
+     *  after Sidekick is reloaded/updated while a Torn tab stays open. The
+     *  page keeps running the OLD code and every message to the background
+     *  service worker fails with "Extension context invalidated" until the
+     *  tab is refreshed. Detectable via chrome.runtime.id vanishing. */
+    extensionContextDead() {
+        return typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id;
+    },
 
     scriptVersion() {
         // Sent to /api/auth alongside the key — whitelisted server-side by
@@ -350,6 +471,19 @@ friendlyStatus(status, fallback) {
 
     notePollFailure(err) {
         this.pollFailedCount++;
+        // Dev/workflow artifact, NOT a server problem: Sidekick was reloaded
+        // while this Torn tab stayed open, so this page's copy of the content
+        // script no longer has a working bridge to the background service
+        // worker. Nothing tornwar-related can work from this tab until it is
+        // refreshed — say that once, plainly, instead of logging the raw
+        // transport error every 5s tick forever.
+        const msg = String(err?.message || err || '');
+        if (this.extensionContextDead() || /extension context/i.test(msg)) {
+            if (this.pollFailedCount === 1) {
+                console.warn('🎯 FactionOps poll stopped: Sidekick was reloaded while this Torn tab was open. Refresh the tab — polling and calling reconnect automatically afterwards.');
+            }
+            return;
+        }
         // Log the first failure, then every 10th — a blip every 5s would
         // flood the console without adding insight.
         if (this.pollFailedCount === 1 || this.pollFailedCount % 10 === 0) {
@@ -418,6 +552,111 @@ friendlyStatus(status, fallback) {
         return idMatch ? idMatch[1] : null;
     },
 
+    /** The badge is absolutely positioned within the row — mark the li as
+     *  the positioning context (Torn's own list styles vary across skins).
+     *  Idempotent: safe to call on every updateMemberRow pass. */
+    addBadgeAnchor(li) {
+        if (!li.classList.contains('sk-wtc-row-anchor')) {
+            li.classList.add('sk-wtc-row-anchor');
+        }
+    },
+
+    /** Local expiry sweep: every 15s, drop the local view of any claim older
+     *  than CALL_MAX_MS from this.calls and re-render. The server still says
+     *  what it says — we just stop DISPLAYING museum pieces, and our own
+     *  expired claims get released on the server via unclaimTarget. Runs
+     *  alongside polling so visuals go stale-proof even between polls. */
+    startExpirySweep() {
+        if (this.sweepTimer) return;
+        this.sweepTimer = setInterval(() => this.sweepExpiredCalls(), 15000);
+    },
+
+    stopExpirySweep() {
+        if (this.sweepTimer) {
+            clearInterval(this.sweepTimer);
+            this.sweepTimer = null;
+        }
+    },
+
+    sweepExpiredCalls() {
+        if (!this.calls || !this.isDeadFragment) return;
+        const now = Date.now();
+        let changed = false;
+        const expirers = [];
+        for (const tid of Object.keys(this.calls)) {
+            const call = this.calls[tid];
+            const at = this.calledAtMs(call);
+            if (at && now - at > this.CALL_MAX_MS) {
+                const mine = String(call.calledBy?.id ?? '') === String(this.auth?.playerId ?? '');
+                delete this.calls[tid];
+                changed = true;
+                if (mine) expirers.push(tid); // my expired claim — release server-side too
+                console.log(`🎯 FactionOps Target Caller: claim on ${tid} expired after 20 min — removed`);
+            }
+        }
+        if (changed) {
+            this.updateWarPanelVisuals();
+            expirers.forEach(tid => this.unclaimTarget(tid).catch(() => {}));
+        }
+    },
+
+    /** Hospital gate: calling a target IN hospital is fine — but only if
+     *  they are out (or were bailed) within the next 20 min. If War Monitor
+     *  shows them hospitalized with MORE than 20 min on the clock, the call
+     *  is blocked and the user gets a notification banner. Unknown status
+     *  (War Monitor hasn't seen them) never blocks — don't lock the war
+     *  room behind a soft dependency. */
+    hospitalGate(targetId) {
+        const status = window.SidekickModules?.WarMonitor?.memberStatus?.get(String(targetId));
+        if (!status) return { blocked: false };
+        const outOfBounds = status.state !== 'Hospital' && status.state !== 'Jail';
+        if (outOfBounds) return { blocked: false };
+        const now = Date.now() / 1000;
+        if (status.until && status.until > now) {
+            const leftMs = (status.until - now) * 1000;
+            if (leftMs > this.CALL_MAX_MS) {
+                const mins = Math.floor(((status.until - now) / 60));
+                return {
+                    blocked: true,
+                    reason: `${status.state} for ${mins} more min — targets hospitalized over 20 min can't be called`,
+                };
+            }
+        }
+        return { blocked: false };
+    },
+
+    /** Notification banner helper — the row tint alone was easy to miss
+     *  when a claim was refused; route through Core's toast system when
+     *  available (respects the user's sound/duration prefs), console as
+     *  fallback so nothing is ever silent. */
+    showBanner(title, message, type = 'warning') {
+        const ns = window.SidekickModules?.Core?.NotificationSystem;
+        if (ns?.show) {
+            ns.show(title, message, type, 6000);
+        }
+        console.warn('🎯 FactionOps Target Caller:', title, '—', message);
+    },
+
+    /** Normalise a claim timestamp to epoch MILLISECONDS. The server's
+     *  calledAt may arrive as a seconds epoch, an ISO string, or ms — the
+     *  20-min expiry math must not misread a fresh claim as ancient (that
+     *  is exactly what made the call button "do nothing": every new claim
+     *  was treated as already expired and instantly swept away). */
+    calledAtMs(call) {
+        if (!call || !call.calledAt) return null;
+        let t = call.calledAt;
+        if (typeof t === 'string') {
+            const parsed = Date.parse(t);
+            t = Number.isNaN(parsed) ? Number(t) : parsed;
+        } else {
+            t = Number(t);
+        }
+        if (!Number.isFinite(t) || t <= 0) return null;
+        // Heuristic: a value around 1e9 is SECONDS since epoch; 1e12+ is ms.
+        if (t < 1e12) t *= 1000;
+        return t;
+    },
+
     extractNameFromRow(li) {
         const nameEl = li.querySelector('.name a') || li.querySelector('.user.name');
         if (nameEl) return nameEl.textContent.trim();
@@ -445,43 +684,106 @@ friendlyStatus(status, fallback) {
         const targetName = this.extractNameFromRow(li);
         if (targetName) this.rowNameById.set(String(targetId), targetName);
 
+        this.addBadgeAnchor(li);
+
         const tid = String(targetId);
-        const call = this.calls[tid];
+        const call = this.isDeadFragment ? this.calls[tid] : null;
+
+        // 20-min policy at render time: a claim older than CALL_MAX_MS is
+        // dead — show the claim button, not the badge (the sweep removes it
+        // from this.calls within 15s; this keeps re-renders honest in between).
+        if (call && this.calledAtMs(call) && Date.now() - this.calledAtMs(call) > this.CALL_MAX_MS) {
+            this.sweepExpiredCalls();
+            return; // swept re-render paints the row fresh
+        }
 
         // A "Copied to clipboard" flash is in progress on this row — our own
         // DOM write (or React's re-render) must not stomp it before it ends.
         if (this.flashTid === tid && Date.now() < this.flashUntil) return;
+
+        // Copy mode: never render other players' server claims (we don't
+        // poll, so this.calls is empty anyway — the guard is explicit) and
+        // strip any stale badge left over from a previous session/mode.
+        if (!this.isDeadFragment) {
+            const staleBadge = li.querySelector('.sk-wtc-badge');
+            if (staleBadge) staleBadge.remove();
+        }
 
         if (call) {
             // Claimed — render the caller's name, exactly like FactionOps
             // does natively. Mine: clickable to release. Others: plain text.
             const mine = String(call.calledBy?.id ?? '') === String(this.auth?.playerId ?? '');
             const who = call.calledBy?.name || 'Claimed';
-            const whoColor = this.callerColor(who, !!mine);
+            const style = this.callerColor(who, !!mine);
 
             let badge = li.querySelector('.sk-wtc-badge');
             if (!badge) {
-                badge = document.createElement('button');
-                badge.className = 'sk-wtc-btn sk-wtc-badge';
-                if (mine) {
-                    badge.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.unclaimTarget(tid, li);
-                    });
-                }
-                container.insertBefore(badge, container.firstChild);
+                // Full-row overlay. A span, not a button: single clicks must
+                // fall through to the row's own links. DOUBLE-click attacks
+                // the target (even though it's already called). Own claims
+                // release automatically when the hit lands (handleAttackResult)
+                // or when the 20-min cap expires (sweepExpiredCalls).
+                badge = document.createElement('span');
+                badge.className = 'sk-wtc-badge';
+                badge.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.attackTarget(tid, li);
+                });
+                // Right-click ANYWHERE on the overlay releases — only when the
+                // claim is yours (checked live via dataset, refreshed on each
+                // render, instead of this.calls which may lag a poll tick).
+                badge.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (badge.dataset.skMine !== '1') return;
+                    const mineTid = badge.dataset.skTid;
+                    if (mineTid) this.unclaimTarget(mineTid, li);
+                });
+                container.appendChild(badge);
             }
+            // Name only — the pill styling itself conveys "called", and a
+            // prefix made the badge wide enough to crowd the row's own text.
             if (badge.textContent !== who) badge.textContent = who;
             // Stable per-caller color — same person is always the same color,
             // different people resolve differently (name-hash → HSL hue).
-            if (badge.style.color !== whoColor) badge.style.color = whoColor;
+            // Every property is re-asserted each render so the transient
+            // "Copied to clipboard" flash (which overwrites them inline)
+            // always self-heals on the next updateWarPanelVisuals pass.
+            if (badge.style.color !== style.text) badge.style.color = style.text;
+            if (badge.style.backgroundColor !== style.bg) badge.style.backgroundColor = style.bg;
+            if (badge.style.borderColor !== style.border) badge.style.borderColor = style.border;
             const newTitle = mine
-                ? 'Called by you — click to release'
-                : (call.isDeal ? 'Deal call by ' : 'Called by ') + who;
+                ? 'Called by you — double-click to attack, right-click to release'
+                : (call.isDeal ? 'Deal call by ' : 'Called by ') + who + ' — double-click to attack';
             if (badge.title !== newTitle) badge.title = newTitle;
-            const newCursor = mine ? 'pointer' : 'default';
-            if (badge.style.cursor !== newCursor) badge.style.cursor = newCursor;
+            if (badge.style.cursor !== 'pointer') badge.style.cursor = 'pointer';
+            // Live markers for the contextmenu handler — refreshed every
+            // render so a released/swapped claim can never be released twice
+            // or someone else's badge be mistaken for yours after a re-render.
+            badge.dataset.skMine = mine ? '1' : '0';
+            badge.dataset.skTid = tid;
+
+            // Overlay spans EXACTLY level → score. The li is the positioning
+            // context (sk-wtc-row-anchor), so offsetLeft/offsetRight are
+            // row-relative. left = level's left edge; width = from there to
+            // score's RIGHT edge — the status and attack columns to the far
+            // right stay uncovered and clickable.
+            const levelCell = li.querySelector('.level');
+            const scoreCell = li.querySelector('.score') || li.querySelector('.points');
+            if (levelCell && scoreCell) {
+                const left = levelCell.offsetLeft;
+                const right = scoreCell.offsetLeft + scoreCell.offsetWidth;
+                if (badge.style.left !== left + 'px') badge.style.left = left + 'px';
+                const width = Math.max(40, right - left);
+                if (badge.style.width !== width + 'px') badge.style.width = width + 'px';
+            } else if (levelCell) {
+                const left = levelCell.offsetLeft;
+                if (badge.style.left !== left + 'px') badge.style.left = left + 'px';
+                if (badge.style.width !== '90px') badge.style.width = '90px';
+            } else if (!badge.style.width) {
+                badge.style.width = '110px';
+            }
         } else {
             // Free target — offer the claim button. (Row-skipping for the
             // "Copied to clipboard" flash is handled at the top of
@@ -490,19 +792,61 @@ friendlyStatus(status, fallback) {
             if (badge) badge.remove();
 
             let btn = li.querySelector('.sk-wtc-btn:not(.sk-wtc-badge)');
+            const btnTitle = this.isDeadFragment ? 'Call target' : 'Copy claim message to clipboard';
             if (!btn) {
                 btn = document.createElement('button');
                 btn.className = 'sk-wtc-btn';
                 btn.textContent = '✔️';
-                btn.title = 'Call target';
+                btn.title = btnTitle;
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    this.claimTarget(tid, li);
+                    if (this.isDeadFragment) {
+                        this.claimTarget(tid, li);
+                    } else {
+                        this.copyOnlyClaim(tid, li);
+                    }
                 });
+                // Original placement: inline at the start of the row's
+                // first cell (before the level/name), right where it has
+                // always been.
                 container.insertBefore(btn, container.firstChild);
+            } else if (btn.title !== btnTitle) {
+                // Mode may have resolved after the button was first rendered
+                // (faction check is async) — keep the tooltip honest.
+                btn.title = btnTitle;
             }
         }
+    },
+
+    /**
+     * Attack a target from the war panel row. Torn moved attack pages to
+     * page.php?sid=attack — loader.php answers with the "endpoint no longer
+     * available" JSON — so look for the row's new-style attack link first,
+     * then navigate to the current URL format directly.
+     */
+    attackTarget(tid, li) {
+        if (!tid) return;
+        const attackLink = li && li.querySelector(`a[href*='sid=attack']`);
+        if (attackLink) {
+            attackLink.click();
+            return;
+        }
+        window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(tid)}`;
+    },
+
+    /**
+     * Copy-mode claim: no authentication, no server POST, no local claim
+     * state. Copies the same "Hitting <name> [id] in Nm Ns" message to the
+     * clipboard and flashes the confirmation on the row. The user pastes it
+     * into faction chat themselves.
+     */
+    copyOnlyClaim(targetId, li) {
+        const tid = String(targetId);
+        const targetName = this.rowNameById.get(tid) || this.extractNameFromRow(li) || `target ${tid}`;
+        this.copyCallMessage(tid, targetName);
+        this.flashCopied(li, tid);
+        console.log('🎯 FactionOps Target Caller: claim message for ' + targetName + ' copied to clipboard (copy-paste mode — not shared with the war room)');
     },
 
     updateWarPanelVisuals() {
@@ -521,6 +865,35 @@ friendlyStatus(status, fallback) {
     async claimTarget(targetId, li) {
         const tid = String(targetId);
         const targetName = this.rowNameById.get(tid) || this.extractNameFromRow(li) || `target ${tid}`;
+
+        // Extension context died (Sidekick reloaded while this tab stayed
+        // open) — no message can reach the background worker. Surface the
+        // real reason on the row immediately instead of an opaque failed
+        // round trip that reads like "the button does nothing".
+        if (this.extensionContextDead()) {
+            this.showRowError(li, new Error('Sidekick was reloaded — refresh this Torn tab to reconnect'));
+            console.warn('🎯 FactionOps Target Caller: claim blocked — Sidekick was reloaded while this page was open. Refresh the Torn tab to call targets again.');
+            return;
+        }
+
+        // Hospital gate: hospitalized targets CAN be called, but only when
+        // they're out within 20 min. Over that: refuse with a notification
+        // banner (the row tint was too easy to miss).
+        const gate = this.hospitalGate(tid);
+        if (gate.blocked) {
+            const targetLabel = `${targetName} [${tid}]`;
+            this.showBanner('Call refused', `${targetLabel} is in ${gate.reason}`, 'warning');
+            this.showRowError(li, new Error(gate.reason));
+            return;
+        }
+
+        // Backstop: if the faction gate resolved to copy mode while a Dead
+        // Fragment click was somehow already routed here, degrade instead of
+        // ever sending a non-member's claim to the server.
+        if (!this.isDeadFragment) {
+            this.copyOnlyClaim(tid, li);
+            return;
+        }
 
         try {
             if (!this.auth) {
@@ -556,7 +929,7 @@ friendlyStatus(status, fallback) {
             // Optimistic claim; the next poll echo confirms or reverts it.
             this.calls[tid] = {
                 calledBy: { id: this.auth.playerId, name: this.auth.playerName || 'You' },
-                calledAt: Date.now(),
+                calledAt: Date.now(), // ms — normalized by calledAtMs on read
                 isDeal: false,
             };
             this.updateWarPanelVisuals();
@@ -602,11 +975,73 @@ friendlyStatus(status, fallback) {
         }
     },
 
+    /**
+     * A successful attack just resolved on this target (relayed by the
+     * MAIN-world injector on the attack page). Your hit landed, so your own
+     * claim on this target is spent — auto-release it.
+     *
+     * Scoped to YOUR claim only: a teammate's claim (or one you haven't
+     * made) is never touched. Server sync + failure rollback are handled by
+     * the existing unclaimTarget path.
+     */
+    async handleAttackResult(detail) {
+        // Copy mode never has claim state (and never authenticated), so a
+        // relayed hit there is a no-op — there is nothing to release.
+        if (!this.isEnabled || !this.isDeadFragment) return;
+
+        let payload;
+        try {
+            payload = JSON.parse(detail);
+        } catch (_) {
+            return; // malformed relay — ignore
+        }
+
+        const tid = String(payload?.targetId || '');
+        const result = payload?.result;
+        if (!tid || !result) return;
+
+        // The attack page is a SEPARATE page load from factions.php where
+        // claims are made — polling never ran here, so this.calls is empty
+        // and this.auth is unset. Authenticate on demand and pull the live
+        // claim map for this war before deciding.
+        let call, data;
+        try {
+            if (!this.warId()) {
+                await this.ensureAuth();
+            }
+            const warId = this.warId();
+            if (!warId) return; // no key or not in a faction — nothing to release
+
+            data = await this.serverRequest(`/api/poll?warId=${encodeURIComponent(warId)}`);
+            const calls = data?.calls || {};
+            call = calls[tid];
+        } catch (err) {
+            console.warn('🎯 FactionOps Target Caller: could not check claims after attack result:', err?.message || err);
+            return;
+        }
+
+        if (!call || !call.calledBy) return;
+
+        const mine = String(call.calledBy.id ?? '') === String(this.auth?.playerId ?? '');
+        if (!mine) return; // someone else's claim — leave it alone
+
+        // Adopt the fresh claim map so unclaimTarget's guards and the next
+        // factions.php render agree with the server.
+        if (data && data.calls) this.calls = data.calls;
+
+        console.log('🎯 FactionOps Target Caller: successful hit on your claimed target ' + tid + ' — auto-releasing');
+        await this.unclaimTarget(tid);
+    },
+
     /** Inline, transient error feedback on the row's button — no toasts/alerts. */
     showRowError(li, err) {
         const btn = li.querySelector('.sk-wtc-badge') || li.querySelector('.sk-wtc-btn');
         if (!btn) return;
-        btn.title = err?.message || 'Server error';
+        const raw = String(err?.message || err || 'Server error');
+        // Translate the cryptic transport line into the actual instruction.
+        btn.title = /extension context/i.test(raw)
+            ? 'Sidekick was reloaded — refresh this Torn tab to reconnect'
+            : raw;
         btn.classList.add('sk-wtc-error');
         setTimeout(() => {
             btn.classList.remove('sk-wtc-error');
@@ -640,7 +1075,8 @@ friendlyStatus(status, fallback) {
      * Stable colour per caller: hash the caller's NAME into an HSL hue so the
      * same person is always the same colour (across rows, re-renders and page
      * reloads) while different people resolve to visibly different colours.
-     * Own calls get a higher lightness so "yours" always reads as the bright one.
+     * Returns the full pill style set: bright border + dark translucent bg
+     * + light text. Own calls get brighter tones so "yours" always pops.
      */
     callerColor(name, mine) {
         const key = String(name || '?').toLowerCase();
@@ -651,7 +1087,11 @@ friendlyStatus(status, fallback) {
                 hash |= 0; // keep it a 32-bit int
             }
             const hue = Math.abs(hash) % 360;
-            this.colorCache.set(key, `hsl(${hue}, 85%, ${mine ? 65 : 55}%)`);
+            this.colorCache.set(key, {
+                text: '#ffffff',
+                bg: `hsla(${hue}, 75%, ${mine ? 30 : 20}%, 0.85)`,
+                border: `hsl(${hue}, 85%, ${mine ? 65 : 52}%)`,
+            });
         }
         return this.colorCache.get(key);
     },
@@ -664,14 +1104,18 @@ friendlyStatus(status, fallback) {
      * live, and the timer itself does the restore.
      */
     flashCopied(li, tid) {
-        const badge = li.querySelector('.sk-wtc-badge');
+        // In copy mode the row holds the ✔️ button (no caller badge), so flash
+        // on whichever element is present.
+        const badge = li.querySelector('.sk-wtc-badge') || li.querySelector('.sk-wtc-btn');
         if (!badge) return;
 
         this.flashTid = String(tid);
         this.flashUntil = Date.now() + 1600;
 
-        badge.textContent = 'Copied to clipboard';
+        badge.textContent = 'Copied!';
         badge.style.color = '#4CAF50';
+        badge.style.backgroundColor = 'rgba(76, 175, 80, 0.25)';
+        badge.style.borderColor = '#4CAF50';
         badge.style.fontSize = '10px';
 
         setTimeout(() => {
@@ -680,7 +1124,8 @@ friendlyStatus(status, fallback) {
                 this.flashTid = null;
                 this.flashUntil = 0;
                 // The flash set fontSize/color inline; the re-render restores
-                // the per-caller color, but fontSize needs an explicit reset.
+                // the per-caller color/border/background, but fontSize needs an
+                // explicit reset.
                 badge.style.fontSize = '';
             }
             this.updateWarPanelVisuals();

@@ -400,12 +400,16 @@
             await chrome.storage.local.set({
                 [NOTIFICATIONS_KEY]: all.map(notification => ({ ...notification, read: true }))
             });
+            // Viewing unread history also clears the action badge so the
+            // count doesn't linger after the user has seen the alerts.
+            try { await chrome.runtime.sendMessage({ action: 'clearCrimeBadge' }); } catch (e) { /* background may be asleep */ }
         }
         elements.notificationDot.hidden = true;
     }
 
     async function clearNotifications() {
         await chrome.storage.local.set({ [NOTIFICATIONS_KEY]: [] });
+        try { await chrome.runtime.sendMessage({ action: 'clearCrimeBadge' }); } catch (e) { /* background may be asleep */ }
         await renderNotifications();
         showToast('Notifications cleared');
     }

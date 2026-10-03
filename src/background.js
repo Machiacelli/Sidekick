@@ -193,6 +193,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({ success: true, message: 'Background script is alive', timestamp: Date.now() });
             break;
 
+        case 'clearCrimeBadge':
+            // Called by the popup when the user views/clears the notification
+            // history, so the action badge doesn't stay stuck at a stale count.
+            clearBadge()
+                .then(() => sendResponse({ success: true }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+            return true; // async
+
         case 'fetchTornApi':
             // Handle Torn API calls from content scripts (avoids CORS)
             handleTornApiCall(request)
@@ -241,12 +249,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             break;
 
         case 'notification':
-            // Create native Chrome notifications
+            // Create native Chrome notifications. requireInteraction: true
+            // keeps the OS notification on screen until the user interacts
+            // (used by acknowledge-required alerts like the event notifier).
             chrome.notifications.create({
                 type: 'basic',
                 iconUrl: 'assets/icons/swissknife-48.png',
                 title: request.title || 'Sidekick',
-                message: request.message || 'Notification from Sidekick'
+                message: request.message || 'Notification from Sidekick',
+                requireInteraction: request.requireInteraction === true
             });
             sendResponse({ success: true });
             break;

@@ -121,6 +121,18 @@
             // Torn time is UTC
             const hour = now.getUTCHours();
 
+            // First pass: find which area has the highest confidence score
+            // right now, so exactly one button can be crowned "best this hour".
+            let bestLocation = null;
+            let bestScore = -1;
+            for (const [location, data] of Object.entries(LOCATION_TIME_DATA)) {
+                const slot = data.slots.find(s => hour >= s.start && hour < s.end);
+                if (slot && slot.score > bestScore) {
+                    bestScore = slot.score;
+                    bestLocation = location;
+                }
+            }
+
             Object.entries(LOCATION_TIME_DATA).forEach(([location, data]) => {
 
                 const button = document.querySelector(
@@ -137,6 +149,10 @@
                 );
 
                 if (!slot) return;
+
+                // Faint green glow on the area the timetable says is the
+                // best pick for the current hour (toggled off for the rest).
+                button.classList.toggle('sk-burglary-best', location === bestLocation);
 
                 const color = this.getLocationColor(slot.score);
 
@@ -279,6 +295,7 @@
             this.addConfidencePercentages();
             this.updateLocationButtons();
 
+            this._injectGlowStyles();
             this._intervalId = setInterval(() => {
                 this.addConfidencePercentages();
                 this.updateLocationButtons();
@@ -352,6 +369,21 @@
             this._headerObserver.observe(document.body, { childList: true, subtree: true });
         },
 
+        // Style block for the "best area right now" glow
+        _injectGlowStyles() {
+            if (document.getElementById('sk-burglary-glow-styles')) return;
+            const s = document.createElement('style');
+            s.id = 'sk-burglary-glow-styles';
+            s.textContent = `
+                button.sk-burglary-best {
+                    box-shadow: 0 0 8px 2px rgba(76, 175, 80, 0.35),
+                                0 0 16px 4px rgba(76, 175, 80, 0.15) !important;
+                    border-radius: 4px;
+                }
+            `;
+            document.head.appendChild(s);
+        },
+
         disable() {
             console.log('🏠 Disabling Burglary Module');
 
@@ -370,6 +402,12 @@
                 this._headerObserver = null;
             }
             this._removeHeaderBadge();
+
+            // Remove best-area glow styling and classes
+            document.getElementById('sk-burglary-glow-styles')?.remove();
+            document.querySelectorAll('button.sk-burglary-best').forEach(b =>
+                b.classList.remove('sk-burglary-best')
+            );
 
             // Clean up UI
             const displays = document.querySelectorAll('.conf-text-display');

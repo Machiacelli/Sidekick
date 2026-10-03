@@ -197,7 +197,12 @@
         async showStockAdvisor() {
             console.log('📈 Creating Stock Advisor window...');
 
-            const contentArea = document.getElementById('sidekick-content');
+            // Load saved window state first to find the owning page
+            let savedOpenState = null;
+            try { savedOpenState = await this.loadWindowState(); } catch (e) { /* ignore */ }
+
+            // Route to the page this window belongs to (sticky once saved; active page on first open)
+            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(savedOpenState?.pageId) || document.getElementById('sidekick-content');
             if (!contentArea) {
                 console.error('📈 Sidebar content area not found');
                 return;
@@ -594,6 +599,19 @@
             windowElement._resizeObserver = resizeObserver;
         },
 
+        // Remove window if it belongs to a deleted page
+        async purgePage(pageId) {
+            if (pageId == null) return;
+            const state = await this.loadWindowState();
+            if (state?.pageId != null && String(state.pageId) === String(pageId)) {
+                document.querySelector('.movable-stockadvisor')?.remove();
+                this.isWindowOpen = false;
+                if (this.refreshInterval) { clearInterval(this.refreshInterval); this.refreshInterval = null; }
+                await window.SidekickModules.Core.ChromeStorage.set('sidekick_stockadvisor_window', { ...state, isOpen: false, pageId: null });
+                console.log('📈 Stock Advisor purged (its page was deleted)');
+            }
+        },
+
         // Load window state
         async loadWindowState() {
             try {
@@ -614,6 +632,7 @@
 
                 const state = {
                     isOpen: isOpen,
+                    pageId: window.SidekickModules?.UI?.getActivePageId?.() ?? null, // page this window belongs to
                     x: parseInt(windowElement.style.left) || 10,
                     y: parseInt(windowElement.style.top) || 10,
                     width: windowElement.offsetWidth,
