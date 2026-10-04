@@ -28,9 +28,3 @@ Sidekick modules live in one of two places:
 - **Settings** — open the Sidekick sidebar → gear (Settings) → tabs: Personal, Gym, Economy, Utility, Reminders, Crimes, War, Missions, Events, Medical, Mugging, Merits
 - **Toolbar popup** — click the Sidekick extension icon to toggle most modules on/off quickly, grouped by category
 - **API key** — many modules read live data; set your key once in Settings → API and they all share it
-
-## On by default
-
-Fast Attack · Attack Online Status · Item Market Max Quantity · Special Gym Ratios · OC Weights · Travel Blocker (and its three rules) · Player ID Linker (no toggle, always on) · Clock / Notepad / Event Ticker (Event Calendar row: off) · Debt Receipt Sharing (with Debt Tracker)
-
-Everything else is opt-in.
