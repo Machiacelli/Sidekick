@@ -97,8 +97,8 @@ button, input { font: inherit; }
 .brand:hover { color: var(--text); text-decoration: none; }
 
 .brand-logo {
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
   object-fit: contain;
   border-radius: 10px;
   filter: drop-shadow(0 5px 15px rgba(102,187,106,.25));
@@ -311,10 +311,10 @@ button, input { font: inherit; }
   position: relative;
   z-index: 1;
   display: block;
-  width: 450px;
-  height: 450px;
-  max-width: 450px;
-  max-height: 450px;
+  width: 900px;
+  height: 900px;
+  max-width: 900px;
+  max-height: 900px;
   object-fit: contain;
   margin: 0 0 20px;
   filter: drop-shadow(0 10px 24px rgba(102,187,106,.22));
@@ -681,7 +681,7 @@ mark {
   :root { --topbar-height: 58px; }
 
   .brand { min-width: 0; font-size: 15px; }
-  .brand-logo { width: 58px; height: 58px; }
+  .brand-logo { width: 68px; height: 68px; }
   .brand span { display: none; }
 
   .topbar-actions { flex: 1; justify-content: flex-end; }
@@ -697,10 +697,10 @@ mark {
   }
 
   .hero img {
-    width: 315px;
-    height: 315px;
-    max-width: 315px;
-    max-height: 315px;
+    width: 630px;
+    height: 630px;
+    max-width: 630px;
+    max-height: 630px;
   }
 
   .hero h1 { font-size: 36px; }
