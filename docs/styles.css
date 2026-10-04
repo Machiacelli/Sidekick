@@ -311,10 +311,10 @@ button, input { font: inherit; }
   position: relative;
   z-index: 1;
   display: block;
-  width: 600px;
-  height: 600px;
-  max-width: 600px;
-  max-height: 600px;
+  width: 700px;
+  height: 700px;
+  max-width: 700px;
+  max-height: 700px;
   object-fit: contain;
   margin: 0 0 20px;
   filter: drop-shadow(0 10px 24px rgba(102,187,106,.22));
