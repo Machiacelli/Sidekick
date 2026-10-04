@@ -2,8 +2,8 @@
 "use strict";
 
 const pages = [
-  {id:"installation", title:"Installation", file:"Installation.md", icon:"Assets/Icons/General.png", group:"Getting started"},
   {id:"overview", title:"Overview", file:"README.md", icon:"Assets/Icons/General.png", group:"Getting started"},
+  {id:"installation", title:"Installation", file:"Installation.md", icon:"Assets/Icons/General.png", group:"Getting started"},
   {id:"sidebar", title:"Sidebar Modules", file:"Sidebar%20Modules.md", icon:"Assets/Icons/Features.png", group:"Modules"},
   {id:"attack-war", title:"Attack & War", file:"Attack%20%26%20War.md", icon:"Assets/Icons/War.png", group:"Modules"},
   {id:"crimes", title:"Crimes", file:"Crimes.md", icon:"Assets/Icons/Crimes.png", group:"Modules"},
@@ -121,7 +121,7 @@ function buildHero(){
   }).join("");
 
   return '<section class="hero">' +
-    '<img class="hero-logo" src="Assets/logo-wordmark.png" alt="Sidekick">' +
+    '<img class="hero-logo" src="Assets/logo.png" alt="Sidekick">' +
     '<h1>The Swiss Army Knife for Torn</h1>' +
     '<p>Explore every Sidekick module, find where features live, and learn how to configure the tools you use most.</p>' +
   '</section>' +
