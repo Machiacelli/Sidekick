@@ -14,8 +14,7 @@ Click the money icon (...) in any buy-quantity field and it fills in the exact m
 
 Where to find it: Settings → Economy → Item Market Filler (toggleable from the toolbar popup) · Off by default · Runs on bazaar and item market pages
 
-Auto-fills prices when listing items for sale. You pick a pricing source — Torn's market value, the current Item Market listings, or live bazaar prices (via weav3r.dev) — plus a margin offset (absolute $ or %) and which listing slot to base on (1 = cheapest). Then on the bazaar add/manage pages and item market, click a row's **Fill** button to instantly fill in the calculated price and quantity, with the price colored green or red vs market value. An ℹ button shows the live listings it used. Includes a **Black Friday mode** that prices everything at $1.
-
+Auto-fills prices when listing items for sale. You pick a pricing source — Torn's market value, the current Item Market listings, or live bazaar prices (via weav3r.dev) — plus a margin offset (absolute $ or %) and which listing slot to base on (1 = cheapest). Then on the bazaar add/manage pages and item market, click a row's **Fill** button to instantly fill in the calculated price and quantity, with the price colored green or red vs market value. An ℹ button shows the live listings it used.
 ---
 
 🏪 **Bazaar Filler**
@@ -30,7 +29,7 @@ The bazaar management counterpart to Price Filler: adds checkboxes and fill butt
 
 Where to find it: Settings → Economy → Quick Deposit (toggleable from the toolbar popup) · Off by default · Runs on all Torn pages (sidebar)
 
-Adds a **[DEPOSIT]** button next to the money display in Torn's sidebar. One click vaults everything you're carrying — to your faction vault, a property vault, a company vault, or a "ghost trade" (it can scan open trades and pick the right one) — depending on which target you choose in Settings → Economy → Quick Deposit.
+Adds a **[DEPOSIT]** button inside the money display in Torn's sidebar. One click vaults everything you're carrying — to your faction vault, a property vault, a company vault, or a "ghost trade" — depending on which target you choose in Settings → Economy → Quick Deposit.
 
 ---
 
@@ -38,7 +37,7 @@ Adds a **[DEPOSIT]** button next to the money display in Torn's sidebar. One cli
 
 Where to find it: Settings → Economy → Bunker Bucks (toggleable from the toolbar popup) · Off by default · Runs on the item market
 
-Shows the Bunker Buck value of weapons and armor right on market listings (the trade-in value of an item at the faction bunker — worth checking before you trash/sell gear). Uses an accurate hard-coded table (Yellow/Orange/Red star ÷ by weapon class: pistol vs melee vs shotgun vs armor vs heavies) so you can compare bunker value against market sale price at a glance.
+Shows the Bunker Buck value of weapons and armor right on market listings. Uses an accurate hard-coded table (Yellow/Orange/Red star ÷ by weapon class: pistol vs melee vs shotgun vs armor vs heavies) so you can compare bunker value against market sale price at a glance.
 
 ---
 
@@ -46,7 +45,7 @@ Shows the Bunker Buck value of weapons and armor right on market listings (the t
 
 Where to find it: Settings → Utility → OC Weights (toggleable from the toolbar popup) · On by default · Runs on the faction OC page
 
-Shows each organized-crime slot's weight percentage (the chance each role has of being picked for the crime) directly under the role slots, so your faction can spread members to beat slot competition. Pulls the freshest weights from tornprobability.com with a hard-coded table as instant fallback.
+Shows each organized-crime slot's weight percentage (the chance each role has of being succesfull in the crime) directly under the role slots, so your faction can spread members.
 
 ---
 
