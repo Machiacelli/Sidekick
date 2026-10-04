@@ -121,7 +121,7 @@ function buildHero(){
   }).join("");
 
   return '<section class="hero">' +
-    '<img class="hero-logo" src="Assets/logo-wordmark.png" alt="Sidekick">' +
+    '<img class="hero-logo" src="Assets/logo.png" alt="Sidekick">' +
     '<div class="hero-kicker">Torn.com extension</div>' +
     '<h1>The Swiss Army Knife for Torn.com.</h1>' +
     '<p>Explore every Sidekick module, find where features live, and learn how to configure the tools you use most.</p>' +
