@@ -20,7 +20,7 @@ The clock display built into the sidebar top bar, showing Torn City Time alongsi
 
 Where to find it: Settings → Events → **Event Calendar** (also toggleable from the toolbar popup) · Off by default · Lives in the sidebar top bar
 
-Rolling event notifications between the sidebar clock and the Torn logo. Rotates through upcoming Torn events with a live countdown to the nearest one ("⏰ Next Event: CaffeineCon 2026 in 12d 03:44:49"), pulling dates from the official Torn calendar via API with a built-in list of holidays as fallback. Your personal event start time (events start at different times for each player) is respected.
+Rolling event notifications between the sidebar clock and the Sidekick logo. Rotates through upcoming Torn events with a live countdown to the nearest one ("⏰ Next Event: CaffeineCon 2026 in 12d 03:44:49"), pulling dates from the official Torn calendar via API with a built-in list of holidays as fallback. Your personal event start time (events start at different times for each player) is respected.
 
 ## 🔗 Link Group
 
