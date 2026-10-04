@@ -278,11 +278,14 @@ button, input { font: inherit; }
   pointer-events: none;
 }
 
-.hero-logo {
+.hero img {
+  display: block;
   width: 78px;
   height: 78px;
+  max-width: 78px;
+  max-height: 78px;
   object-fit: contain;
-  margin-bottom: 20px;
+  margin: 0 0 20px;
   filter: drop-shadow(0 10px 24px var(--accent-glow));
 }
 
@@ -655,7 +658,12 @@ mark {
     border-radius: 14px;
   }
 
-  .hero-logo { width: 62px; height: 62px; }
+.hero img {
+  width: 62px;
+  height: 62px;
+  max-width: 62px;
+  max-height: 62px;
+}
   .hero h1 { font-size: 36px; }
 
   .module-grid { grid-template-columns: 1fr; }
