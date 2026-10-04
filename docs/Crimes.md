@@ -37,7 +37,7 @@ Shows the confidence percentage permanently as text next to the burglary graphic
 
 Where to find it: Settings → Crimes → Disposal (also toggleable from the toolbar popup) · Off by default · Runs on the crimes page (disposal section)
 
-Color-codes disposal method buttons by outcome risk for each item type — green for the safe method, red for failure risks. Weapon? Sink it green. Documents? Burn them (sinking or dissolving documents is a red-bordered mistake). The color coding applies automatically to each item's five method buttons so you never misclick a bad disposal method.
+Color-codes disposal method buttons by outcome risk for each item type — green for the safe method, red for failure risks. The color coding applies automatically to each item's five method buttons so you never misclick a bad disposal method.
 
 ---
 
@@ -45,7 +45,7 @@ Color-codes disposal method buttons by outcome risk for each item type — green
 
 Where to find it: Settings → Crimes → Search for Cash (also toggleable from the toolbar popup) · Off by default · Runs on the crimes page (search-for-cash section)
 
-Highlights the best location to search. It reads each location's current odds, subtracts penalties, adds bonuses (e.g. cemetery is penalized during weekday working hours when groundskeepers are around, junkyards earn a weekend bonus), and draws a pulsing green outline plus a "Suggested" badge around the tile it recommends, so you pick the best location instead of the habitually-best one.
+Highlights the best location to search. It reads each location's current odds, subtracts penalties, adds bonuses, and draws a pulsing green outline plus a "Suggested" badge around the tile it recommends, so you pick the best location instead of the habitually-best one.
 
 ---
 
@@ -69,7 +69,7 @@ Solves the mark's blind spots for you. It reads the current scamming board (mark
 
 Where to find it: Settings → Crimes → Hustling (toggleable from the toolbar popup) · Off by default · Runs on the crimes page (hustling section)
 
-A live advisor panel for the Hustling street crime. It reads the visible audience (attention and suspicion gauges, hearts, bettors) and recommends the next action — gather, demo a game, hype, intentionally lose or win — with the reasoning shown in plain language ("The favorite-game audience is near maximum suspicion; finish with wins"). Tracks your shill/pickpocket collect timers, warns when an audience is getting bored or suspicious, tracks technique progress toward maxing each game, and has modes: Efficient, Technique, Money, Spam CS, and Snake Oil.
+A live advisor panel for the Hustling street crime. It reads the visible audience (attention and suspicion gauges, hearts, bettors) and recommends the next action — gather, demo a game, hype, intentionally lose or win — with the reasoning shown in plain language. Tracks your shill/pickpocket collect timers, warns when an audience is getting bored or suspicious, tracks technique progress toward maxing each game, and has modes: Efficient, Technique, Money, Spam CS, and Snake Oil.
 
 ---
 
