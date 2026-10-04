@@ -22,7 +22,9 @@ Pinning Sidekick makes the extension immediately accessible from Chrome's toolba
 3. Click the **Pin** icon next to Sidekick.
 4. The Sidekick icon will now stay visible in the toolbar next to the address bar.
 
-You can drag pinned extension icons to change their order. Chrome documents this under [Customise the Chrome toolbar](https://support.google.com/chrome/answer/14835450).
+You can drag pinned extension icons to change their order.
+
+Chrome documents this under [Customise the Chrome toolbar](https://support.google.com/chrome/answer/14835450).
 
 > **Recommended:** Keep Sidekick pinned. Most users will use the toolbar icon to open the Sidekick controls and access the sidebar.
 
@@ -32,9 +34,8 @@ Many Sidekick modules use Torn's API to read live information. Set your API key 
 
 ### Get your Torn API key
 
-1. Open Torn's **API settings**:
-   [Open Torn API settings](https://www.torn.com/preferences.php#tab=api)
-2. Create an API key with the access level you want to use with Sidekick.
+1. Open Torn's **API settings**: [Open Torn API settings](https://www.torn.com/preferences.php#tab=api)
+2. Create an API key with the access level you want to use with Sidekick. The higher the access level, the more modules will work as intended. Your information never leaves your PC!
 3. Copy the key.
 
 ### Add the key to Sidekick
@@ -52,26 +53,13 @@ Once the key is stored, modules that require API access can use it without askin
 
 ## 4. Keep the Sidekick control page handy
 
-If you use Sidekick's **pop-out control page**, you can keep it easy to reach without repeatedly opening the extension menu.
-
-1. Open the Sidekick control page using the extension's pop-out control.
-2. When the control page opens as a normal Chrome page/tab, press **Ctrl+D** on Windows/Linux or **⌘+D** on macOS.
-3. Save the bookmark to the **Bookmarks bar**.
-4. If the Bookmarks bar is hidden, press **Ctrl+Shift+B** on Windows/Linux or **⌘+Shift+B** on macOS to show it.
-5. You can now open the Sidekick control page directly from the Bookmarks bar.
-
-### Toolbar pin vs. control-page bookmark
-
-These are two different shortcuts:
-
-- **Pin Sidekick** — keeps the Sidekick extension icon beside Chrome's address bar.
-- **Bookmark the pop-out control page** — gives you a direct shortcut to the full control page from the Bookmarks bar.
-
-For everyday use, keeping the extension pinned is the simplest option. The bookmarked control page is useful if you prefer managing Sidekick from a dedicated page.
+If you pinned Sidekick's plugin icon in the adress bar, you can control your modules and settings from any page! Just click on the Sidekick swiss armyknife icon and the controlpanel will open.
 
 ## 5. Start using Sidekick
 
-After installation and API setup, open any Torn page and click the Sidekick icon. From there you can:
+After installation and API setup, open any Torn page and click the Sidekick icon.
+
+From there you can:
 
 - Open the Sidekick sidebar.
 - Open **Settings** and configure modules.
@@ -86,7 +74,9 @@ Most Sidekick modules are opt-in, while a smaller set is enabled by default. See
 
 ### Sidekick is not visible in the toolbar
 
-Open Chrome's **Extensions** menu and pin Sidekick. Chrome can hide installed extensions until you choose to pin them. See [Install and manage extensions](https://support.google.com/chrome/answer/2664769).
+Open Chrome's **Extensions** menu and pin Sidekick. Chrome can hide installed extensions until you choose to pin them.
+
+See [Install and manage extensions](https://support.google.com/chrome/answer/2664769).
 
 ### A module says an API key is required
 
@@ -94,4 +84,6 @@ Open **Sidekick → Settings → API** and check that a valid Torn API key has b
 
 ### Chrome will not install Sidekick
 
-Make sure you are using desktop Chrome and are not trying to install the extension from Incognito or Guest mode. A work or school-managed browser may also restrict extension installation. See Chrome's [extension troubleshooting guide](https://support.google.com/chrome_webstore/answer/1698338).
+Make sure you are using desktop Chrome and are not trying to install the extension from Incognito or Guest mode. A work or school-managed browser may also restrict extension installation.
+
+See Chrome's [extension troubleshooting guide](https://support.google.com/chrome_webstore/answer/1698338).
