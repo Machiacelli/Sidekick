@@ -122,7 +122,7 @@ function buildHero(){
 
   return '<section class="hero">' +
     '<img class="hero-logo" src="Assets/logo.png" alt="Sidekick">' +
-    '<h1>The Swiss Army Knife for Torn</h1>' +
+    '<h1>The Ultimate Torn Companion</h1>' +
     '<p>Explore every Sidekick module, find where features live, and learn how to configure the tools you use most.</p>' +
   '</section>' +
   '<div class="module-grid">'+cards+'</div>';
