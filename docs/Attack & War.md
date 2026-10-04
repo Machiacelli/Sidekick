@@ -36,7 +36,7 @@ While Termed War Mode is on, this module hides the Mug and Hospitalize buttons f
 
 Where to find it: Settings → War → Chain Timer (also toggleable from the toolbar popup) · Off by default · Runs on all Torn pages
 
-Floating, draggable countdown of your faction's chain timer so you never drop a chain by accident. Colors shift green → orange → red as time runs low, and when the timer drops below your threshold (configurable 1–4 minutes, chains of 25+ hits only) it alerts you three ways: a browser popup, a red screen flash, and a browser notification. The floater appears instantly on page loads via a saved fast-path, before settings finish loading.
+Floating, draggable countdown of your faction's chain timer so you never drop a chain by accident. Colors shift green → orange → red as time runs low, and when the timer drops below your threshold, it alerts you three ways: a browser popup, a red screen flash, and a browser notification. The floater appears instantly on page loads via a saved fast-path, before settings finish loading.
 
 ---
 
@@ -67,6 +67,7 @@ Hospital/jail rows show a live HH:MM:SS countdown, travelers show direction and 
 
 🎯 **FactionOps Target Caller**
 
+Thanks to RussianRob & Dead Fragment exclusive!
 Where to find it: Settings → War → FactionOps Target Caller (also toggleable from the toolbar popup) · Off by default · Runs on the faction war page
 
 A "called it" system for wars: click ✔️ on an enemy row to claim that target so your faction mates don't waste hits on it, with claims shared live (5-second sync) between Sidekick users and FactionOps userscript users via the FactionOps server. Claims show the caller's name in a stable per-player color; double-click the badge to jump to the attack, right-click your own claim to release it. Claims auto-expire after 20 minutes and auto-release when your own hit lands. Players outside the supported faction get copy mode — clicking ✔️ copies a "Hitting <name> [id]" message to the clipboard instead of syncing with a server.
@@ -77,7 +78,7 @@ A "called it" system for wars: click ✔️ on an enemy row to claim that target
 
 Where to find it: Settings → Mugging → Warning (also toggleable from the toolbar popup) · Off by default · Runs on profile and attack pages
 
-If you mugged a player recently (configurable window, default 24 hours), a red modal warns you before you can mug them again — mugging the same person twice in a short window is a faction etiquette violation and waste of loot. One click dismisses it, or "Set Mug Target" silences future warnings for that player.
+If you mugged a player recently (configurable window, default 24 hours), a red modal warns you before you can mug them again.
 
 ---
 
@@ -85,4 +86,4 @@ If you mugged a player recently (configurable window, default 24 hours), a red m
 
 Where to find it: Settings → Mugging → Calculator (also toggleable from the toolbar popup) · Off by default · Runs on the Item Market and Points Market
 
-Adds an ⓘ icon next to sellers on market listings. Click it to see the target's mug range — the minimum and maximum cash you'd steal, computed from the real mug formula (5–10% base, Masterful Looting merits, Plunder bonus, Clothing Store 7★ protection) applied to the listing they're selling. The popup also shows their level, status countdown, life, faction, and revivability. Icons only appear on listings above your configured minimum value.
+Adds an ⓘ icon next to sellers on market listings. Click it to see the target's mug range — the minimum and maximum cash you'd steal, computed from the real mug formula applied to the listing they're selling. The popup also shows their level, status countdown, life, faction, and revivability. Icons only appear on listings above your configured minimum value.
