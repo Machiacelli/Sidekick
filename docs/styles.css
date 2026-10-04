@@ -311,10 +311,10 @@ button, input { font: inherit; }
   position: relative;
   z-index: 1;
   display: block;
-  width: 900px;
-  height: 900px;
-  max-width: 900px;
-  max-height: 900px;
+  width: 1800px;
+  height: 1800px;
+  max-width: 1800px;
+  max-height: 1800px;
   object-fit: contain;
   margin: 0 0 20px;
   filter: drop-shadow(0 10px 24px rgba(102,187,106,.22));
@@ -697,10 +697,10 @@ mark {
   }
 
   .hero img {
-    width: 630px;
-    height: 630px;
-    max-width: 630px;
-    max-height: 630px;
+    width: 1260px;
+    height: 1260px;
+    max-width: 1260px;
+    max-height: 1260px;
   }
 
   .hero h1 { font-size: 36px; }
