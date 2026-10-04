@@ -97,10 +97,10 @@ button, input { font: inherit; }
 .brand:hover { color: var(--text); text-decoration: none; }
 
 .brand-logo {
-  width: 150px;
-  height: 54px;
+  width: 58px;
+  height: 58px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 10px;
   filter: drop-shadow(0 5px 15px rgba(102,187,106,.25));
 }
 
@@ -158,46 +158,6 @@ button, input { font: inherit; }
   font-weight: 650;
   white-space: nowrap;
 }
-
-.install-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 9px;
-  background: var(--brand-gradient);
-  color: #101510;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: 0 6px 18px rgba(102,187,106,.16);
-}
-
-.install-link:hover {
-  color: #101510;
-  filter: brightness(1.05);
-  text-decoration: none;
-}
-
-.store-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 4px 0 30px;
-  padding: 12px 18px;
-  border-radius: 10px;
-  background: var(--brand-gradient);
-  color: #101510;
-  font-weight: 800;
-  box-shadow: 0 8px 24px rgba(102,187,106,.16);
-}
-
-.store-button:hover {
-  color: #101510;
-  filter: brightness(1.05);
-  text-decoration: none;
-}
-
 
 .github-link:hover { color: var(--text); }
 
@@ -351,9 +311,10 @@ button, input { font: inherit; }
   position: relative;
   z-index: 1;
   display: block;
-  width: min(380px, 72%);
-  height: auto;
-  max-width: 380px;
+  width: 450px;
+  height: 450px;
+  max-width: 450px;
+  max-height: 450px;
   object-fit: contain;
   margin: 0 0 20px;
   filter: drop-shadow(0 10px 24px rgba(102,187,106,.22));
@@ -716,12 +677,11 @@ mark {
 }
 
 @media (max-width: 560px) {
-  .install-link { display: none; }
   .topbar { height: 58px; }
   :root { --topbar-height: 58px; }
 
   .brand { min-width: 0; font-size: 15px; }
-  .brand-logo { width: 128px; height: 46px; }
+  .brand-logo { width: 46px; height: 46px; }
   .brand span { display: none; }
 
   .topbar-actions { flex: 1; justify-content: flex-end; }
@@ -737,9 +697,10 @@ mark {
   }
 
   .hero img {
-    width: min(290px, 82%);
-    height: auto;
-    max-width: 290px;
+    width: 315px;
+    height: 315px;
+    max-width: 315px;
+    max-height: 315px;
   }
 
   .hero h1 { font-size: 36px; }
