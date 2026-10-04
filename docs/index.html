@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Sidekick documentation — a complete guide to Sidekick modules for Torn.com.">
+<title>Sidekick Documentation</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#overview" aria-label="Sidekick documentation home">
+    <span class="brand-mark">S</span><span>Sidekick</span>
+  </a>
+  <div class="topbar-actions">
+    <label class="search" for="search-input">
+      <span aria-hidden="true">⌕</span>
+      <input id="search-input" type="search" placeholder="Search documentation..." autocomplete="off">
+      <kbd>/</kbd>
+    </label>
+    <a class="github-link" href="https://github.com/Machiacelli/Sidekick" target="_blank" rel="noopener">GitHub</a>
+    <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">☾</button>
+    <button id="mobile-menu" class="icon-button mobile-only" type="button" aria-label="Open navigation">☰</button>
+  </div>
+</header>
+
+<div class="page-shell">
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+      <div class="sidebar-label">Documentation</div>
+      <nav id="nav" aria-label="Documentation navigation"></nav>
+    </div>
+  </aside>
+
+  <main class="content-area">
+    <div id="search-results" class="search-results" hidden>
+      <div class="content-header">
+        <div class="eyebrow">Search</div>
+        <h1>Search results</h1>
+        <p id="search-summary" class="lede"></p>
+      </div>
+      <div id="results-list"></div>
+    </div>
+
+    <article id="content" class="markdown-body" aria-live="polite">
+      <div class="loading"><span class="spinner"></span>Loading documentation…</div>
+    </article>
+
+    <footer class="site-footer">
+      <span>Sidekick Documentation</span>
+      <a href="https://github.com/Machiacelli/Sidekick" target="_blank" rel="noopener">View source on GitHub</a>
+    </footer>
+  </main>
+</div>
+
+<button id="back-to-top" class="back-to-top" type="button" aria-label="Back to top">↑</button>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
