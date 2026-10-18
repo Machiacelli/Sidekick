@@ -13,6 +13,8 @@ const PlayerIdLinkerModule = (() => {
 
     let scanTimer = null;
     let scanInProgress = false;
+    let isEnabled = true; // ModuleSettingsHelper default (audit item 18)
+    let storageListener = null;
 
     function getViewedProfileId() {
         if (!window.location.pathname.toLowerCase().endsWith('/profiles.php')) return '';
@@ -94,7 +96,13 @@ const PlayerIdLinkerModule = (() => {
     }
 
     function scanPage() {
-        if (scanInProgress || document.hidden || !document.body) return;
+        if (!isEnabled || scanInProgress || document.hidden || !document.body) return;
+
+        // (Audit item 18) Cheap bail before the TreeWalker: if the page has
+        // no digit runs at all, the regex can't match and a full DOM walk is
+        // wasted work on heavy pages.
+        if (!/\d{5,}/.test(document.body.innerText || '')) return;
+
         scanInProgress = true;
 
         try {
@@ -129,17 +137,61 @@ const PlayerIdLinkerModule = (() => {
         }
     }
 
+    /** Read the canonical module toggle (sidekick_settings[moduleKey]). */
+    async function loadEnabledState() {
+        try {
+            const s = await window.SidekickModules?.Core?.ChromeStorage.get('sidekick_settings');
+            // Default stays ON (previous behavior had no toggle at all).
+            isEnabled = s?.['player-id-linker']?.isEnabled !== false;
+        } catch {
+            isEnabled = true;
+        }
+    }
+
     return {
         name: 'PlayerIdLinker',
 
-        init() {
+        async init() {
             if (scanTimer !== null) return;
 
-            scanPage();
-            scanTimer = window.setInterval(scanPage, SCAN_INTERVAL_MS);
-            document.addEventListener('visibilitychange', scanPage);
+            await loadEnabledState();
+
+            if (isEnabled) {
+                scanPage();
+                scanTimer = window.setInterval(scanPage, SCAN_INTERVAL_MS);
+                document.addEventListener('visibilitychange', scanPage);
+            }
+
+            // (Audit item 18) Live enable/disable from other tabs — this was
+            // previously the only module with NO disable option.
+            if (!storageListener && window.SidekickModules?.Core?.ChromeStorage) {
+                storageListener = async (changes, area) => {
+                    if (area !== 'local' || !changes['sidekick_settings']) return;
+                    const wasEnabled = isEnabled;
+                    await loadEnabledState();
+                    if (isEnabled === wasEnabled) return;
+                    if (isEnabled) {
+                        // Re-arm guard: never stack a second interval.
+                        this.destroy();
+                        scanPage();
+                        scanTimer = window.setInterval(scanPage, SCAN_INTERVAL_MS);
+                        document.addEventListener('visibilitychange', scanPage);
+                    } else {
+                        this.destroy();
+                    }
+                };
+                chrome.storage.onChanged.addListener(storageListener);
+            }
 
             console.log('🔗 Player ID Linker: initialized');
+        },
+
+        destroy() {
+            if (scanTimer !== null) {
+                window.clearInterval(scanTimer);
+                scanTimer = null;
+            }
+            document.removeEventListener('visibilitychange', scanPage);
         }
     };
 })();

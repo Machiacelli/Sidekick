@@ -53,7 +53,6 @@
 
         { id: 'time-on-tab', name: 'Time on Tab', category: 'Utility', storageKey: 'sidekick_time_on_tab', defaultEnabled: false },
         { id: 'random-target', name: 'Random Target', category: 'Utility', storageKey: 'sidekick_random_target', defaultEnabled: false },
-        { id: 'chat-popout', name: 'Chat Popout', category: 'Utility', storageKey: 'sidekick_settings', subKey: 'chat-popout', defaultEnabled: false },
         { id: 'legible-names', name: 'Legible Player Names', category: 'Utility', storageKey: 'sidekick_settings', subKey: 'legible-names', defaultEnabled: false },
         { id: 'xanax-viewer', name: 'Xanax Viewer', category: 'Utility', storageKey: 'sidekick_xanax_viewer', defaultEnabled: false },
         { id: 'refill-blocker', name: 'Refill Blocker', category: 'Utility', storageKey: 'sidekick_refill_blocker', defaultEnabled: false },

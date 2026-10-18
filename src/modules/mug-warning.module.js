@@ -17,6 +17,11 @@ const MugWarningModule = {
     apiKey: null,
     lastCheckTime: 0,
     MIN_CHECK_INTERVAL: 5000, // 5 seconds
+    // How long a per-target "did we mug them recently?" answer stays fresh.
+    // Profile/attack pages re-check on every mutation burst; without a TTL
+    // cache those sweeps would hit the Torn API on each DOM change.
+    MUG_RESULT_TTL: 10 * 60 * 1000, // 10 minutes
+    _mugCache: new Map(),
 
     // Initialize module
     async init() {
@@ -28,10 +33,20 @@ const MugWarningModule = {
             this.enable();
         }
 
-        // Listen for storage changes
+        // Listen for storage changes. enable()/disable() from the settings
+        // panel already handle arming; this also covers the toolbar popup
+        // path, which only writes storage — re-arm or tear down here so the
+        // observer always matches the enabled state.
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area === 'local' && changes[this.STORAGE_KEY]) {
-                this.loadSettings();
+                this.loadSettings().then(() => {
+                    if (this.isEnabled) {
+                        this.startMonitoring();
+                    } else if (this._observer) {
+                        this._observer.disconnect();
+                        this._observer = null;
+                    }
+                });
             }
         });
 
@@ -81,16 +96,16 @@ const MugWarningModule = {
         console.log('⚠️ Mug Warning enabled');
     },
 
-    // Disable module
-    disable() {
-        this.isEnabled = false;
-        this.saveSettings();
-        console.log('⚠️ Mug Warning disabled');
-    },
-
     // Start monitoring for profiles/attacks
     startMonitoring() {
         if (!this.isEnabled) return;
+
+        // Re-arming after a disable/enable cycle must not stack observers
+        // (the same leak pattern flagged for war-monitor / chaintimer).
+        if (this._observer) {
+            this._observer.disconnect();
+            this._observer = null;
+        }
 
         // Check if on profile or attack page
         if (this.isProfilePage() || this.isAttackPage()) {
@@ -98,21 +113,37 @@ const MugWarningModule = {
         }
 
         // Observer for SPA navigation
-        const observer = new MutationObserver(() => {
+        this._observer = new MutationObserver(() => {
             if (this.isProfilePage() || this.isAttackPage()) {
                 this.checkForRecentMug();
             }
         });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+        this._observer.observe(document.body, { childList: true, subtree: true });
+    },
+
+    // Disable module
+    disable() {
+        this.isEnabled = false;
+        this.saveSettings();
+        if (this._observer) {
+            this._observer.disconnect();
+            this._observer = null;
+        }
+        console.log('⚠️ Mug Warning disabled');
     },
 
     isProfilePage() {
         return /profiles\.php|profile\.php|pda\.php/.test(location.pathname + location.search);
     },
 
+    // Torn moved attack pages from loader.php to page.php?sid=attack; support
+    // both (same pattern as attack-button-mover / war-target-caller).
     isAttackPage() {
-        return /loader\.php/.test(location.pathname) && this.getAttackTargetId();
+        const path = location.pathname.toLowerCase();
+        const sid = (new URLSearchParams(location.search).get('sid') || '').toLowerCase();
+        const attack = (path.endsWith('page.php') || path.endsWith('loader.php')) && sid === 'attack';
+        return attack && this.getAttackTargetId();
     },
 
     getProfileId() {
@@ -127,7 +158,13 @@ const MugWarningModule = {
     getAttackTargetId() {
         try {
             const url = new URL(window.location.href);
-            return url.searchParams.get('user2ID') || null;
+            // Modern attacks live at page.php?sid=attack with user2ID=; legacy
+            // loader.php used the same param. Try all known param spellings.
+            for (const key of ['user2ID', 'user2Id', 'XID', 'xid']) {
+                const value = url.searchParams.get(key);
+                if (/^\d+$/.test(value || '')) return value;
+            }
+            return null;
         } catch {
             return null;
         }
@@ -163,34 +200,111 @@ const MugWarningModule = {
             return;
         }
 
-        // Check for recent mug
+        // Check for recent mug (result cached per target with a short TTL so
+        // re-views don't re-hit the API)
         try {
-            console.log(`⚠️ Mug Warning: Fetching attacks from API...`);
-            const resp = await fetch(`https://api.torn.com/user/?selections=attacks&key=${this.apiKey}`, { cache: 'no-store' });
-            const data = await resp.json();
+            console.log(`⚠️ Mug Warning: Fetching recent attacks from API...`);
 
-            if (data.error || !data.attacks) {
-                console.log('⚠️ Mug Warning: API error or no attacks', data.error);
+            const result = await this.fetchRecentMug(targetId, this.hoursThreshold);
+            if (result === null) {
+                console.log('⚠️ Mug Warning: API error or unavailable — skipping (fail silent)');
                 return;
             }
 
-            const attacks = Object.values(data.attacks);
-            const cutoff = Date.now() - (this.hoursThreshold * 3600 * 1000);
-            console.log(`⚠️ Mug Warning: Checking ${attacks.length} attacks (threshold: ${this.hoursThreshold}h)`);
-
-            for (const attack of attacks) {
-                const timestamp = this.extractTimestamp(attack);
-                if (timestamp && timestamp >= cutoff && this.attackIndicatesMug(attack, targetId)) {
-                    console.log(`⚠️ Mug Warning: MATCH FOUND! Showing warning...`);
-                    this.showWarningModal(targetId, new Date(timestamp).toISOString());
-                    return;
-                }
+            if (!result.mugged) {
+                console.log(`⚠️ Mug Warning: No recent mugs found for ${targetId}`);
+                return;
             }
 
-            console.log(`⚠️ Mug Warning: No recent mugs found for ${targetId}`);
+            console.log(`⚠️ Mug Warning: MATCH FOUND! Showing warning...`);
+            this.showWarningModal(targetId, new Date(result.timestamp).toISOString());
         } catch (error) {
             console.error('⚠️ Failed to check attacks:', error);
         }
+    },
+
+    /**
+     * Check whether WE mugged `targetId` within the last `hours` hours.
+     *
+     * Efficiency notes (audit items 1–2; see PROJECT_CONTEXT "Torn API ToS"):
+     * - Result is cached per target (+hours threshold) with a TTL, so the
+     *   per-view "fetch the whole attacks log" behaviour is gone: profile
+     *   and attack-page sweeps (MutationObserver fires on every DOM change)
+     *   now hit the API at most once per target per TTL window.
+     * - Transport goes through the background `proxyFetch` so the API key
+     *   never appears in a content-script URL / page DevTools network log.
+     * - Matches structurally on the attack object's fields
+     *   (`defender_id` + `result === 'Mugged'`) instead of the old
+     *   stringified-JSON substring match, which false-positived when the
+     *   target ID appeared inside any numeric field (money, damage, etc.).
+     */
+    async fetchRecentMug(targetId, hours) {
+        const cacheKey = `${targetId}:${hours}`;
+
+        const now = Date.now();
+        const cached = this._mugCache.get(cacheKey);
+        if (cached && (now - cached.at) < this.MUG_RESULT_TTL) {
+            return cached.result;
+        }
+
+        const result = await this._fetchAttacksViaProxy(targetId, hours);
+        if (result !== null) {
+            this._mugCache.set(cacheKey, { at: now, result });
+        }
+        return result;
+    },
+
+    async _fetchAttacksViaProxy(targetId, hours) {
+        let response;
+        try {
+            response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    // Same transport as crime-notifier/travel-blocker: the
+                    // background worker makes the request, so the key never
+                    // shows up in the page's network tab. Only the fetched
+                    // result is cached long-term (per target, with TTL); the
+                    // structural scan below stops at the first match in the
+                    // check window and never stringifies entries.
+                    url: `https://api.torn.com/user/?selections=attacks&comment=SidekickMugWarning&key=${encodeURIComponent(this.apiKey)}`,
+                }, (res) => {
+                    if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                    else resolve(res);
+                });
+            });
+        } catch (error) {
+            console.warn('⚠️ Mug Warning: proxy fetch failed:', error.message);
+            return null;
+        }
+
+        if (!response?.success) {
+            console.warn('⚠️ Mug Warning: API error:', response?.error);
+            return null;
+        }
+
+        const data = response.data;
+        if (data?.error || !data?.attacks) {
+            console.warn('⚠️ Mug Warning: Torn API error:', data?.error?.error || 'no attacks payload');
+            return null;
+        }
+
+        const attacks = Object.values(data.attacks);
+        if (!attacks.length) return { mugged: false, timestamp: 0 };
+
+        const cutoff = Date.now() - (hours * 3600 * 1000);
+        let latest = 0;
+        for (const attack of attacks) {
+            // Structural match: WE attacked THEM and the result was a mug.
+            // (The old JSON.stringify substring match could false-positive
+            // when the target ID digits appeared inside any numeric field.)
+            if (String(attack.defender_id || attack.defenderId || '') !== String(targetId)) continue;
+            if ((attack.result || '').toLowerCase() !== 'mugged') continue;
+
+            const ts = this.extractTimestamp(attack);
+            if (ts && ts >= cutoff && ts > latest) latest = ts;
+        }
+
+        return latest > 0 ? { mugged: true, timestamp: latest } : { mugged: false, timestamp: 0 };
     },
 
     extractTimestamp(attack) {
@@ -204,14 +318,6 @@ const MugWarningModule = {
             }
         } catch { }
         return null;
-    },
-
-    attackIndicatesMug(attack, targetId) {
-        try {
-            const text = JSON.stringify(attack).toLowerCase();
-            return /mug(g?ed|ging)/.test(text) && text.includes(String(targetId));
-        } catch { }
-        return false;
     },
 
     showWarningModal(profileId, whenIso) {

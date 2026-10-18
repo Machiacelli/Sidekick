@@ -96,6 +96,18 @@
                     console.log('⏸️ Chain Timer: Disabled');
                 }
 
+                // Reconcile the fast-path floater against ACTUAL settings (audit
+                // item 10): the localStorage mirror can lag behind chrome.storage
+                // when settings were changed on another page without
+                // saveSettings() running there (e.g. popup toggle path) — the
+                // floater would appear, then flicker out one beat later. Fix:
+                // whenever authorized settings disagree with what the fast path
+                // drew, correct the floater immediately instead of after the
+                // first monitor tick.
+                if (this.isEnabled && !this.floatingDisplayEnabled && this.floatingDisplay) {
+                    this.removeFloatingDisplay();
+                }
+
                 console.log("✅ Chain Timer Module initialized successfully");
             } catch (error) {
                 console.error("❌ Chain Timer Module initialization failed:", error);
@@ -260,7 +272,12 @@
                 this.floatingDisplay.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
             });
 
-            // Make draggable (removed click-to-toggle to prevent accidental disable)
+            // Make draggable (removed click-to-toggle to prevent accidental disable).
+            // Document-level drag helpers are NAMED + stored so
+            // removeFloatingDisplay() can take them off — the old code added
+            // fresh anonymous mousemove/mouseup listeners on every floater
+            // creation and never removed them, leaking two listeners + the
+            // element closure per enable cycle (audit item 10).
             let isDragging = false;
             let startX, startY, startLeft, startTop;
 
@@ -283,16 +300,16 @@
                 e.preventDefault();
             });
 
-            document.addEventListener('mousemove', (e) => {
+            this._dragMoveHandler = (e) => {
                 if (!isDragging) return;
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
                 this.floatingDisplay.style.left = (startLeft + dx) + 'px';
                 this.floatingDisplay.style.top = (startTop + dy) + 'px';
                 this.floatingDisplay.style.right = 'auto'; // Clear right positioning
-            });
+            };
 
-            document.addEventListener('mouseup', () => {
+            this._dragEndHandler = () => {
                 if (isDragging) {
                     this.floatingDisplay.style.cursor = 'move';
                     this.floatingPosition = {
@@ -303,7 +320,10 @@
                     this.saveSettings();
                 }
                 isDragging = false;
-            });
+            };
+
+            document.addEventListener('mousemove', this._dragMoveHandler);
+            document.addEventListener('mouseup', this._dragEndHandler);
 
             document.body.appendChild(this.floatingDisplay);
 
@@ -338,6 +358,14 @@
             if (this.floatingResizeObserver) {
                 this.floatingResizeObserver.disconnect();
                 this.floatingResizeObserver = null;
+            }
+            if (this._dragMoveHandler) {
+                document.removeEventListener('mousemove', this._dragMoveHandler);
+                this._dragMoveHandler = null;
+            }
+            if (this._dragEndHandler) {
+                document.removeEventListener('mouseup', this._dragEndHandler);
+                this._dragEndHandler = null;
             }
             if (this.floatingDisplay) {
                 this.floatingDisplay.remove();
@@ -431,49 +459,75 @@
 
         // Get chain data from page
         getChainData() {
-            // Try multiple selectors for chain time
-            const timeSelectors = [
-                '[class*="bar-timeleft"]',
-                '[class*="chain-time"]',
-                '.chain-time',
-                '.timeleft'
-            ];
+            // Selector lists — module-level constants, not per-tick literals.
+            // getChainData() runs every second; the old code re-ran all 8
+            // querySelector passes over the whole document on each tick.
+            // We cache which selectors last matched and try those FIRST,
+            // falling back to a full scan only when the fast path misses
+            // (e.g. after SPA navigation away from the faction page).
+            if (!this._chainTimeSelectors) {
+                this._chainTimeSelectors = [
+                    '[class*="bar-timeleft"]',
+                    '[class*="chain-time"]',
+                    '.chain-time',
+                    '.timeleft'
+                ];
+                this._chainLengthSelectors = [
+                    '[class*="bar-value"]',
+                    '[class*="chain-length"]',
+                    '.chain-length',
+                    '.chain-count'
+                ];
+            }
 
-            const lengthSelectors = [
-                '[class*="bar-value"]',
-                '[class*="chain-length"]',
-                '.chain-length',
-                '.chain-count'
-            ];
+            const tryTime = (selectorList) => {
+                for (const selector of selectorList) {
+                    const element = document.querySelector(selector);
+                    if (element && element.textContent.trim()) {
+                        const text = element.textContent.trim();
+                        if (text.includes(':') && !text.includes('ended')) {
+                            return { timeLeft: text, timeElement: element, matched: selector };
+                        }
+                    }
+                }
+                return null;
+            };
 
             let timeLeft = null;
             let length = null;
             let status = 'Monitoring...';
             let timeElement = null;
+            let timeMatched = null;
 
-            // Find time element
-            for (const selector of timeSelectors) {
-                const element = document.querySelector(selector);
-                if (element && element.textContent.trim()) {
-                    const text = element.textContent.trim();
-                    if (text.includes(':') && !text.includes('ended')) {
-                        timeLeft = text;
-                        timeElement = element;
-                        break;
-                    }
-                }
+            // Fast path: last known good time selector first.
+            // (Array concat with a Set-de-dup keeps this cheap: at most 2
+            // extra querySelector calls when the page hasn't changed.)
+            const timeOrder = this._cachedTimeSelector
+                ? [this._cachedTimeSelector, ...this._chainTimeSelectors.filter(s => s !== this._cachedTimeSelector)]
+                : this._chainTimeSelectors;
+
+            const timeHit = tryTime(timeOrder);
+            if (timeHit) {
+                timeLeft = timeHit.timeLeft;
+                timeElement = timeHit.timeElement;
+                timeMatched = timeHit.matched;
+                this._cachedTimeSelector = timeMatched;
             }
 
             // Find length element
             // First try to find it near the time element to avoid getting energy/nerve bars
             if (timeElement) {
                 let parent = timeElement.parentElement;
+                const lengthOrder = this._cachedLengthSelector
+                    ? [this._cachedLengthSelector, ...this._chainLengthSelectors.filter(s => s !== this._cachedLengthSelector)]
+                    : this._chainLengthSelectors;
                 // Go up to 5 levels to find the common container
                 for (let i = 0; i < 5 && parent; i++) {
-                    for (const selector of lengthSelectors) {
+                    for (const selector of lengthOrder) {
                         const valElement = parent.querySelector(selector);
                         if (valElement && valElement.textContent.trim()) {
                             length = valElement.textContent.trim();
+                            this._cachedLengthSelector = selector;
                             break;
                         }
                     }
@@ -484,7 +538,7 @@
 
             // Fallback if not found nearby
             if (!length) {
-                for (const selector of lengthSelectors) {
+                for (const selector of this._chainLengthSelectors) {
                     const elements = document.querySelectorAll(selector);
                     for (const element of elements) {
                         if (element && element.textContent.trim()) {
@@ -492,6 +546,7 @@
                             // Skip if it looks like an energy/nerve bar (e.g. "375/150")
                             if (!val.includes('/')) {
                                 length = val;
+                                this._cachedLengthSelector = selector;
                                 break;
                             }
                         }
@@ -508,6 +563,8 @@
                 } else {
                     status = 'Not on faction page';
                 }
+                // Invalidate the time-selector cache — the page changed.
+                this._cachedTimeSelector = null;
             }
 
             return { timeLeft, length, status };

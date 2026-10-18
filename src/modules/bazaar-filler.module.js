@@ -13,6 +13,12 @@ const BazaarFillerModule = (() => {
 
     const CACHE_TTL_MS = 60 * 1000;
 
+    // Failed lookups are negative-cached briefly so rapid re-clicks don't
+    // re-burst requests into a Weav3r rate limit.
+    const FAILED_CACHE_TTL_MS = 15 * 1000;
+
+    const MAX_429_RETRIES = 2;
+
     const CLR_BTN =
         'linear-gradient(135deg, #3a8a3e, #4fa854)';
 
@@ -32,6 +38,10 @@ const BazaarFillerModule = (() => {
     };
 
     const weav3rCache = new Map();
+
+    // Global (all-items) pause window after a Weav3r 429 — firing more
+    // requests into a rate limit only prolongs it.
+    let weav3rPausedUntil = 0;
 
     let bazaarObserver = null;
     let activePopup = null;
@@ -76,17 +86,51 @@ const BazaarFillerModule = (() => {
 
         if (
             cached &&
-            Date.now() - cached.ts < CACHE_TTL_MS
+            Date.now() - cached.ts <
+                (cached.failed
+                    ? FAILED_CACHE_TTL_MS
+                    : CACHE_TTL_MS)
         ) {
             return cached.listings;
         }
 
+        // A recent 429 pauses ALL Weav3r lookups briefly, not just the one
+        // that was rejected.
+        if (Date.now() < weav3rPausedUntil) {
+            return null;
+        }
+
         try {
-            const response = await fetch(
+            let response = await fetch(
                 `${WEAV3R_URL}${itemId}`
             );
 
+            // Weav3r rate-limits (HTTP 429) under rapid fill-churn —
+            // wait and retry so a burst of Fill clicks doesn't strand items.
+            for (
+                let attempt = 1;
+                response.status === 429 &&
+                attempt <= MAX_429_RETRIES;
+                attempt++
+            ) {
+                const waitMs = 1500 * attempt;
+                weav3rPausedUntil = Date.now() + waitMs;
+
+                await new Promise(resolve =>
+                    setTimeout(resolve, waitMs)
+                );
+
+                response = await fetch(
+                    `${WEAV3R_URL}${itemId}`
+                );
+            }
+
             if (!response.ok) {
+                if (response.status === 429) {
+                    weav3rPausedUntil =
+                        Date.now() + 5000;
+                }
+
                 throw new Error(
                     `HTTP ${response.status}`
                 );
@@ -110,6 +154,14 @@ const BazaarFillerModule = (() => {
 
             return listings;
         } catch (error) {
+            // Negative cache: remember the failure briefly so immediately
+            // re-clicking Fill/ℹ doesn't re-burst requests.
+            weav3rCache.set(itemId, {
+                listings: null,
+                ts: Date.now(),
+                failed: true
+            });
+
             console.error(
                 '[BazaarFiller] fetchBazaarListings error:',
                 error
@@ -907,11 +959,34 @@ const BazaarFillerModule = (() => {
                     );
                 });
             }
-        } else if (listings === null) {
+        } else {
+            // Nothing was filled — NEVER leave the button in the active
+            // "Clear" state. Previously a failed/empty fetch kept it stuck
+            // there, so the next click CLEARED price/quantity/selection
+            // instead of retrying the fill (suspected cause of items
+            // silently dropping out of listings).
+            button.classList.remove(
+                'sk-bf-active'
+            );
+
+            button.textContent = 'Fill';
+
             button.title =
-                'Weav3r API error – could not fetch prices';
+                listings === null
+                    ? 'Weav3r API error – could not fetch prices'
+                    : 'No bazaar listings found for this item';
 
             button.style.opacity = '0.6';
+
+            setTimeout(() => {
+                if (
+                    !button.classList.contains(
+                        'sk-bf-active'
+                    )
+                ) {
+                    button.style.opacity = '';
+                }
+            }, 4000);
         }
     }
 

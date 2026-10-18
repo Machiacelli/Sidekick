@@ -269,29 +269,21 @@
                             console.log('✅ Background fetch API successful');
                         }
                     } catch (bgError) {
-                        console.log('⚠️ Background fetch failed, trying direct...');
+                        console.log('⚠️ Background fetch failed');
                     }
                 }
 
-                // Fallback to direct fetch
+                // (Architectural observation) The old direct-fetch fallback
+                // put the API key in a page-visible URL — removed. Without a
+                // successful background fetch, skip this restore pass; the
+                // next successful pass restores timers.
                 if (!cooldownData) {
-                    const response = await fetch(`https://api.torn.com/user/?selections=cooldowns&key=${this.apiKey}`);
-                    const data = await response.json();
-
-                    if (data.error) {
-                        console.warn("⚠️ API Error during fetch:", data.error.error);
-                        return;
-                    }
-                    cooldownData = data.cooldowns;
+                    console.log('📭 Cooldown fetch unavailable this pass');
+                    return;
                 }
 
-                if (cooldownData) {
-                    this.cooldownData = cooldownData;
-                    console.log('✅ Cooldown data refreshed:', Object.keys(this.cooldownData).length, 'cooldowns');
-                } else {
-                    this.cooldownData = {};
-                    console.log('📭 No active cooldowns found');
-                }
+                this.cooldownData = cooldownData;
+                console.log('✅ Cooldown data refreshed:', Object.keys(this.cooldownData).length, 'cooldowns');
 
                 this.restoreTimersFromCooldownData();
             } catch (error) {
@@ -316,22 +308,15 @@
                             return;
                         }
                     } catch (bgError) {
-                        console.log('⚠️ Background checkApiCooldowns failed, trying direct...');
+                        console.log('⚠️ Background checkApiCooldowns failed');
                     }
                 }
 
-                // Fallback to direct fetch
-                const response = await fetch(`https://api.torn.com/user/?selections=cooldowns&key=${this.apiKey}`);
-                const data = await response.json();
-
-                if (data.error) {
-                    console.warn("⚠️ API Error:", data.error.error);
-                    return;
-                }
-
-                if (data.cooldowns) {
-                    this.updateCooldownTimers(data.cooldowns);
-                }
+                // (Architectural observation) direct-fetch fallback removed —
+                // key must not appear in a page-visible URL. The background
+                // path above already applied updates on success; without it,
+                // there is nothing to apply this tick.
+                return;
             } catch (error) {
                 console.error('❌ Error in checkApiCooldowns:', error);
                 this.handleCooldownApiError(error);
@@ -387,14 +372,22 @@
                             console.log('✅ Background checkSpecificCooldown successful');
                         }
                     } catch (bgError) {
-                        console.log('⚠️ Background checkSpecificCooldown failed, trying direct...');
+                        console.log('⚠️ Background checkSpecificCooldown failed');
                     }
                 }
 
-                // Fallback to direct fetch
+                // (Architectural observation) direct-fetch fallback removed —
+                // key must not appear in a page-visible URL. Without data,
+                // surface a transient warning instead of leaking the key.
                 if (!data) {
-                    const response = await fetch(`https://api.torn.com/user/?selections=cooldowns,money&key=${this.apiKey}`);
-                    data = await response.json();
+                    if (window.SidekickModules?.Core?.NotificationSystem) {
+                        window.SidekickModules.Core.NotificationSystem.show(
+                            'Cooldown check unavailable',
+                            'Background service worker unreachable — try again in a moment',
+                            'warning'
+                        );
+                    }
+                    return;
                 }
 
                 console.log('🔍 Full API Response:', data);
@@ -745,15 +738,24 @@
             try {
                 console.log('🦠 Checking virus coding status...');
 
-                // Use Torn API v2 virus endpoint
-                const response = await fetch(`https://api.torn.com/v2/user/virus`, {
-                    headers: {
-                        'accept': 'application/json',
-                        'Authorization': `ApiKey ${this.apiKey}`
-                    }
+                // Use Torn API v2 virus endpoint via the background proxy —
+                // Authorization header (with the key) lives in the isolated
+                // world, not on the page's fetch.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: 'https://api.torn.com/v2/user/virus',
+                        headers: {
+                            'accept': 'application/json',
+                            'Authorization': `ApiKey ${this.apiKey}`
+                        }
+                    }, (r) => resolve(r));
                 });
-
-                const data = await response.json();
+                if (!res?.success) {
+                    console.warn('🦠 Virus check failed:', res?.error);
+                    return;
+                }
+                const data = res.data;
 
                 console.log('🦠 Virus API response:', data);
 
@@ -1921,14 +1923,24 @@
                                         return;
                                     }
 
-                                    const response = await fetch(`https://api.torn.com/v2/user/virus`, {
-                                        headers: {
-                                            'accept': 'application/json',
-                                            'Authorization': `ApiKey ${self.apiKey}`
-                                        }
+                                    // Background proxy — Authorization header
+                                    // (with the key) stays in the isolated world.
+                                    const virusRes = await new Promise((resolve) => {
+                                        chrome.runtime.sendMessage({
+                                            action: 'proxyFetch',
+                                            url: 'https://api.torn.com/v2/user/virus',
+                                            headers: {
+                                                'accept': 'application/json',
+                                                'Authorization': `ApiKey ${self.apiKey}`
+                                            }
+                                        }, (r) => resolve(r));
                                     });
-
-                                    const data = await response.json();
+                                    if (!virusRes?.success) {
+                                        console.warn('🦠 Virus check failed:', virusRes?.error);
+                                        alert('Virus check failed — is the background service worker reachable?');
+                                        return;
+                                    }
+                                    const data = virusRes.data;
                                     console.log('🦠 Virus API response:', data);
 
                                     if (data.virus && data.virus.until) {
@@ -2871,6 +2883,11 @@
             // Remove from array
             this.timers = this.timers.filter(t => t.id !== id);
 
+            // (Architectural observation) Release the registry's document
+            // drag listeners for this timer (docked + undocked tokens).
+            window.SidekickModules?.Core?.DragListenerRegistry?.detach(`timer:drag:${id}`);
+            window.SidekickModules?.Core?.DragListenerRegistry?.detach(`timer:fixed:${id}`);
+
             // Save timers immediately after deletion
             console.log('💾 Saving timers after deletion');
             this.saveTimers();
@@ -2898,8 +2915,17 @@
             let yOffset = currentY;
 
             header.addEventListener('mousedown', dragStart);
-            document.addEventListener('mousemove', drag);
-            document.addEventListener('mouseup', dragEnd);
+
+            // (Architectural observation) document-level drag pair goes
+            // through the shared DragListenerRegistry keyed by timer id —
+            // re-renders can no longer stack anonymous document listeners.
+            const registry = window.SidekickModules?.Core?.DragListenerRegistry;
+            if (registry) {
+                registry.attach(`timer:drag:${timer.id}`, { onMove: drag, onUp: dragEnd });
+            } else {
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', dragEnd);
+            }
 
             function dragStart(e) {
                 if (e.target.closest('button')) return;
@@ -3035,16 +3061,17 @@
                 console.log(`📌 Undocked timer position saved: x=${timer.undockX}, y=${timer.undockY}`);
             };
 
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup',   onUp);
-
-            // Clean up listeners when element is removed
-            const origRemove = element.remove.bind(element);
-            element.remove = () => {
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup',   onUp);
-                origRemove();
-            };
+            // (Architectural observation) Registry-based attach keyed by timer
+            // id: re-renders can't stack pairs, and detach happens without
+            // relying on a patched element.remove (which innerHTML rebuilds
+            // and replaceChildren bypass).
+            const registry = window.SidekickModules?.Core?.DragListenerRegistry;
+            if (registry) {
+                registry.attach(`timer:fixed:${timer.id}`, { onMove, onUp });
+            } else {
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+            }
         },
 
         // Build the inner HTML string for a timer element (shared between docked & undocked paths)

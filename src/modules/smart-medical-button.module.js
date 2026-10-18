@@ -90,9 +90,15 @@
         const key = await getApiKey();
         if (!key || key.length !== 16) return;
         try {
-            const res = await fetch(`https://api.torn.com/user/?selections=education,perks&key=${encodeURIComponent(key)}`);
-            if (!res.ok) return;
-            const data = await res.json();
+            // Background proxy (audit item 9): key never in a page-visible URL.
+            const res = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: `https://api.torn.com/user/?selections=education,perks&comment=SidekickSmartMedical&key=${encodeURIComponent(key)}`,
+                }, (r) => resolve(r));
+            });
+            if (!res?.success) return;
+            const data = res.data;
             if (data.error) return;
             let bonus = 0;
             [...(data.education_perks || []), ...(data.faction_perks || [])].forEach(p => {

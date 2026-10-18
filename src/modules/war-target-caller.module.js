@@ -61,6 +61,7 @@ const WarTargetCallerModule = {
     authWarned: false,
     authRetryMode: false, // true while the server's version gate (426) rejects auth — slowed polling
     membersObserver: null,
+    attackResultListener: null, // tracked so disable() can remove it (audit item 12)
 
     async init() {
         console.log('🎯 FactionOps Target Caller initializing...');
@@ -95,9 +96,14 @@ const WarTargetCallerModule = {
         // stripped crossing worlds). Registered here so it works on ALL
         // pages, not just factions.php: claims are only ever made there, but
         // the attack happens on loader.php?sid=attack, a different page load.
-        document.addEventListener('sidekick:attack-result', (e) => {
-            this.handleAttackResult(e.detail);
-        });
+        // Tracked + idempotent so repeated enable cycles don't stack a new
+        // document listener each time, and disable() removes it (audit item 12).
+        if (!this.attackResultListener) {
+            this.attackResultListener = (e) => {
+                this.handleAttackResult(e.detail);
+            };
+            document.addEventListener('sidekick:attack-result', this.attackResultListener);
+        }
 
         console.log('🎯 FactionOps Target Caller initialized');
     },
@@ -179,6 +185,13 @@ const WarTargetCallerModule = {
             this.membersObserver = null;
         }
 
+        // Remove the attack-result relay listener (audit item 12: it was
+        // never removed, leaking a closure per enable cycle).
+        if (this.attackResultListener) {
+            document.removeEventListener('sidekick:attack-result', this.attackResultListener);
+            this.attackResultListener = null;
+        }
+
         this.calls = {};
         this.rowNameById.clear();
 
@@ -212,8 +225,8 @@ const WarTargetCallerModule = {
             .sk-wtc-badge {
                 /* Overlays EXACTLY the level + score columns (edges measured
                    in JS from those cells); status/attack stay uncovered. The
-                   whole overlay is one hit target: dblclick = attack,
-                   right-click = release (own claims). Name truncates with an
+                   whole overlay is one hit target: right-click = release
+                   (own claims). Name truncates with an
                    ellipsis — it does not need to fit. */
                 position: absolute;
                 top: 0;
@@ -403,8 +416,15 @@ friendlyStatus(status, fallback) {
         case 409: return 'Conflict — another player already has this target';
         case 426: return 'Server rejected this client version (HTTP 426) — update Sidekick';
         case 429: return 'Rate limited — slow down';
-        }
-    },
+        // Unexpected statuses (500 / 503 / network=0) must surface the
+        // server's own message that proxyFetch attached — the old code
+        // returned `undefined` and new Error(undefined) printed "undefined",
+        // hiding the real reason (audit item 12).
+        default: return typeof fallback === 'string' && fallback
+            ? fallback
+            : `Request failed (HTTP ${status || 'network'})`;
+    }
+},
 
     startPolling() {
         if (this.pollTimer) return;
@@ -493,11 +513,11 @@ friendlyStatus(status, fallback) {
         // The server's version gate (426) will reject every client it doesn't
         // know. Continuing to ask every 5s gains nothing — back off to a slow
         // retry cadence until the server accepts our scriptVersion.
-        if (err?.status === 426) this.enterAuth_retryMode();
+        if (err?.status === 426) this.enterAuthRetryMode();
     },
 
     /** Slow auth retries while the server hard-rejects us (HTTP 426). */
-    enterAuth_retryMode() {
+    enterAuthRetryMode() {
         if (this.authRetryMode) return;
         this.authRetryMode = true;
         const interval = this.AUTH_RETRY_INTERVAL_MS;
@@ -718,18 +738,13 @@ friendlyStatus(status, fallback) {
 
             let badge = li.querySelector('.sk-wtc-badge');
             if (!badge) {
-                // Full-row overlay. A span, not a button: single clicks must
-                // fall through to the row's own links. DOUBLE-click attacks
-                // the target (even though it's already called). Own claims
-                // release automatically when the hit lands (handleAttackResult)
-                // or when the 20-min cap expires (sweepExpiredCalls).
+                // Full-row overlay. A span, not a button: clicks must fall
+                // through to the row's own links (attack button included).
+                // Own claims release automatically when the hit lands
+                // (handleAttackResult) or when the 20-min cap expires
+                // (sweepExpiredCalls).
                 badge = document.createElement('span');
                 badge.className = 'sk-wtc-badge';
-                badge.addEventListener('dblclick', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.attackTarget(tid, li);
-                });
                 // Right-click ANYWHERE on the overlay releases — only when the
                 // claim is yours (checked live via dataset, refreshed on each
                 // render, instead of this.calls which may lag a poll tick).
@@ -754,10 +769,14 @@ friendlyStatus(status, fallback) {
             if (badge.style.backgroundColor !== style.bg) badge.style.backgroundColor = style.bg;
             if (badge.style.borderColor !== style.border) badge.style.borderColor = style.border;
             const newTitle = mine
-                ? 'Called by you — double-click to attack, right-click to release'
-                : (call.isDeal ? 'Deal call by ' : 'Called by ') + who + ' — double-click to attack';
+                ? 'Called by you — right-click to release'
+                : (call.isDeal ? 'Deal call by ' : 'Called by ') + who;
             if (badge.title !== newTitle) badge.title = newTitle;
-            if (badge.style.cursor !== 'pointer') badge.style.cursor = 'pointer';
+            // Right-click release is the only interaction on the overlay, and
+            // it exists for OWN claims only — others' badges must not read as
+            // clickable.
+            const newCursor = mine ? 'pointer' : 'default';
+            if (badge.style.cursor !== newCursor) badge.style.cursor = newCursor;
             // Live markers for the contextmenu handler — refreshed every
             // render so a released/swapped claim can never be released twice
             // or someone else's badge be mistaken for yours after a re-render.
@@ -769,20 +788,26 @@ friendlyStatus(status, fallback) {
             // row-relative. left = level's left edge; width = from there to
             // score's RIGHT edge — the status and attack columns to the far
             // right stay uncovered and clickable.
-            const levelCell = li.querySelector('.level');
-            const scoreCell = li.querySelector('.score') || li.querySelector('.points');
-            if (levelCell && scoreCell) {
-                const left = levelCell.offsetLeft;
-                const right = scoreCell.offsetLeft + scoreCell.offsetWidth;
-                if (badge.style.left !== left + 'px') badge.style.left = left + 'px';
-                const width = Math.max(40, right - left);
-                if (badge.style.width !== width + 'px') badge.style.width = width + 'px';
-            } else if (levelCell) {
-                const left = levelCell.offsetLeft;
-                if (badge.style.left !== left + 'px') badge.style.left = left + 'px';
-                if (badge.style.width !== '90px') badge.style.width = '90px';
-            } else if (!badge.style.width) {
-                badge.style.width = '110px';
+            //
+            // offsetLeft/offsetWidth are layout reads (forced reflow when
+            // interleaved with writes) and this runs per mutation. Only
+            // re-measure when the badge is missing geometry (fresh badge or
+            // a row React recreated) — stable rows keep their cached px
+            // values (audit item 12).
+            if (!badge.style.left || !badge.style.width) {
+                const levelCell = li.querySelector('.level');
+                const scoreCell = li.querySelector('.score') || li.querySelector('.points');
+                if (levelCell && scoreCell) {
+                    const left = levelCell.offsetLeft;
+                    const right = scoreCell.offsetLeft + scoreCell.offsetWidth;
+                    badge.style.left = left + 'px';
+                    badge.style.width = Math.max(40, right - left) + 'px';
+                } else if (levelCell) {
+                    badge.style.left = levelCell.offsetLeft + 'px';
+                    badge.style.width = '90px';
+                } else {
+                    badge.style.width = '110px';
+                }
             }
         } else {
             // Free target — offer the claim button. (Row-skipping for the
@@ -817,22 +842,6 @@ friendlyStatus(status, fallback) {
                 btn.title = btnTitle;
             }
         }
-    },
-
-    /**
-     * Attack a target from the war panel row. Torn moved attack pages to
-     * page.php?sid=attack — loader.php answers with the "endpoint no longer
-     * available" JSON — so look for the row's new-style attack link first,
-     * then navigate to the current URL format directly.
-     */
-    attackTarget(tid, li) {
-        if (!tid) return;
-        const attackLink = li && li.querySelector(`a[href*='sid=attack']`);
-        if (attackLink) {
-            attackLink.click();
-            return;
-        }
-        window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(tid)}`;
     },
 
     /**

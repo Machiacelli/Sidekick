@@ -11,7 +11,10 @@
     // ── Constants ──────────────────────────────────────────────────────────────
     const STORAGE_KEY = 'sidekick_auction_tracker';
     const WINDOW_KEY = 'sidekick_auction_tracker_window';
-    const REFRESH_MS = 60_000;   // auto-refresh every 60 s
+    const REFRESH_MS = 60_000;   // sale-resolution cycle (ended auctions only)
+    const RESEED_MS = 2_000;      // live re-harvest throttle while on amarket
+    const MAX_SALE_ATTEMPTS = 5;  // clean-miss budget before settling as expired
+    const SALE_RETRY_GAP_SEC = 55;
     const STYLE_ID = 'ska-tracker-styles';
     const WIN_ID = 'ska-tracker-win';
     const INJECT_ATTR = 'data-ska-tracked';
@@ -27,17 +30,106 @@
         item: { border: '#78716c', bg: 'rgba(120,113,108,0.08)', label: 'Item' },
     };
 
-    // ── Torn API item_type → category key ─────────────────────────────────────
-    function categoryFromType(type) {
-        if (!type) return 'item';
-        const t = type.toLowerCase();
-        if (t.includes('weapon') || t.includes('melee') || t.includes('primary') || t.includes('secondary') || t.includes('temporary')) return 'weapon';
-        if (t.includes('armor') || t.includes('armour')) return 'armor';
-        if (t.includes('clothing')) return 'clothing';
-        if (t.includes('drug')) return 'drug';
-        if (t.includes('medical')) return 'medical';
-        if (t.includes('enhancer')) return 'enhancer';
-        return 'item';
+    // Torn v2 item rarity → accent colour (same glow palette the
+    // auction-weapon-bonus module uses). Overrides the category colour on
+    // the card border/gradient when present.
+    const RARITY_COLORS = {
+        yellow: { border: '#fcf75e', bg: 'rgba(252,247,94,0.07)' },
+        orange: { border: '#d18100', bg: 'rgba(209,129,0,0.09)' },
+        red: { border: '#e64d19', bg: 'rgba(230,77,25,0.08)' },
+    };
+
+    // ── amarket row → seed data (live-page selectors, Oct 2026) ────────────────
+    // "Ends on HH:MM:SS - DD/MM/YY" title attribute (TCT = UTC)
+    function parseEndsTitle(title) {
+        const m = String(title || '').match(/(\d{2}):(\d{2}):(\d{2})\s*-\s*(\d{2})\/(\d{2})\/(\d{2})/);
+        if (!m) return null;
+        const [, hh, mi, ss, dd, mm, yy] = m.map(Number);
+        const epoch = Math.floor(Date.UTC(2000 + yy, mm - 1, dd, hh, mi, ss) / 1000);
+        return Number.isFinite(epoch) ? epoch : null;
+    }
+
+    function parseMoneyText(text) {
+        const digits = String(text || '').replace(/[^0-9]/g, '');
+        return digits ? Number(digits) : null;
+    }
+
+    // Torn amarket titles carry the rarity tag + instance number after the
+    // item name itself — e.g. "P90 (common 2341234123)". The tag's on-screen
+    // ALL-CAPS look comes from CSS text-transform; the DOM text is lowercase,
+    // so we can't match on case. Instead strip a trailing parenthetical when
+    // it contains a long digit run (the item-instance uid — 5+ digits, never
+    // part of a real item name) or an ALL-CAPS token; genuine parentheticals
+    // like "... (large)" or "... (x5)" are left alone.
+    function cleanItemName(raw) {
+        return String(raw || '')
+            .replace(/\s*\((?:[^()]*\d{5,}[^()]*|[^()]*\b[A-Z]{2,}\b[^()]*)\)\s*$/, '')
+            .trim();
+    }
+
+    // Harvest one auction row. Live data comes from the page itself: Torn's
+    // API only publishes COMPLETED auction sales, so active auctions have no
+    // API representation to poll — the card is seeded here and re-seeded by
+    // the page observer while the user browses; the API is consulted only
+    // after the auction ends (sale resolution).
+    function collectAuctionSeed(li) {
+        const seed = {};
+        if (!li || typeof li.querySelector !== 'function') return seed;
+
+        const name = cleanItemName(li.querySelector('.item-name, span.title, .title')?.textContent.trim());
+        if (name) seed.name = name;
+
+        const sellerLink = li.querySelector('.seller-wrap .name a[href*="XID="], .seller-mob-wrap a[href*="XID="], a[href*="profiles.php"][href*="XID="]');
+        const xid = sellerLink?.href.match(/[?&]XID=(\d+)/)?.[1];
+        if (xid) {
+            seed.sellerId = Number(xid);
+            seed.sellerName = sellerLink.textContent.trim() || '—';
+        }
+
+        // Item id + item-instance uid: the hooks the sale-resolution lookup
+        // anchors on (item-scoped completed-sales feed).
+        const hover = li.querySelector('.item-hover');
+        const itemId = Number(hover?.getAttribute('item'))
+            || Number(li.querySelector('.item-name')?.getAttribute('href')?.match(/[?&]ID=(\d+)/)?.[1])
+            || Number(li.querySelector('img[src*="/images/items/"]')?.getAttribute('src')?.match(/\/images\/items\/(\d+)\//)?.[1]);
+        if (Number.isFinite(itemId) && itemId > 0) seed.itemId = itemId;
+        const uidRaw = hover?.getAttribute('armoury');
+        if (uidRaw && /^\d+$/.test(String(uidRaw).trim())) seed.uid = String(uidRaw).trim();
+
+        const bidText = li.querySelector('.c-bid-wrap, .top-bid-mob-wrap, .price-wrap')?.textContent || '';
+        const price = /none/i.test(bidText) ? 0 : parseMoneyText(bidText);
+        if (price !== null) seed.price = price;
+
+        const bids = Number(li.querySelector('.bids-wrap')?.textContent.match(/(\d+)\s*bids?/i)?.[1] ?? 0);
+        if (bids) seed.bids = bids;
+
+        const endsAt = parseEndsTitle(
+            li.querySelector('.time-wrap span[title], .time-mob-wrap span[title], span[title*="Ends on"]')?.getAttribute('title')
+        );
+        if (endsAt) seed.endsAt = endsAt;
+
+        const glowEl = li.querySelector('.item-plate[class*="glow-"], [class*="glow-"]');
+        const rarity = (glowEl?.className.match(/glow-(yellow|orange|red)/) || li.className.match(/glow-(yellow|orange|red)/))?.[1];
+        if (rarity) seed.rarity = rarity;
+
+        const bonuses = Array.from(li.querySelectorAll('.iconsbonuses .bonus-attachment-icons[title], .iconsbonuses span[title]'))
+            .map(span => {
+                const raw = span.getAttribute('title') || '';
+                const bName = raw.match(/<b[^>]*>\s*([^<]+?)\s*<\/b>/i)?.[1]
+                    || raw.split(/<br/i)[0].replace(/<[^>]*>/g, '').trim();
+                if (!bName) return null;
+                const description = raw.split(/<br\s*\/?>/i).slice(1).join(' ').replace(/<[^>]*>/g, '').trim();
+                const value = Number(description.match(/(\d+(?:\.\d+)?)\s*%/)?.[1] ?? 0) || 0;
+                return { name: bName, value, description };
+            })
+            .filter(Boolean);
+        if (bonuses.length) seed.bonuses = bonuses;
+
+        const category = li.closest('#types-tab-1') ? 'weapon'
+            : li.closest('#types-tab-2') ? 'armor' : null;
+        if (category) seed.category = category;
+
+        return seed;
     }
 
     // ── Module ─────────────────────────────────────────────────────────────────
@@ -46,6 +138,7 @@
         _win: null,   // DOM window element
         _listings: {},     // { id: { ...cached data } }
         _refreshTimer: null,
+        _tickTimer: null,
         _winState: {
             open: false,
             x: 120,
@@ -98,6 +191,7 @@
             }
             this._buildWindow();
             this._startRefresh();
+            this._startCountdown();
             await this._refreshAll();
         },
 
@@ -106,7 +200,24 @@
             const CS = window.SidekickModules?.Core?.ChromeStorage;
             if (!CS) return;
             const saved = await CS.get(STORAGE_KEY);
-            if (saved?.listings) this._listings = saved.listings;
+            if (saved?.listings) {
+                this._listings = saved.listings;
+                // Rows written by earlier revisions may carry stuck error /
+                // loading flags from the broken API attempts — nothing sets
+                // them any more; strip on load so no legacy red text survives.
+                // Names are also re-cleaned here: rows tracked before the
+                // title cleaner (or before it handled lowercase tags) still
+                // carry the raw page title.
+                Object.values(this._listings).forEach(l => {
+                    if (!l) return;
+                    delete l.error;
+                    if (l.loading) l.loading = false;
+                    if (l.name) {
+                        const clean = cleanItemName(l.name);
+                        if (clean && clean !== l.name) l.name = clean;
+                    }
+                });
+            }
             const ws = await CS.get(WINDOW_KEY);
             if (ws) this._winState = { ...this._winState, ...ws };
         },
@@ -118,45 +229,77 @@
             await CS.set(WINDOW_KEY, this._winState);
         },
 
-        // ── Listing data API ──────────────────────────────────────────────────
-        async _fetchListing(listingId) {
+        // ── Ended-auction sale resolution ──────────────────────────────────────
+        // Torn's API only publishes COMPLETED auction sales: the per-item
+        // rolling feed GET /v2/market/{itemId}/auctionhouse (entries carry
+        // price, bids, buyer, end timestamp, item uid). Active auctions have
+        // no API representation at all, and the amarket page exposes no
+        // API-compatible listing id — so live data is DOM-driven and this
+        // lookup runs once per tracked auction AFTER its end time, to learn
+        // the final sale result. Transport follows the event-ticker v2
+        // pattern: background proxyFetch + Authorization header (rule #14).
+        async _fetchItemSales(itemId, fromSec, toSec) {
             const CS = window.SidekickModules?.Core?.ChromeStorage;
-            const key = CS ? await CS.get('sidekick_api_key') : null;
-            if (!key) throw new Error('No API key configured');
+            const apiKey = CS ? await CS.get('sidekick_api_key') : null;
+            if (!apiKey) return null;
 
-            return new Promise((resolve, reject) => {
+            const path = `market/${itemId}/auctionhouse?from=${fromSec}&to=${toSec}&limit=100&sort=DESC`;
+            const response = await new Promise((resolve) => {
                 chrome.runtime.sendMessage({
-                    action: 'fetchTornApi',
-                    apiKey: key,
-                    selections: [],
-                    endpoint: `market/${listingId}`,
-                }, res => {
-                    if (chrome.runtime.lastError) {
-                        return reject(new Error(chrome.runtime.lastError.message));
+                    action: 'proxyFetch',
+                    url: `https://api.torn.com/v2/${path}`,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `ApiKey ${apiKey}`
                     }
-
-                    if (!res?.success) {
-                        return reject(new Error(res?.error || 'API error'));
-                    }
-
-                    console.log("Auction API response:", JSON.stringify(res, null, 2));
-
-                    resolve(res);
-                });
+                }, (r) => resolve(r));
             });
+
+            if (!response?.success) {
+                throw new Error(response?.error || 'Background proxy failed');
+            }
+
+            let data = response.data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch { throw new Error('Sales feed returned invalid JSON'); }
+            }
+            if (data?.error) {
+                throw new Error(data.error.error || data.error.message || `HTTP ${response.status}`);
+            }
+            return Array.isArray(data?.auctionhouse) ? data.auctionhouse : [];
         },
 
-        // ── Add a listing (called by inject button or manually) ───────────────
+        // Does a completed-sales feed entry describe OUR tracked auction?
+        // Primary: item-instance uid (unique weapons/armor). Fallback (no uid
+        // available): same seller with the sale ending inside a ±15 min
+        // window of the row's advertised end time.
+        _sameAuction(sale, l) {
+            if (!sale) return false;
+            const saleUid = String(sale.item?.uid ?? '').trim();
+            if (l.uid && saleUid) {
+                if (saleUid !== String(l.uid)) return false;
+                return sale.seller?.id == null || l.sellerId == null
+                    || sale.seller.id === l.sellerId;
+            }
+            if (l.sellerId != null && sale.seller?.id != null && sale.seller.id !== l.sellerId) return false;
+            if (!Number.isFinite(sale.timestamp) || !l.endsAt) return false;
+            return Math.abs(sale.timestamp - l.endsAt) <= 900;
+        },
+
+        // ── Add a listing (called by the details-panel track button) ──────────
         async addListing(listingId, seedData = {}) {
             listingId = String(listingId).trim();
             if (!listingId) return;
             if (!this.isInitialized) await this.init();
 
-            // Store seed data immediately so the UI shows the row right away
+            // The seed is the data source for live auctions (Torn's API only
+            // publishes completed sales), so the row is complete immediately —
+            // no loading state, no fetch.
             this._listings[listingId] = {
                 id: listingId,
                 addedAt: Date.now(),
-                loading: true,
+                loading: false,
+                sold: false,
                 ...seedData,
             };
             await this._saveState();
@@ -166,48 +309,67 @@
             } else {
                 await this.open();
             }
-
-            // Fire background fetch
-            this._refreshOne(listingId);
         },
 
         async _refreshOne(listingId) {
-            try {
-                const data = await this._fetchListing(listingId);
-                const prev = this._listings[listingId] || {};
+            const l = this._listings[listingId];
+            if (!l) return;
 
-                const market = data.auctionhouselisting;
-                if (!market) throw new Error("Missing auctionhouselisting");
+            const nowSec = Math.floor(Date.now() / 1000);
 
-                const item = market.item || {};
+            // Active auctions live in the amarket DOM (observer re-seed); the
+            // API has nothing for them. Nothing to do until they end.
+            if (!l.endsAt || l.endsAt > nowSec) return;
+            if (l.saleResolved || (l.saleAttempts || 0) >= MAX_SALE_ATTEMPTS) return;
 
-                const price = market.price ?? prev.price ?? 0;
-                const prevPrice = prev.price && !prev.loading ? prev.price : null;
+            // Pace retries (the countdown tick can kick us the second the
+            // timer hits 0, plus the 60 s cycle — don't double-fire)
+            if (nowSec - (l.lastSaleTry || 0) < SALE_RETRY_GAP_SEC) return;
+            l.lastSaleTry = nowSec;
 
-                this._listings[listingId] = {
-                    id: listingId,
-                    addedAt: prev.addedAt || Date.now(),
-                    loading: false,
-                    name: item.name || prev.name || `Listing #${listingId}`,
-                    category: categoryFromType(item.type || prev.category || ''),
-                    sellerId: market.seller?.id ?? prev.sellerId ?? null,
-                    sellerName: market.seller?.name ?? prev.sellerName ?? '—',
-                    price,
-                    prevPrice,
-                    quantity: 1,
-                    bids: market.bids ?? prev.bids ?? 0,
-                    timeLeft: market.timestamp ?? prev.timeLeft ?? null,
-                    bonuses: item.bonuses ?? prev.bonuses ?? [],
-                    sold: !!market.buyer,
-                    refreshedAt: Date.now(),
-                };
-            } catch (e) {
-                console.warn(`🏷️ [AuctionTracker] Could not refresh listing ${listingId}:`, e.message);
-                if (this._listings[listingId]) {
-                    this._listings[listingId].error = e.message;
-                    this._listings[listingId].loading = false;
-                }
+            // Without the item id there is nothing to look the sale up by
+            if (!l.itemId) {
+                l.saleResolved = true;
+                await this._saveState();
+                return;
             }
+
+            if (!this._resolving) this._resolving = new Set();
+            if (this._resolving.has(listingId)) return;
+            this._resolving.add(listingId);
+
+            try {
+                const sales = await this._fetchItemSales(l.itemId, l.endsAt - 600, l.endsAt + 3600);
+                if (sales === null) return; // no API key — silent, retry later
+
+                l.saleAttempts = (l.saleAttempts || 0) + 1;
+                const match = sales.find(s => this._sameAuction(s, l));
+
+                if (match) {
+                    if (match.price != null && match.price !== l.price) {
+                        l.prevPrice = l.price || l.prevPrice;
+                        l.price = match.price;
+                    }
+                    if (match.bids != null) l.bids = match.bids;
+                    if (match.buyer?.id) {
+                        l.sold = true;
+                        l.buyerId = match.buyer.id;
+                        l.buyerName = match.buyer.name;
+                    }
+                    l.saleResolved = true;
+                    console.log(`🏷️ [AuctionTracker] Resolved sale for listing ${listingId}`);
+                } else if (l.saleAttempts >= MAX_SALE_ATTEMPTS) {
+                    // Clean misses exhausted: absent from the completed-sales
+                    // feed means it expired unsold. Settle without an error.
+                    l.saleResolved = true;
+                }
+            } catch (e) {
+                l.saleAttempts = (l.saleAttempts || 0) + 1;
+                console.warn(`🏷️ [AuctionTracker] Sale lookup failed for ${listingId}:`, e.message);
+            } finally {
+                this._resolving.delete(listingId);
+            }
+
             await this._saveState();
             if (this._win && document.contains(this._win)) this._renderList();
         },
@@ -223,6 +385,58 @@
             this._renderList();
         },
 
+        // Live updates while the user browses amarket: Torn re-renders rows as
+        // bids arrive, so re-harvest any tracked row currently on the page.
+        // Throttled — Torn ticks its row timers every second, which fires the
+        // page observer constantly. Only fills gaps or records CHANGES; never
+        // overwrites a resolved sale (ended rows are gone from the page by
+        // then, so they simply don't match here).
+        _reseedTracked() {
+            if (!window.location.href.includes('amarket.php')) return;
+            const now = Date.now();
+            if (now - (this._lastReseedAt || 0) < RESEED_MS) return;
+            this._lastReseedAt = now;
+
+            let anyChanged = false;
+            for (const [id, l] of Object.entries(this._listings)) {
+                const li = document.getElementById(id);
+                if (!li) continue;
+                const seed = collectAuctionSeed(li);
+
+                let changed = false;
+                if (seed.price != null && seed.price !== l.price) {
+                    if (l.price) l.prevPrice = l.price;
+                    l.price = seed.price;
+                    changed = true;
+                }
+                if (seed.bids != null && seed.bids !== l.bids) {
+                    l.bids = seed.bids;
+                    changed = true;
+                }
+                // Rows tracked before the name cleaner existed may carry the
+                // raw page title ("P90 (COMMON 4230397)") — correct them.
+                if (seed.name && seed.name !== l.name) {
+                    l.name = seed.name;
+                    changed = true;
+                }
+                for (const [k, v] of Object.entries(seed)) {
+                    if (v == null || l[k] != null) continue;
+                    if (k === 'price' || k === 'bids') continue; // handled above
+                    l[k] = v;
+                    changed = true;
+                }
+                if (changed) {
+                    l.refreshedAt = now;
+                    anyChanged = true;
+                }
+            }
+
+            if (anyChanged) {
+                this._saveState();
+                if (this._win && document.contains(this._win)) this._renderList();
+            }
+        },
+
         // ── Auto-refresh ──────────────────────────────────────────────────────
         _startRefresh() {
             this._stopRefresh();
@@ -230,6 +444,35 @@
         },
         _stopRefresh() {
             if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+        },
+
+        // 1s display-only countdown — rewrites the data-ends spans in place.
+        // Never re-renders the list (rebuild-per-tick is the repaint churn
+        // anti-pattern) and makes no API calls — except kicking the sale
+        // resolver the moment a tracked auction's timer hits 0.
+        _startCountdown() {
+            this._stopCountdown();
+            this._tickTimer = setInterval(() => {
+                if (!this._win || !document.contains(this._win)) return;
+                const nowSec = Math.floor(Date.now() / 1000);
+                this._win.querySelectorAll('.ska-l-time[data-ends]').forEach(el => {
+                    const remaining = Number(el.dataset.ends) - nowSec;
+                    el.textContent = `⏱ ${remaining > 0 ? this._formatTime(remaining) : 'Ended'}`;
+                    el.classList.toggle('ended', remaining <= 0);
+                });
+
+                // An auction just hit 0: resolve its final sale right away
+                // (paced inside _refreshOne; active auctions are skipped)
+                for (const [id, l] of Object.entries(this._listings)) {
+                    if (l?.endsAt && l.endsAt <= nowSec && !l.saleResolved
+                        && (l.saleAttempts || 0) < MAX_SALE_ATTEMPTS) {
+                        this._refreshOne(id);
+                    }
+                }
+            }, 1000);
+        },
+        _stopCountdown() {
+            if (this._tickTimer) { clearInterval(this._tickTimer); this._tickTimer = null; }
         },
 
         // ── z-index helper ────────────────────────────────────────────────────
@@ -309,21 +552,6 @@ min-height: 120px;
                 font-family: inherit;
             }
             #${WIN_ID} .ska-tw-close:hover { color: #ef4444; }
-
-            #${WIN_ID} .ska-tw-addinput:focus { border-color: rgba(245,158,11,.55); }
-            #${WIN_ID} .ska-tw-addinput::placeholder { color: rgba(255,255,255,.3); }
-            #${WIN_ID} .ska-tw-addbtn {
-                background: rgba(245,158,11,.18);
-                border: 1px solid rgba(245,158,11,.45);
-                color: #f59e0b;
-                border-radius: 6px;
-                padding: 5px 13px;
-                font-size: 11.5px;
-                cursor: pointer;
-                transition: background .15s;
-                font-weight: 600;
-                font-family: inherit;
-            }
 
             /* Listing list */
             #${WIN_ID} .ska-tw-body {
@@ -413,7 +641,7 @@ min-height: 120px;
             #${WIN_ID} .ska-l-drop { color: #22c55e; font-size: 10.5px; margin-left: -8px; }
             #${WIN_ID} .ska-l-rise { color: #ef4444; font-size: 10.5px; margin-left: -8px; }
             #${WIN_ID} .ska-l-sold-badge {
-                color: #ef4444;
+                color: #22c55e;
                 font-weight: 700;
                 font-size: 10.5px;
             }
@@ -438,6 +666,12 @@ min-height: 120px;
             #${WIN_ID} .ska-l-error {
                 color: #f87171;
                 font-size: 10.5px;
+            }
+            #${WIN_ID} .ska-l-time {
+                font-variant-numeric: tabular-nums;
+            }
+            #${WIN_ID} .ska-l-time.ended {
+                color: rgba(255,255,255,.35);
             }
 
             /* resize handle */
@@ -541,16 +775,6 @@ min-height: 120px;
             this._renderList();
         },
 
-        // ── Parse a listing ID from URL or raw number ─────────────────────────
-        _parseListingId(raw) {
-            // Full URL: https://www.torn.com/amarket.php#/p=item&step=item&ID=12345&tab=...
-            const urlMatch = raw.match(/ID=(\d+)/i) || raw.match(/listing[=/](\d+)/i);
-            if (urlMatch) return urlMatch[1];
-            // Plain number
-            if (/^\d+$/.test(raw)) return raw;
-            return null;
-        },
-
         // ── Render the listing list ───────────────────────────────────────────
         _renderList() {
             const body = this._win?.querySelector('#ska-tw-body');
@@ -560,7 +784,8 @@ min-height: 120px;
             if (!entries.length) {
                 body.innerHTML = `<div class="ska-tw-empty">
                     No listings tracked yet.<br>
-                    Paste a listing ID above, or click <strong>+ Track</strong> on any auction listing.
+                    Open the <strong>Auction House</strong>, click a listing, and press
+                    <strong>+ Track Listing</strong> in its details panel.
                 </div>`;
                 return;
             }
@@ -578,14 +803,17 @@ min-height: 120px;
 
         _listingHTML(l) {
             const cat = CATEGORY_COLORS[l.category] || CATEGORY_COLORS.item;
+            const accent = RARITY_COLORS[l.rarity] || cat;
             const catBg = cat.bg;
-            const clr = cat.border;
+            const catClr = cat.border;
+            const clr = accent.border;
 
+            const name = l.name || `Listing #${l.id}`;
             const price = l.price ? `$${Number(l.price).toLocaleString()}` : '—';
             const seller = l.sellerId
                 ? `<a href="https://www.torn.com/profiles.php?XID=${l.sellerId}" target="_blank" rel="noopener"
-                      style="color:${clr};text-decoration:none;">${l.sellerName || l.sellerId}</a>`
-                : (l.sellerName || '—');
+                      style="color:${clr};text-decoration:none;">${this._esc(l.sellerName || l.sellerId)}</a>`
+                : this._esc(l.sellerName || '—');
 
             // Price change indicator
             let priceChange = '';
@@ -596,32 +824,45 @@ min-height: 120px;
                     : `<span class="ska-l-rise">▲ $${diff.toLocaleString()}</span>`;
             }
 
-            // Time left
-            const timeLeft = l.timeLeft ? this._formatTime(l.timeLeft) : '';
-            const timeStr = timeLeft ? `⏱ ${timeLeft}` : '';
+            // Time left — carried as an end epoch; the 1s display tick updates
+            // the data-ends spans in place between API refreshes
+            let timeStr = '';
+            if (l.endsAt) {
+                const remaining = l.endsAt - Math.floor(Date.now() / 1000);
+                timeStr = remaining > 0
+                    ? `<span class="ska-l-time" data-ends="${l.endsAt}">⏱ ${this._formatTime(remaining)}</span>`
+                    : `<span class="ska-l-time ended">⏱ Ended</span>`;
+            }
 
             // Bids
             const bidsStr = l.bids !== undefined && l.bids !== null ? `🔨 ${l.bids} bid${l.bids !== 1 ? 's' : ''}` : '';
 
-            // Sold badge
-            const soldBadge = l.sold ? `<span class="ska-l-sold-badge">⚠️ Sold / Expired</span>` : '';
+            // Sold badge (green — a resolved sale is a result, not an error)
+            const soldBadge = l.sold
+                ? `<span class="ska-l-sold-badge">✔ Sold${l.buyerName
+                    ? ` to <a href="https://www.torn.com/profiles.php?XID=${l.buyerId}" target="_blank" rel="noopener"
+                          style="color:#22c55e;text-decoration:none;">${this._esc(l.buyerName)}</a>`
+                    : ''}</span>`
+                : '';
 
-            // Bonuses
+            // Bonuses (v2 item shape: { id, title, description, value })
             let bonusesHTML = '';
             if (Array.isArray(l.bonuses) && l.bonuses.length) {
                 const pills = l.bonuses.map(b => {
-                    const name = b.name || b.bonus_name || b;
-                    const val = b.value || b.percentage || '';
-                    return `<span class="ska-l-bonus">${name}${val ? ` ${val}%` : ''}</span>`;
+                    const bName = b.title || b.name || '';
+                    if (!bName) return '';
+                    const val = b.value > 0 ? ` ${b.value}%` : '';
+                    const tip = b.description ? ` title="${this._esc(b.description)}"` : '';
+                    return `<span class="ska-l-bonus"${tip}>${this._esc(bName)}${val}</span>`;
                 }).join('');
-                bonusesHTML = `<div class="ska-l-bonuses">${pills}</div>`;
+                if (pills) bonusesHTML = `<div class="ska-l-bonuses">${pills}</div>`;
             }
 
             const loading = l.loading
                 ? `<span class="ska-l-loading">Fetching data…</span>`
                 : '';
             const errMsg = l.error && !l.loading
-                ? `<span class="ska-l-error">⚠ ${l.error}</span>`
+                ? `<span class="ska-l-error">⚠ ${this._esc(l.error)}</span>`
                 : '';
 
             // Last refreshed
@@ -631,10 +872,10 @@ min-height: 120px;
 
             return `
             <div class="ska-listing${l.sold ? ' sold' : ''}"
-                 style="border-left-color:${clr};background:linear-gradient(135deg,${catBg},rgba(255,255,255,.02));">
+                 style="border-left-color:${clr};background:linear-gradient(135deg,${accent.bg},rgba(255,255,255,.02));">
                 <div class="ska-l-row1">
-                    <span class="ska-l-cat" style="background:${catBg};color:${clr};border:1px solid ${clr}33;">${cat.label}</span>
-                    <span class="ska-l-name" title="${(l.name || '').replace(/"/g, '&quot;')}">${l.name || `Listing #${l.id}`}</span>
+                    <span class="ska-l-cat" style="background:${catBg};color:${catClr};border:1px solid ${catClr}33;">${cat.label}</span>
+                    <span class="ska-l-name" title="${this._esc(name)}">${this._esc(name)}</span>
                     <button class="ska-l-del" data-id="${l.id}" title="Remove">×</button>
                 </div>
                 <div class="ska-l-row2">
@@ -656,7 +897,13 @@ min-height: 120px;
             if (!secs || secs <= 0) return 'Ended';
             const h = Math.floor(secs / 3600);
             const m = Math.floor((secs % 3600) / 60);
-            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            const s = secs % 60;
+            if (h > 0) return `${h}h ${m}m`;
+            if (m > 0) return `${m}m ${s}s`;
+            return `${s}s`;
+        },
+        _esc(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
         },
         _relTime(ts) {
             const s = Math.floor((Date.now() - ts) / 1000);
@@ -668,6 +915,7 @@ min-height: 120px;
         // ── Close window ──────────────────────────────────────────────────────
         _close() {
             this._stopRefresh();
+            this._stopCountdown();
 
             this._winState.open = false;
             this._saveState();
@@ -728,81 +976,59 @@ min-height: 120px;
             });
         },
 
-        // ── Inject "Track" button on amarket.php listing rows ─────────────────
+        // ── amarket.php integration ────────────────────────────────────────────
+        // Current amarket DOM (verified against live-page scrapers, Oct 2026):
+        // rows are `li` elements under #auction-house-tabs / ul.items-list whose
+        // DOM id IS the per-auction id Torn's own frontend uses. URLs only carry
+        // `#/?itemtab=…&start=…` — the auction id exists in NO link or URL.
+        // No visible UI is added to the rows themselves: the only button is
+        // the one in the details panel. This pass just (a) remembers which
+        // row was last clicked so the panel button knows which auction it is
+        // looking at, and (b) drives the live re-seed through the observer.
         _injectPageButton() {
             if (!window.location.href.includes('amarket.php')) return;
 
             const self = this;
 
             function injectButtons() {
-                // 1. Torn auction rows have bid buttons — find the listing ID from the row
-                document.querySelectorAll('ul.items-list li').forEach(li => {
+                // 1. Auction rows — attach the (invisible) click-capture once
+                document.querySelectorAll('ul.items-list li[id], #auction-house-tabs li[id]').forEach(li => {
                     if (li.classList.contains('last') || li.classList.contains('clear')) return;
                     if (li.getAttribute(INJECT_ATTR)) return;
-                    li.setAttribute(INJECT_ATTR, 'pending');
 
-                    // Try to find an ID from the bid/view link or data attributes
-                    const bidLink = li.querySelector('a[href*="step=item"]') || li.querySelector('a[href*="ID="]');
-                    const listingId = bidLink
-                        ? (bidLink.href.match(/ID=(\d+)/i)?.[1])
-                        : null;
-
+                    const listingId = /^\d+$/.test(li.id) ? li.id : null;
                     if (!listingId) return;
+                    li.setAttribute(INJECT_ATTR, 'listener');
 
-                    // Capture clicks on the row to remember the active listing ID
                     li.addEventListener('click', () => {
                         self._lastClickedListingId = listingId;
                     }, true);
-
-                    // Grab item name from DOM for seed data
-                    const nameEl = li.querySelector('.title-wrap h4, span.title, .item-name');
-                    const name = nameEl?.textContent.trim() || null;
-
-                    // Find the price element to anchor the button next to
-                    const priceEl = li.querySelector('.price-wrap, .current-bid, [class*="price"]');
-                    if (!priceEl) return;
-
-                    const already = self._listings[listingId];
-
-                    const btn = document.createElement('button');
-                    btn.className = 'ska-track-btn' + (already ? ' tracked' : '');
-                    btn.textContent = already ? '✓ Tracked' : '+ Track';
-                    btn.title = already ? 'Already in Auction Tracker' : 'Add to Auction Tracker';
-                    btn.setAttribute(INJECT_ATTR, listingId);
-
-                    if (!already) {
-                        btn.addEventListener('click', async e => {
-                            e.stopPropagation();
-                            btn.textContent = '✓ Tracked';
-                            btn.classList.add('tracked');
-                            console.log("Tracking listing:", listingId, bidLink?.href);
-                            await self.addListing(listingId, { name });
-                        });
-                    }
-
-                    priceEl.appendChild(btn);
-                    li.setAttribute(INJECT_ATTR, listingId);
                 });
 
-                // 2. Inject into the React details panel if open
+                // 2. The details-panel track button. The panel is reused
+                // across listings, so rebind whenever the open listing
+                // changes and resolve the id at CLICK time — a button frozen
+                // to a previous listing would track the wrong auction.
                 document.querySelectorAll('ul[class*="properties___"]').forEach(panelUl => {
-                    if (panelUl.getAttribute(INJECT_ATTR)) return;
+                    const panelListingId = window.location.href.match(/[?&]ID=(\d+)/i)?.[1] || self._lastClickedListingId;
+                    if (!panelListingId || !/^\d+$/.test(String(panelListingId))) return;
+                    if (panelUl.getAttribute(INJECT_ATTR) === String(panelListingId)) return;
 
-                    // We can usually get the listing ID from the URL when a panel is open,
-                    // otherwise fall back to the row that was just clicked.
-                    const urlMatch = window.location.href.match(/ID=(\d+)/i) || window.location.href.match(/listing[=/](\d+)/i);
-                    const panelListingId = (urlMatch ? urlMatch[1] : null) || self._lastClickedListingId;
+                    // Retire a button bound to a previous listing
+                    panelUl.querySelector('.ska-track-btn')?.remove();
+                    panelUl.setAttribute(INJECT_ATTR, String(panelListingId));
 
-                    if (!panelListingId) return;
-                    panelUl.setAttribute(INJECT_ATTR, 'pending');
-
-                    const already = self._listings[panelListingId];
+                    const already = !!self._listings[panelListingId];
 
                     // Find an empty property div to inject into, instead of adding a new li
-                    const propDivs = Array.from(panelUl.querySelectorAll('.property___gpda9'));
+                    const propDivs = Array.from(panelUl.querySelectorAll('[class*="property___"]'));
                     const emptyDiv = propDivs.find(d => !d.children.length && !d.textContent.trim());
 
-                    if (!emptyDiv) return;
+                    if (!emptyDiv) {
+                        // No slot yet — allow a later pass to retry
+                        panelUl.removeAttribute(INJECT_ATTR);
+                        return;
+                    }
 
                     emptyDiv.style.justifyContent = 'center';
 
@@ -816,28 +1042,41 @@ min-height: 120px;
                     trackBtn.style.padding = '6px';
                     trackBtn.style.fontSize = '11px';
 
-                    if (!already) {
-                        trackBtn.addEventListener('click', async e => {
-                            e.stopPropagation();
-                            trackBtn.textContent = 'Tracked';
-                            trackBtn.classList.add('tracked');
+                    trackBtn.addEventListener('click', async e => {
+                        e.stopPropagation();
+                        const idNow = self._lastClickedListingId;
+                        if (!idNow || !/^\d+$/.test(String(idNow))) return;
+                        if (self._listings[idNow]) return;
 
-                            // Try to find the title from the panel header
-                            const titleEl = document.querySelector('[class*="titleContainer___"] h4, .title-wrap h4');
-                            const name = titleEl?.textContent.trim() || null;
+                        trackBtn.textContent = 'Tracked';
+                        trackBtn.classList.add('tracked');
 
-                            await self.addListing(panelListingId, { name });
-                        });
-                    }
+                        const liNow = document.getElementById(idNow);
+                        const seed = liNow ? collectAuctionSeed(liNow) : {};
+                        if (!seed.name) {
+                            const titleEl = document.querySelector('[class*="titleContainer___"] h4, .title-wrap h4, .item-name');
+                            if (titleEl) seed.name = cleanItemName(titleEl.textContent.trim());
+                        }
+
+                        await self.addListing(idNow, seed);
+                    });
 
                     emptyDiv.appendChild(trackBtn);
-                    panelUl.setAttribute(INJECT_ATTR, panelListingId);
                 });
             }
 
-            // Initial pass + observe for lazy-loaded rows
+            // Initial pass + observe for lazy-loaded rows. The same observer
+            // drives the live re-seed of tracked rows as Torn re-renders them.
+            // Mutations from our OWN window (its 1s countdown tick rewrites
+            // span text) are ignored so the observer isn't run hot and never
+            // consumes the re-seed throttle.
             injectButtons();
-            new MutationObserver(() => injectButtons())
+            new MutationObserver((muts) => {
+                const ourWin = self._win;
+                if (ourWin && muts.every(m => ourWin.contains(m.target))) return;
+                injectButtons();
+                self._reseedTracked();
+            })
                 .observe(document.body, { childList: true, subtree: true });
         },
     };

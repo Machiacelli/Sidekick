@@ -1005,6 +1005,60 @@
         };
     }
 
+    // === DRAG LISTENER REGISTRY (shared teardown utility) ==================
+    // Architectural-observation fix: several modules register document-level
+    // mousemove/mouseup drag listeners per render/creation and never remove
+    // them — a slow listener leak. This registry gives every makeDraggable-
+    // style call site one identical pattern: attach through it, and teardown
+    // happens by token (per window/list/element) or all-at-once on disable.
+    const DragListenerRegistry = {
+        _byToken: new Map(), // token -> Set<{ type, handler, target }>
+
+        /**
+         * Attach a document-level drag pair for `token`.
+         * Re-attaching the same token first removes its previous pair, so
+         * re-renders can't stack listeners. Returns a remover for manual use.
+         */
+        attach(token, { onMove, onUp } = {}) {
+            if (!token || typeof onMove !== 'function' || typeof onUp !== 'function') {
+                return () => { };
+            }
+            // Idempotent re-arm: drop any previous pair for this token first.
+            this.detach(token);
+
+            const entries = [
+                { type: 'mousemove', handler: onMove, target: document },
+                { type: 'mouseup', handler: onUp, target: document }
+            ];
+            entries.forEach(({ type, handler, target }) =>
+                target.addEventListener(type, handler));
+            this._byToken.set(token, entries);
+
+            return () => this.detach(token);
+        },
+
+        /** Remove (and stop tracking) the document-level pair for `token`. */
+        detach(token) {
+            const entries = this._byToken.get(token);
+            if (!entries) return;
+            entries.forEach(({ type, handler, target }) =>
+                target.removeEventListener(type, handler));
+            this._byToken.delete(token);
+        },
+
+        /** Remove every tracked pair (module disable/destroy). */
+        detachAll() {
+            for (const token of Array.from(this._byToken.keys())) {
+                this.detach(token);
+            }
+        },
+
+        /** Introspection for tests/debugging. */
+        size() {
+            return this._byToken.size;
+        }
+    };
+
     // === CORE MODULE EXPORT ===
     const CoreModule = {
         STORAGE_KEYS,
@@ -1016,6 +1070,7 @@
         StateManager,
         ColorPicker,
         ModuleSettingsHelper,
+        DragListenerRegistry,
 
         async init() {
             console.log("🔧 Initializing Core Module...");

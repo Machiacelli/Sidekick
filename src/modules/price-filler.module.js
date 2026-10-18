@@ -78,8 +78,15 @@ const PriceFillerModule = (() => {
     async function refreshTornItems() {
         if (!prefs.apiKey) return;
         try {
-            const resp = await fetch(`https://api.torn.com/torn/?key=${prefs.apiKey}&selections=items&comment=SidekickPriceFiller`);
-            const data = await resp.json();
+            // Background proxy — key never in a page-visible URL.
+            const res = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: `https://api.torn.com/torn/?key=${encodeURIComponent(prefs.apiKey)}&selections=items&comment=SidekickPriceFiller`,
+                }, (r) => resolve(r));
+            });
+            if (!res?.success) throw new Error(res?.error || 'Background fetch failed');
+            const data = res.data;
             if (!data.items) throw new Error(data.error?.error || 'No items in response');
             const filtered = {};
             for (const [id, item] of Object.entries(data.items)) {
@@ -104,10 +111,17 @@ const PriceFillerModule = (() => {
         if (itemMarketCache[itemId]?.time && now - itemMarketCache[itemId].time < 30000)
             return itemMarketCache[itemId].data;
         if (!prefs.apiKey) return null;
-        const resp = await fetch(`https://api.torn.com/v2/market/${itemId}/itemmarket?comment=SidekickPriceFiller`, {
-            headers: { Authorization: 'ApiKey ' + prefs.apiKey }
+        // Background proxy — Authorization header (with the key) is relayed
+        // through the isolated world instead of living on the page's fetch.
+        const res = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({
+                action: 'proxyFetch',
+                url: `https://api.torn.com/v2/market/${itemId}/itemmarket?comment=SidekickPriceFiller`,
+                headers: { Authorization: 'ApiKey ' + prefs.apiKey },
+            }, (r) => resolve(r));
         });
-        const data = await resp.json();
+        if (!res?.success) { console.warn('[PriceFiller] API error:', res?.error); return null; }
+        const data = res.data;
         if (data.error) { console.warn('[PriceFiller] API error:', data.error); return null; }
         itemMarketCache[itemId] = { time: now, data };
         return data;

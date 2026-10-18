@@ -678,19 +678,25 @@
                     throw new Error("API key not configured");
                 }
 
-                const response = await fetch(`https://api.torn.com/torn/?selections=stocks&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy — key never in a page-visible URL.
+                const proxyGet = (url) => new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `${url}${url.includes('?') ? '&' : '?'}comment=SidekickStockAdvisor&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else if (!r?.success) reject(new Error(r?.error || 'Background fetch failed'));
+                        else resolve(r.data);
+                    });
+                });
+
+                const data = await proxyGet('https://api.torn.com/torn/?selections=stocks');
 
                 if (data.error) {
                     throw new Error(data.error.error);
                 }
 
                 console.log("✅ Stock data fetched successfully");
-                console.log("📈 DEBUG - Stock API data structure:", {
-                    stocksKey: data.stocks ? 'EXISTS' : 'MISSING',
-                    firstStockId: data.stocks ? Object.keys(data.stocks)[0] : 'N/A',
-                    sampleStock: data.stocks ? data.stocks[1] : 'N/A'
-                });
                 this.cachedStockData = data.stocks;
                 this.lastCacheTime = now;
                 return this.cachedStockData;
@@ -719,20 +725,25 @@
                     throw new Error("API key not configured");
                 }
 
-                const response = await fetch(`https://api.torn.com/user/?selections=stocks&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy — key never in a page-visible URL.
+                const proxyGet = (url) => new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `${url}${url.includes('?') ? '&' : '?'}comment=SidekickStockAdvisor&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else if (!r?.success) reject(new Error(r?.error || 'Background fetch failed'));
+                        else resolve(r.data);
+                    });
+                });
+
+                const data = await proxyGet('https://api.torn.com/user/?selections=stocks');
 
                 if (data.error) {
                     throw new Error(data.error.error);
                 }
 
                 console.log("✅ Portfolio fetched successfully");
-                console.log("📈 DEBUG - Portfolio data structure:", {
-                    keys: Object.keys(data),
-                    stocksKeys: data.stocks ? Object.keys(data.stocks) : 'NO STOCKS KEY',
-                    firstFewStocks: data.stocks ? Object.keys(data.stocks).slice(0, 5) : [],
-                    sampleStock: data.stocks ? data.stocks[Object.keys(data.stocks)[0]] : 'N/A'
-                });
                 this.cachedPortfolio = data.stocks;
                 return this.cachedPortfolio;
             } catch (error) {
@@ -761,9 +772,19 @@
                 }
 
                 // Fetch item data from torn API which includes market prices
+                // (background proxy — key never in a page-visible URL)
                 const itemIds = Object.values(ITEM_IDS).join(',');
-                const response = await fetch(`https://api.torn.com/torn/${itemIds}?selections=items&key=${apiKey}`);
-                const data = await response.json();
+                const proxyGet = (url) => new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `${url}${url.includes('?') ? '&' : '?'}comment=SidekickStockAdvisor&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else if (!r?.success) reject(new Error(r?.error || 'Background fetch failed'));
+                        else resolve(r.data);
+                    });
+                });
+                const data = await proxyGet(`https://api.torn.com/torn/${itemIds}?selections=items`);
 
                 if (data.error) {
                     throw new Error(data.error.error);
@@ -810,8 +831,18 @@
                     throw new Error("API key not configured");
                 }
 
-                const response = await fetch(`https://api.torn.com/market/?selections=pointsmarket&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy — key never in a page-visible URL.
+                const proxyGet = (url) => new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `${url}${url.includes('?') ? '&' : '?'}comment=SidekickStockAdvisor&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else if (!r?.success) reject(new Error(r?.error || 'Background fetch failed'));
+                        else resolve(r.data);
+                    });
+                });
+                const data = await proxyGet('https://api.torn.com/market/?selections=pointsmarket');
 
                 if (data.error) {
                     throw new Error(data.error.error);
@@ -856,8 +887,18 @@
                     throw new Error("API key not configured");
                 }
 
-                const response = await fetch(`https://api.torn.com/user/?selections=money&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy — key never in a page-visible URL.
+                const proxyGet = (url) => new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `${url}${url.includes('?') ? '&' : '?'}comment=SidekickStockAdvisor&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => {
+                        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                        else if (!r?.success) reject(new Error(r?.error || 'Background fetch failed'));
+                        else resolve(r.data);
+                    });
+                });
+                const data = await proxyGet('https://api.torn.com/user/?selections=money');
 
                 if (data.error) {
                     throw new Error(data.error.error);

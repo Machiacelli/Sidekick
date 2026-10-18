@@ -88,10 +88,17 @@ const WeaponExpModule = (() => {
             const CACHE_KEY = 'sidekick_wxp_cache';
 
             try {
-                const response = await fetch(`https://api.torn.com/user/?selections=weaponexp&key=${apiKey}`);
+                // Background proxy (audit item 9): key never in a page-visible
+                // URL. HTTP status arrives on `res.status`.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `https://api.torn.com/user/?selections=weaponexp&comment=SidekickWXP&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => resolve(r));
+                });
 
                 // Handle HTTP-level throttling
-                if (response.status === 429) {
+                if (res && res.status === 429) {
                     console.warn('[Sidekick] WXP: API rate limited (429), loading cached data...');
                     const cached = await CS.get(CACHE_KEY);
                     if (cached?.weaponexp) {
@@ -102,7 +109,11 @@ const WeaponExpModule = (() => {
                     return;
                 }
 
-                const data = await response.json();
+                if (!res?.success) {
+                    console.error('[Sidekick] WXP: fetch failed:', res?.error);
+                    return;
+                }
+                const data = res.data;
 
                 if (data.error) {
                     // Error code 5 = Too many requests, fallback to cache
@@ -304,14 +315,23 @@ const WeaponExpModule = (() => {
                 }
 
                 try {
-                    // Fetch user data and torn items in parallel
-                    const [userResponse, itemsResponse] = await Promise.all([
-                        fetch(`https://api.torn.com/user/?selections=weaponexp,personalstats,inventory&key=${apiKey}`),
-                        fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
+                    // Fetch user data and torn items in parallel (both via the
+                    // background proxy — audit item 9)
+                    const proxyFetchJson = (url) => new Promise((resolve) => {
+                        chrome.runtime.sendMessage({ action: 'proxyFetch', url }, (r) => resolve(r));
+                    });
+                    const [userRes, itemsRes] = await Promise.all([
+                        proxyFetchJson(`https://api.torn.com/user/?selections=weaponexp,personalstats,inventory&comment=SidekickWXP&key=${encodeURIComponent(apiKey)}`),
+                        proxyFetchJson(`https://api.torn.com/torn/?selections=items&comment=SidekickWXP&key=${encodeURIComponent(apiKey)}`)
                     ]);
 
-                    const userData = await userResponse.json();
-                    const itemsData = await itemsResponse.json();
+                    if (!userRes?.success || !itemsRes?.success) {
+                        alert('API Error: ' + (userRes?.error || itemsRes?.error || 'transport failed'));
+                        return;
+                    }
+
+                    const userData = userRes.data;
+                    const itemsData = itemsRes.data;
 
                     if (userData.error) {
                         alert('API Error: ' + userData.error.error);

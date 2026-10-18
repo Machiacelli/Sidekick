@@ -19,8 +19,9 @@ const AuctionWeaponBonusModule = (() => {
     }
 
     function isInventoryPage() {
-        const url = window.location.href;
-        return url.includes('inventory.php') || url.includes('page.php?sid=inventory');
+        const url = window.location.href.toLowerCase();
+        // Torn's inventory lives at item.php — the old 'inventory.php' check never matched.
+        return url.includes('item.php') || url.includes('page.php?sid=inventory');
     }
 
     function isMarketOrBazaarPage() {
@@ -259,7 +260,10 @@ const AuctionWeaponBonusModule = (() => {
     }
 
     function getBonusData(item) {
-        const tooltipSpans = [...item.querySelectorAll('.item-bonuses .iconsbonuses span')];
+        // Cover both markup variants: the classic `.item-bonuses .iconsbonuses`
+        // wrapper (auction house) and React item pages where the wrapper may
+        // be absent (audit item 3: verify selectors vs inventory markup).
+        const tooltipSpans = [...item.querySelectorAll('.item-bonuses .iconsbonuses span, .iconsbonuses span')];
         return tooltipSpans
             .map(extractBonusData)
             .filter(d => d.label);
@@ -275,7 +279,8 @@ const AuctionWeaponBonusModule = (() => {
     }
 
     function getMarketBonusSpans() {
-        return [...document.querySelectorAll('.item-bonuses .iconsbonuses span')];
+        // Both markup variants: with and without the .item-bonuses wrapper.
+        return [...document.querySelectorAll('.item-bonuses .iconsbonuses span, .iconsbonuses span')];
     }
 
     function enhanceBonusIconSpan(span) {
@@ -311,20 +316,30 @@ const AuctionWeaponBonusModule = (() => {
     }
 
     function renderItem(item) {
-        if (item.getAttribute(PROCESSED_ATTR) === 'true') {
+        // Already fully processed (bonus pills rendered) — skip. Rows marked
+        // processed but MISSING their pills (e.g. scanned mid-React-render,
+        // container removed by Torn) fall through and get retried; see the
+        // early-return logic below (audit item 3: processed-flag stranding).
+        if (item.getAttribute(PROCESSED_ATTR) === 'true'
+            && (item.querySelector('.sidekick-auction-bonus-container')
+                || !item.querySelector('.item-bonuses .iconsbonuses span'))) {
             return;
         }
 
         const bonusData = getBonusData(item);
         const titleElement = item.querySelector('span.title');
 
-        if (!titleElement) {
-            item.setAttribute(PROCESSED_ATTR, 'true');
-            return;
-        }
+        // No title yet → React hasn't finished rendering this row; do NOT
+        // mark processed (old code did, stranding the item with no pills and
+        // no retry).
+        if (!titleElement) return;
 
         if (!bonusData.length) {
-            item.setAttribute(PROCESSED_ATTR, 'true');
+            // Genuine no-bonus weapon: no data AND no hidden bonus spans left
+            // to wait for → safe to mark processed so we stop rescanning it.
+            if (!item.querySelector('.item-bonuses .iconsbonuses span')) {
+                item.setAttribute(PROCESSED_ATTR, 'true');
+            }
             return;
         }
 
@@ -358,7 +373,12 @@ const AuctionWeaponBonusModule = (() => {
     }
 
     function updateAuctionItems() {
-        getAuctionItems().forEach(renderItem);
+        getAuctionItems().forEach((item) => {
+            renderItem(item);
+            // Also enlarge the raw bonus icons on the auction page. The .ska-auction-page
+            // scale CSS existed but nothing applied the enhancement class here.
+            item.querySelectorAll('.item-bonuses .iconsbonuses span, .iconsbonuses span').forEach(enhanceBonusIconSpan);
+        });
     }
 
     function handleMutations() {

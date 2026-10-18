@@ -1,7 +1,9 @@
 /**
  * Sidekick Chrome Extension - OC Weights Module
  * Displays weight percentages under each role in Organized Crimes
- * Version: 1.1.0 - Fixed selectors, updated data, added API fallback
+ * Version: 1.2.0 - Self-updating fallback: successful API syncs are merged
+ *            into a persisted cache and replayed on boot, so new OCs are
+ *            learned after one online fetch — even offline or if the API dies
  * Author: Machiacelli
  */
 
@@ -14,9 +16,14 @@
         isInitialized: false,
         isEnabled: false,
         weightData: {},
+        rawData: null,   // API-shaped (un-normalized) mirror of all merged sources
+        cacheAt: 0,     // timestamp (ms) of the last successful API sync
         observer: null,
         API_URL: "https://tornprobability.com:3000/api/GetRoleWeights",
         STYLE_ID: "oc-weights-style",
+        CACHE_KEY: "sidekick_oc_weights_cache",
+        CACHE_VERSION: 1,
+        CACHE_TTL_MS: 24 * 60 * 60 * 1000, // one sync/day is plenty for slow-moving stats
 
         async init() {
             if (this.isInitialized) {
@@ -77,11 +84,17 @@
             // Step 1: Load hardcoded data immediately — page works right away
             this.loadHardcodedData();
 
+            // Step 1.5: Overlay the persisted cache from the last successful
+            // API sync — teaches the module OCs released after this file was
+            // built, and keeps them if the third-party API goes down entirely
+            await this.loadCachedData();
+
             // Step 2: Start observer + initial scan
             this.startObserver();
             this.scanPage();
 
-            // Step 3: Try API in background — silently update if it succeeds
+            // Step 3: Sync from the API in the background (at most once a day) —
+            // merges in newly released OCs and persists them for offline boots
             this.fetchWeightsFromAPI();
         },
 
@@ -148,16 +161,78 @@
             return out;
         },
 
-        // Hardcoded data — updated 2026-05-19 from live API response
-        // Includes: FirstAidAndAbet, PluckingTheLotusPetal, WindowOfOpportunity, ThouShaltNotSteal
+        // Hardcoded data — updated 2026-10-05 from live API response (32 OCs)
+        // Newly added: HostileTakeover, ClearedforTakeoff, DishItOut
         loadHardcodedData() {
-            const raw = {"MobMentality":{"Looter1":33.96650646,"Looter2":26.48850715,"Looter3":18.36444021,"Looter4":21.18054618},"PetProject":{"Kidnapper":30.92676727,"Muscle":32.62884615,"Picklock":36.44438658},"FirstAidAndAbet":{"Picklock":26.040303247907904,"Decoy":30.73072727408889,"Pickpocket":43.228969478003215},"CashMeIfYouCan":{"Thief1":54.18134868,"Thief2":28.04221236,"Lookout":17.77643896},"BestOfTheLot":{"Picklock":20.73368395,"CarThief":19.5328795,"Muscle":43.67657367,"Imitator":16.05686289},"MarketForces":{"Enforcer":29.4020952,"Negotiator":27.22899702,"Lookout":16.36647471,"Arsonist":4.456390991,"Muscle":22.54604208},"SmokeAndWingMirrors":{"CarThief":50.89511253,"Imitator":27.10752487,"Hustler1":9.000400474,"Hustler2":12.99696212},"GaslightTheWay":{"Imitator1":9.394999578,"Imitator2":27.46467248,"Imitator3":41.32194207,"Looter1":9.394999578,"Looter2":-0.0003562738035,"Looter3":12.42374256},"StageFright":{"Enforcer":15.67090339,"Muscle1":20.01365691,"Muscle2":2.659259022,"Muscle3":9.165081208,"Lookout":6.188888612,"Sniper":46.30221086},"SnowBlind":{"Hustler":48.40533937,"Imitator":34.56895649,"Muscle1":8.512932288,"Muscle2":8.512771845},"PluckingTheLotusPetal":{"Robber1":14.027682053942709,"Hustler":14.394494084394903,"Robber2":23.680942608167083,"Muscle":47.89688125349531},"LeaveNoTrace":{"Techie":29.01099583,"Negotiator":34.1307307,"Imitator":36.85827347},"NoReserve":{"CarThief":30.50667524,"Techie":38.37053402,"Engineer":31.12279075},"CounterOffer":{"Robber":35.94505104,"Looter":6.998750427,"Hacker":12.1275068,"Picklock":16.5353262,"Engineer":28.39336554},"GuardianÁngels":{"Enforcer":27.404376861170505,"Hustler":42.10252351813381,"Engineer":30.49309962016114},"HoneyTrap":{"Enforcer":26.98428598,"Muscle1":30.86556191,"Muscle2":42.15015211},"BiddingWar":{"Robber1":7.100963041,"Driver":12.5356157,"Robber2":22.87302433,"Robber3":31.67051915,"Bomber1":7.846987259,"Bomber2":17.97289051},"SneakyGitGrab":{"Imitator":17.539756110007634,"Pickpocket":50.831934101247086,"Hacker":14.481791981545502,"Techie":17.146517807199775},"BlastFromThePast":{"Picklock1":10.84876785,"Hacker":12.05662038,"Engineer":24.0155975,"Bomber":15.61710346,"Muscle":34.58815764,"Picklock2":2.873753178},"BreakTheBank":{"Robber":12.69693448,"Muscle1":13.51973049,"Muscle2":10.10353513,"Thief1":2.930695727,"Muscle3":31.65263066,"Thief2":29.09647352},"StackingTheDeck":{"CatBurglar":23.43294188,"Driver":2.956670602,"Hacker":25.43825688,"Imitator":48.17213064},"ClinicalPrecision":{"Imitator":43.31533431,"CatBurglar":18.93905648,"Assassin":16.0581518,"Cleaner":21.68745741},"ManifestCruelty":{"Hacker":16.32001273063874,"Interrogator":23.492099324887565,"Reviver":46.27406770738405,"CatBurglar":13.913820237089643},"AceInTheHole":{"Imitator":21.07540412,"Muscle1":18.29831955,"Muscle2":24.65084339,"Hacker":28.3434151,"Driver":7.632017841},"GoneFission":{"Hijacker":24.93974876222353,"Engineer":15.565232594311826,"Pickpocket":16.53377808965346,"Imitator":24.93974876222354,"Bomber":18.021491791587643},"CraneReaction":{"Sniper":40.73886856841122,"Lookout":16.623960934255475,"Engineer":8.286087919744741,"Bomber":15.8901690506963,"Muscle1":10.683294142974866,"Muscle2":7.777619383917385},"WindowOfOpportunity":{"Engineer":14.55335487209706,"Looter1":19.544697437213543,"Looter2":25.802321762790502,"Muscle1":23.086816638821606,"Muscle2":17.012809289077286},"ThouShaltNotSteal":{"Thief":12.396646686195815,"Pickpocket":37.856826197979196,"Picklock":49.74652711582499}};
+            const raw = {"MobMentality":{"Looter1":33.96650646,"Looter2":26.48850715,"Looter3":18.36444021,"Looter4":21.18054618},"PetProject":{"Kidnapper":30.92676727,"Muscle":32.62884615,"Picklock":36.44438658},"FirstAidAndAbet":{"Picklock":26.040303247907904,"Decoy":30.73072727408889,"Pickpocket":43.228969478003215},"CashMeIfYouCan":{"Thief1":54.18134868,"Thief2":28.04221236,"Lookout":17.77643896},"BestOfTheLot":{"Picklock":20.73368395,"CarThief":19.5328795,"Muscle":43.67657367,"Imitator":16.05686289},"MarketForces":{"Enforcer":29.4020952,"Negotiator":27.22899702,"Lookout":16.36647471,"Arsonist":4.456390991,"Muscle":22.54604208},"SmokeAndWingMirrors":{"CarThief":50.89511253,"Imitator":27.10752487,"Hustler1":9.000400474,"Hustler2":12.99696212},"GaslightTheWay":{"Imitator1":9.394999578,"Imitator2":27.46467248,"Imitator3":41.32194207,"Looter1":9.394999578,"Looter2":-0.0003562738035,"Looter3":12.42374256},"StageFright":{"Enforcer":15.67090339,"Muscle1":20.01365691,"Muscle2":2.659259022,"Muscle3":9.165081208,"Lookout":6.188888612,"Sniper":46.30221086},"SnowBlind":{"Hustler":48.40533937,"Imitator":34.56895649,"Muscle1":8.512932288,"Muscle2":8.512771845},"PluckingTheLotusPetal":{"Robber1":14.027682053942709,"Hustler":14.394494084394903,"Robber2":23.680942608167083,"Muscle":47.89688125349531},"LeaveNoTrace":{"Techie":29.01099583,"Negotiator":34.1307307,"Imitator":36.85827347},"NoReserve":{"CarThief":30.50667524,"Techie":38.37053402,"Engineer":31.12279075},"CounterOffer":{"Robber":35.94505104,"Looter":6.998750427,"Hacker":12.1275068,"Picklock":16.5353262,"Engineer":28.39336554},"GuardianÁngels":{"Enforcer":27.404376861170505,"Hustler":42.10252351813381,"Engineer":30.49309962016114},"HoneyTrap":{"Enforcer":26.98428598,"Muscle1":30.86556191,"Muscle2":42.15015211},"BiddingWar":{"Robber1":7.100963041,"Driver":12.5356157,"Robber2":22.87302433,"Robber3":31.67051915,"Bomber1":7.846987259,"Bomber2":17.97289051},"SneakyGitGrab":{"Imitator":17.539756110007634,"Pickpocket":50.831934101247086,"Hacker":14.481791981545502,"Techie":17.146517807199775},"BlastFromThePast":{"Picklock1":10.84876785,"Hacker":12.05662038,"Engineer":24.0155975,"Bomber":15.61710346,"Muscle":34.58815764,"Picklock2":2.873753178},"BreakTheBank":{"Robber":12.69693448,"Muscle1":13.51973049,"Muscle2":10.10353513,"Thief1":2.930695727,"Muscle3":31.65263066,"Thief2":29.09647352},"StackingTheDeck":{"CatBurglar":23.43294188,"Driver":2.956670602,"Hacker":25.43825688,"Imitator":48.17213064},"ClinicalPrecision":{"Imitator":43.31533431,"CatBurglar":18.93905648,"Assassin":16.0581518,"Cleaner":21.68745741},"ManifestCruelty":{"Hacker":16.32001273063874,"Interrogator":23.492099324887565,"Reviver":46.27406770738405,"CatBurglar":13.913820237089643},"AceInTheHole":{"Imitator":21.07540412,"Muscle1":18.29831955,"Muscle2":24.65084339,"Hacker":28.3434151,"Driver":7.632017841},"GoneFission":{"Hijacker":24.93974876222353,"Engineer":15.565232594311826,"Pickpocket":16.53377808965346,"Imitator":24.93974876222354,"Bomber":18.021491791587643},"CraneReaction":{"Sniper":40.73886856841122,"Lookout":16.623960934255475,"Engineer":8.286087919744741,"Bomber":15.8901690506963,"Muscle1":10.683294142974866,"Muscle2":7.777619383917385},"WindowOfOpportunity":{"Engineer":14.55335487209706,"Looter1":19.544697437213543,"Looter2":25.802321762790502,"Muscle1":23.086816638821606,"Muscle2":17.012809289077286},"ThouShaltNotSteal":{"Thief":12.396646686195815,"Pickpocket":37.856826197979196,"Picklock":49.74652711582499},"HostileTakeover":{"Hacker":11.154471089082223,"Engineer":15.240409558114203,"CatBurglar":16.003004887681396,"Kidnapper":12.980809844427426,"Negotiator":23.952564641966315,"Muscle":20.668739978728432},"ClearedforTakeoff":{"Imitator":24.939007667714826,"Techie":11.316435057348194,"Pickpocket":12.032038349844655,"Lookout":8.372798960106097,"Assassin":18.15580375759352,"Interrogator":25.183916207392716},"DishItOut":{"Assassin":37.3380808914086,"Muscle":25.243817634035594,"Saboteur1":14.639223669899579,"Saboteur2":8.911747057590532,"Engineer":13.867130747065687}};
+            this.rawData = raw;
             this.weightData = this.normalizeData(raw);
             console.log(`📊 OC Weights: hardcoded data loaded (${Object.keys(this.weightData).length} OCs)`);
         },
 
-        // Background API fetch — silently replaces data if API is reachable
+        // Replay the last successful API sync on top of the builtin table.
+        // One online fetch is enough for newly released OCs to persist across
+        // restarts, extension reloads and third-party outages.
+        async loadCachedData() {
+            try {
+                const storage = window.SidekickModules?.Core?.ChromeStorage;
+                if (!storage?.get) return;
+                const cache = await storage.get(this.CACHE_KEY);
+                if (!cache || cache.version !== this.CACHE_VERSION || !cache.data) return;
+
+                this.cacheAt = cache.fetchedAt || 0;
+
+                const builtinCount = Object.keys(this.weightData).length;
+                this.rawData = { ...this.rawData, ...cache.data };
+                this.weightData = this.normalizeData(this.rawData);
+
+                const mergedCount = Object.keys(this.weightData).length;
+                if (mergedCount !== builtinCount) {
+                    console.log(`📊 OC Weights: persisted cache applied (${mergedCount} OCs, builtin had ${builtinCount})`);
+                }
+            } catch (err) {
+                console.warn(`📊 OC Weights: cache read failed (${err.message}), builtin only`);
+            }
+        },
+
+        persistCache() {
+            try {
+                const storage = window.SidekickModules?.Core?.ChromeStorage;
+                if (!storage?.set) return;
+                storage.set(this.CACHE_KEY, {
+                    version: this.CACHE_VERSION,
+                    fetchedAt: this.cacheAt,
+                    data: this.rawData
+                }).catch(err => console.warn(`📊 OC Weights: cache write failed (${err.message})`));
+            } catch (err) {
+                console.warn(`📊 OC Weights: cache write failed (${err.message})`);
+            }
+        },
+
+        // Dev helper (console): prints the current raw table as one JSON line
+        // ready to paste into loadHardcodedData() for the next release build.
+        dumpRawData() {
+            const json = JSON.stringify(this.rawData);
+            console.log(json);
+            return json;
+        },
+
+        // Dev helper (console): force an immediate API sync, ignoring the TTL.
+        refreshNow() {
+            this.cacheAt = 0;
+            return this.fetchWeightsFromAPI();
+        },
+
+        // Background API sync — rate-limited; new OCs are merged in and cached
         async fetchWeightsFromAPI() {
+            // Rate limit: the merged table persists, so one sync per day is
+            // plenty for stats that only move when a new OC ships
+            if (this.cacheAt && (Date.now() - this.cacheAt) < this.CACHE_TTL_MS) {
+                const hours = Math.round((Date.now() - this.cacheAt) / 3600000);
+                console.log(`📊 OC Weights: cache fresh (${hours}h old), skipping API sync`);
+                return;
+            }
+
             try {
                 const response = await chrome.runtime.sendMessage({
                     action: 'proxyFetch',
@@ -168,18 +243,30 @@
                 const data = response.data;
                 if (typeof data !== 'object' || Object.keys(data).length === 0) throw new Error('Empty response');
 
-                const fresh = this.normalizeData(data);
-                const freshCount = Object.keys(fresh).length;
-                const oldCount = Object.keys(this.weightData).length;
+                // Which OCs does the current table not know yet?
+                const newKeys = Object.keys(data)
+                    .map(name => this.normalize(name))
+                    .filter(key => !this.weightData[key]);
 
-                this.weightData = fresh;
-                console.log(`📊 OC Weights: API refresh succeeded (${freshCount} OCs, was ${oldCount})`);
+                // Merge per-OC: fresh values win; OCs missing from the response
+                // (partial outage) keep their last-known values
+                this.rawData = { ...this.rawData, ...data };
+                this.weightData = this.normalizeData(this.rawData);
+                this.cacheAt = Date.now();
+
+                // Persist so the next boot — even fully offline — knows them
+                this.persistCache();
+
+                console.log(`📊 OC Weights: API sync succeeded (${Object.keys(data).length} received, ${Object.keys(this.weightData).length} total)`);
+                if (newKeys.length) {
+                    console.log(`🆕 OC Weights: new OCs learned: ${newKeys.join(", ")} (cached for offline use)`);
+                }
 
                 // Re-render with fresh data
                 this.removeAllWeightBoxes();
                 this.scanPage();
             } catch (err) {
-                console.log(`📊 OC Weights: API unavailable (${err.message}), using hardcoded data`);
+                console.log(`📊 OC Weights: API unavailable (${err.message}), using cached/hardcoded data`);
             }
         },
 

@@ -22,7 +22,13 @@ const apiCache = {
         profile: 300000,        // 5 minutes - rarely changes
         items: 60000,           // 60 seconds - inventory changes
         money: 60000,           // 60 seconds - bank/wallet changes
-        company: 300000         // 5 minutes - company data rarely changes
+        company: 300000,        // 5 minutes - company data rarely changes
+        // Pseudo-selections consumed by the Todo List module (see
+        // makeActualApiCall). Aligned with the shortest real selection they
+        // travel with; the day-stamped cache key in handleTornApiCall is what
+        // really prevents a snapshot from one UTC day leaking into the next.
+        xanaxDayStart: 15000,
+        cityItemsBoughtDayStart: 15000
     },
 
     // Generate unique cache key from request parameters
@@ -355,7 +361,18 @@ async function handleTornApiCall(request) {
     // Determine the API endpoint
     const endpoint = requestEndpoint || (userId ? `user/${userId}` : 'user');
 
-    const cacheKey = apiCache.getCacheKey(apiKey, selections, endpoint);
+    // Day-start snapshots (xanaxDayStart / cityItemsBoughtDayStart) are only
+    // valid for the UTC day they were requested on. If such a response is
+    // cached shortly before midnight and re-served shortly after, the module
+    // would stamp yesterday's boundary value as today's baseline — crediting
+    // yesterday's doses to today's counter. Bind the cache key to the current
+    // UTC day so every new Torn day starts with a fresh snapshot fetch.
+    const utcDaySensitive = Array.isArray(selections) && (
+        selections.includes('xanaxDayStart') || selections.includes('cityItemsBoughtDayStart')
+    );
+    const cacheKey = utcDaySensitive
+        ? apiCache.getCacheKey(apiKey, selections, endpoint) + ':' + new Date().toISOString().slice(0, 10)
+        : apiCache.getCacheKey(apiKey, selections, endpoint);
     const cached = apiCache.get(cacheKey);
     if (cached) return cached;
 
@@ -487,6 +504,12 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
             refills: null,
             xanaxDayStart: null,
             cityItemsBoughtDayStart: null,
+            // UTC-epoch seconds the snapshots were computed at (today's UTC
+            // midnight - 1). Consumers reject snapshots whose boundary isn't
+            // the current day's, so a response fetched at 23:59:5x can never be
+            // stamped as today's baseline after midnight rolls over.
+            xanaxDayStartBoundary: null,
+            cityItemsBoughtDayStartBoundary: null,
             items: null,
             profile: null,
             company: null,
@@ -527,7 +550,14 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
         }
 
         // Fetch the lifetime Xanax total immediately before today's 00:00 UTC
-        // boundary. This preserves the existing Xanax tracking behaviour.
+        // boundary via the v2 HISTORICAL personalstats endpoint. The old v1
+        // request (user?selections=personalstats&stat=xantaken&timestamp=...)
+        // never returned historical data: in v1 `timestamp` is only a
+        // cache-buster and per-stat filtering is a v2 feature, so the snapshot
+        // was unusable and the todo list fell back to "smart recovery", which
+        // credited yesterday's Xanax to today's counter (phantom 1-3 counts
+        // right after the UTC reset). v2 genuinely snapshots personalstats at
+        // a past timestamp - same mechanism cityItemsBoughtDayStart uses.
         if (selections.includes('xanaxDayStart')) {
             console.log('💊 Background: Fetching UTC day-start Xanax count...');
             try {
@@ -536,7 +566,7 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
                 const beforeTodayUtc = Math.floor(todayUtcStart.getTime() / 1000) - 1;
 
                 const baselineResponse = await fetch(
-                    `https://api.torn.com/${endpoint}?selections=personalstats&stat=xantaken&timestamp=${beforeTodayUtc}&key=${apiKey}`,
+                    `https://api.torn.com/v2/user/personalstats?stat=xantaken&timestamp=${beforeTodayUtc}&key=${apiKey}`,
                     {
                         method: 'GET',
                         headers: {
@@ -549,12 +579,13 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
                     console.warn('⚠️ Background: UTC day-start Xanax fetch failed:', baselineResponse.status);
                 } else {
                     const baselineData = await baselineResponse.json();
-                    const dayStartValue = baselineData.personalstats?.xantaken;
+                    const dayStartValue = extractPersonalStatValue(baselineData, 'xantaken');
 
                     if (baselineData.error) {
                         console.warn('⚠️ Background: UTC day-start Xanax API error:', baselineData.error);
                     } else if (typeof dayStartValue === 'number') {
                         results.xanaxDayStart = dayStartValue;
+                        results.xanaxDayStartBoundary = beforeTodayUtc;
                         console.log('✅ Background: UTC day-start Xanax count retrieved');
                     }
                 }
@@ -592,6 +623,7 @@ async function makeActualApiCall(apiKey, selections, endpoint) {
                         console.warn('⚠️ Background: UTC day-start city item API error:', baselineData.error);
                     } else if (typeof dayStartValue === 'number') {
                         results.cityItemsBoughtDayStart = dayStartValue;
+                        results.cityItemsBoughtDayStartBoundary = beforeTodayUtc;
                         console.log('✅ Background: UTC day-start city item count retrieved');
                     }
                 }

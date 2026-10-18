@@ -342,13 +342,21 @@
             const key = await CS.get('sidekick_api_key');
             if (!key) return null;
 
-            // Fetch battle stats + basic (for current happy)
-            const [bsResp, basicResp] = await Promise.all([
-                fetch(`https://api.torn.com/user/?selections=battlestats&key=${key}`),
-                fetch(`https://api.torn.com/user/?selections=basic&key=${key}`),
+            // Fetch battle stats + basic (for current happy) — both via the
+            // background proxy (key never in a page-visible URL)
+            const proxyFetchJson = (url) => new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'proxyFetch', url }, (r) => resolve(r));
+            });
+            const [bsRes, basicRes] = await Promise.all([
+                proxyFetchJson(`https://api.torn.com/user/?selections=battlestats&comment=SidekickMeritCalc&key=${encodeURIComponent(key)}`),
+                proxyFetchJson(`https://api.torn.com/user/?selections=basic&comment=SidekickMeritCalc&key=${encodeURIComponent(key)}`),
             ]);
-            const bs    = await bsResp.json();
-            const basic = await basicResp.json();
+            if (!bsRes?.success || !basicRes?.success) {
+                console.warn('🎯 API transport error:', bsRes?.error || basicRes?.error);
+                return null;
+            }
+            const bs    = bsRes.data;
+            const basic = basicRes.data;
 
             if (bs.error) { console.warn('🎯 API error:', bs.error); return null; }
 

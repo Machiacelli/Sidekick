@@ -2,12 +2,27 @@
 // Shows hospital timers, travel status, and auto-sorts enemies
 const WarMonitorModule = {
     isEnabled: false,
+    isInitialized: false,
     STORAGE_KEY: 'sidekick_war_monitor',
     apiKey: null,
 
     running: true,
     foundWar: false,
     pageVisible: !document.hidden,
+
+    // ── Tracked lifecycle handles (cleared in disable(); prevents the
+    //    interval/observer stacking flagged in audit item 6) ────────────
+    apiIntervalId: null,
+    renderIntervalId: null,
+    visibilityListener: null,
+    bodyObserver: null,
+    memberListObserver: null,
+    probeTimers: [],
+    attackClickListener: null,
+
+    // Sub-option (own checkbox in Settings → War): open war-page attack
+    // buttons in a new tab instead of navigating the current one.
+    openAttackInNewTab: false,
 
     memberStatus: new Map(),
     memberLis: new Map(),
@@ -17,10 +32,16 @@ const WarMonitorModule = {
     MIN_TIME_SINCE_LAST_REQUEST: 5000,
     TIME_BETWEEN_FRAMES: 500,
 
-    everSorted: false,
-
     // Initialize module
     async init() {
+        // Idempotency guard (same pattern as the other changed modules —
+        // a repeated init would stack another storage.onChanged listener).
+        if (this.isInitialized) {
+            console.log('⚔️ War Monitor already initialized');
+            return;
+        }
+        this.isInitialized = true;
+
         console.log('⚔️ War Monitor initializing...');
 
         await this.loadSettings();
@@ -47,6 +68,7 @@ const WarMonitorModule = {
         try {
             const settings = await window.SidekickModules.Core.ChromeStorage.get(this.STORAGE_KEY) || {};
             this.isEnabled = settings.isEnabled === true;
+            this.openAttackInNewTab = settings.openAttackInNewTab === true;
             this.apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key') || '';
         } catch (error) {
             console.error('⚔️ Failed to load settings:', error);
@@ -57,7 +79,8 @@ const WarMonitorModule = {
     async saveSettings() {
         try {
             await window.SidekickModules.Core.ChromeStorage.set(this.STORAGE_KEY, {
-                isEnabled: this.isEnabled
+                isEnabled: this.isEnabled,
+                openAttackInNewTab: this.openAttackInNewTab
             });
         } catch (error) {
             console.error('⚔️ Failed to save settings:', error);
@@ -78,7 +101,53 @@ const WarMonitorModule = {
         this.isEnabled = false;
         this.running = false;
         this.saveSettings();
+        this.teardown();
         console.log('⚔️ War Monitor disabled');
+    },
+
+    /**
+     * Full teardown of everything inject()/setupObservers() created.
+     * Without this, every toggle on a factions page stacked another
+     * API/render loop pair (audit item 6), and injected CSS kept statuses
+     * transparent with frozen overlay text after disabling.
+     */
+    teardown() {
+        if (this.apiIntervalId) {
+            clearInterval(this.apiIntervalId);
+            this.apiIntervalId = null;
+        }
+        if (this.renderIntervalId) {
+            clearInterval(this.renderIntervalId);
+            this.renderIntervalId = null;
+        }
+        if (this.visibilityListener) {
+            document.removeEventListener('visibilitychange', this.visibilityListener);
+            this.visibilityListener = null;
+        }
+        if (this.attackClickListener) {
+            document.removeEventListener('click', this.attackClickListener, true);
+            this.attackClickListener = null;
+        }
+        if (this.bodyObserver) {
+            this.bodyObserver.disconnect();
+            this.bodyObserver = null;
+        }
+        if (this.memberListObserver) {
+            this.memberListObserver.disconnect();
+            this.memberListObserver = null;
+        }
+        this.probeTimers.forEach(t => clearTimeout(t));
+        this.probeTimers.forEach(t => clearInterval(t));
+        this.probeTimers = [];
+
+        // Remove the injected stylesheet + reset row state. The CSS made
+        // .status text transparent (replaced by ::after overlays) — leaving it
+        // behind froze "statuses stuck transparent with frozen overlay text".
+        document.getElementById('war-monitor-styles')?.remove();
+        this.memberLis.clear();
+        this.memberStatus.clear();
+        this.descriptionCache.clear();
+        this.foundWar = false;
     },
 
     // Inject CSS styles
@@ -88,21 +157,36 @@ const WarMonitorModule = {
         const style = document.createElement('style');
         style.id = 'war-monitor-styles';
         style.textContent = `
+/* Red: targets out of country (traveling / abroad / hospitalized abroad) */
+.members-list li:has(div.status.traveling),
+.members-list li:has(div.status.abroad),
+.members-list li:has(div.status[data-twse-traveling="true"]),
+.members-list li[data-location]:not([data-location=""]) {
+  background-color: #EB9999 !important;
+}
+/* Orange: hospital/jail out in 5-10 minutes (beats red) */
+.members-list li:has(div.status[data-twse-mid="true"]) {
+  background-color: #C4974C !important;
+}
+/* Green: hospital/jail out in under 5 minutes (highest priority) */
 .members-list li:has(div.status[data-twse-highlight="true"]) {
   background-color: #99EB99 !important;
-}
-.members-list li:has(div.status[data-twse-status-differs="true"]) {
-  background-color: #C4974C !important;
 }
 .members-list div.status[data-twse-traveling="true"]::after {
   color: #696026 !important;
 }
 
+:root .dark-mode .members-list li:has(div.status.traveling),
+:root .dark-mode .members-list li:has(div.status.abroad),
+:root .dark-mode .members-list li:has(div.status[data-twse-traveling="true"]),
+:root .dark-mode .members-list li[data-location]:not([data-location=""]) {
+  background-color: #7A4444 !important;
+}
+:root .dark-mode .members-list li:has(div.status[data-twse-mid="true"]) {
+  background-color: #795315 !important;
+}
 :root .dark-mode .members-list li:has(div.status[data-twse-highlight="true"]) {
   background-color: #446944 !important;
-}
-:root .dark-mode .members-list li:has(div.status[data-twse-status-differs="true"]) {
-  background-color: #795315 !important;
 }
 :root .dark-mode .members-list div.status[data-twse-traveling="true"]::after {
   color: #FFED76 !important;
@@ -148,20 +232,57 @@ const WarMonitorModule = {
 
         this.injectStyles();
 
-        document.addEventListener('visibilitychange', () => {
-            this.pageVisible = !document.hidden;
-        });
+        // Re-arm safety: enable() can be called repeatedly (storage listener,
+        // manual toggles). Don't stack another listener per cycle.
+        if (!this.visibilityListener) {
+            this.visibilityListener = () => {
+                this.pageVisible = !document.hidden;
+            };
+            document.addEventListener('visibilitychange', this.visibilityListener);
+        }
 
-        // Start update intervals — they guard on this.foundWar internally
-        setInterval(() => {
-            if (!this.running || !this.foundWar) return;
-            this.updateStatuses();
-        }, this.MIN_TIME_SINCE_LAST_REQUEST);
+        // Open-attacks-in-new-tab interception (Settings → War sub-option).
+        // One delegated CAPTURE listener on document: fires before Torn's own
+        // handlers no matter how React re-renders the rows, so it keeps
+        // working without any per-row bookkeeping. openAttackInNewTab is
+        // read at click time, so the settings checkbox toggles it live.
+        if (!this.attackClickListener) {
+            this.attackClickListener = (e) => {
+                if (!this.running || !this.openAttackInNewTab) return;
+                // Let native modifiers through — ctrl/cmd-click already opens
+                // a new tab on its own. Only intercept the plain left click.
+                if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+                if (!(e.target instanceof Element)) return;
+                const link = e.target.closest("a[href*='sid=attack']");
+                if (!link) return;
+                // War member rows only — not every factions.php link.
+                if (!link.closest('li.enemy') && !link.closest('.enemy-faction')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const win = window.open(link.href, '_blank', 'noopener');
+                // Popup blocked — degrade to today's same-window navigation
+                // instead of eating the click silently.
+                if (!win) window.location.href = link.href;
+            };
+            document.addEventListener('click', this.attackClickListener, true);
+        }
 
-        setInterval(() => {
-            if (!this.foundWar || !this.running || !this.pageVisible) return;
-            this.watch();
-        }, this.TIME_BETWEEN_FRAMES);
+        // Start update intervals — they guard on this.foundWar internally.
+        // Stored so teardown()/disable() can actually clear them (the old
+        // untracked intervals stacked a fresh API/render pair per toggle —
+        // audit item 6).
+        if (!this.apiIntervalId) {
+            this.apiIntervalId = setInterval(() => {
+                if (!this.running || !this.foundWar) return;
+                this.updateStatuses();
+            }, this.MIN_TIME_SINCE_LAST_REQUEST);
+        }
+        if (!this.renderIntervalId) {
+            this.renderIntervalId = setInterval(() => {
+                if (!this.foundWar || !this.running || !this.pageVisible) return;
+                this.watch();
+            }, this.TIME_BETWEEN_FRAMES);
+        }
 
         this.setupObservers();
 
@@ -173,8 +294,12 @@ const WarMonitorModule = {
         const tryInit = () => {
             if (this.foundWar) return;
 
+            // War-container candidates ONLY. The old probe also matched the
+            // plain (non-war) faction member list — `ul.members-list` exists on
+            // every factions.php view — which started the 5s API polling loop
+            // on pages with no war at all (audit item 6).
             const hasWarEl = document.querySelector(
-                'ul.members-list, li.enemy, li.your, .faction-war, .f-war-list, ' +
+                'li.enemy, li.your, .faction-war, .f-war-list, ' +
                 '[class*="war-list"], [class*="factionWar"], [class*="war-new"], #faction_war_list_id'
             );
             if (!hasWarEl) return;
@@ -190,6 +315,8 @@ const WarMonitorModule = {
                 this.extractAllMemberLis();
                 if (this.memberLis.size > 0 || memberAttempts >= 30) {
                     clearInterval(memberPoll);
+                    const idx = this.probeTimers.indexOf(memberPoll);
+                    if (idx > -1) this.probeTimers.splice(idx, 1);
                     if (this.memberLis.size > 0) {
                         console.log(`[WarMonitor] Extracted ${this.memberLis.size} member rows after ${memberAttempts} attempt(s)`);
                         this.updateStatuses();
@@ -200,42 +327,76 @@ const WarMonitorModule = {
                     }
                 }
             }, 300);
+            this.probeTimers.push(memberPoll);
         };
 
-        // MutationObserver catches React renders immediately
-        const observer = new MutationObserver(() => tryInit());
-        observer.observe(document.body, { subtree: true, childList: true });
+        // MutationObserver catches React renders immediately (tracked so
+        // teardown() can disconnect it)
+        if (this.bodyObserver) this.bodyObserver.disconnect();
+        this.bodyObserver = new MutationObserver(() => tryInit());
+        this.bodyObserver.observe(document.body, { subtree: true, childList: true });
 
-        // Aggressive polling for the first 20s in case observer misses early render
+        // Bounded probe: 40 × 500ms = 20s of fast polling, then a BOUNDED
+        // slow fallback (5 min) instead of polling for tab life. The old
+        // slowPoll never stopped when no war container appeared (audit
+        // item 6) — a factions page visit without a war left a 2s timer
+        // running until the tab closed.
         let fastAttempts = 0;
         const fastPoll = setInterval(() => {
             fastAttempts++;
             tryInit();
             if (fastAttempts >= 40 || this.foundWar) {
                 clearInterval(fastPoll);
+                const idx = this.probeTimers.indexOf(fastPoll);
+                if (idx > -1) this.probeTimers.splice(idx, 1);
                 if (!this.foundWar) {
+                    let slowAttempts = 0;
+                    const SLOW_MAX = 150; // 150 × 2s = 5 minutes, then give up
                     const slowPoll = setInterval(() => {
+                        slowAttempts++;
                         tryInit();
-                        if (this.foundWar) clearInterval(slowPoll);
+                        if (this.foundWar || slowAttempts >= SLOW_MAX) {
+                            clearInterval(slowPoll);
+                            const i = this.probeTimers.indexOf(slowPoll);
+                            if (i > -1) this.probeTimers.splice(i, 1);
+                            if (!this.foundWar) {
+                                console.debug('[WarMonitor] No war container appeared — probe stopped');
+                            }
+                        }
                     }, 2000);
+                    this.probeTimers.push(slowPoll);
                 }
             }
         }, 500);
+        this.probeTimers.push(fastPoll);
 
         // Try immediately after a short delay
-        setTimeout(tryInit, 150);
+        const early = setTimeout(() => tryInit(), 150);
+        this.probeTimers.push(early);
 
         // After members are found, observe the member list for re-renders
-        const memberListObserver = new MutationObserver(() => {
+        // (tracked + bounded: the old recheck interval ran for tab life when
+        // no member list ever appeared)
+        if (this.memberListObserver) this.memberListObserver.disconnect();
+        this.memberListObserver = new MutationObserver(() => {
             if (this.foundWar) this.extractAllMemberLis();
         });
+        let recheckAttempts = 0;
         const recheckMemberObserver = setInterval(() => {
+            recheckAttempts++;
             const memberLists = document.querySelectorAll('ul.members-list');
             if (memberLists.length > 0) {
-                memberLists.forEach(ul => memberListObserver.observe(ul, { childList: true }));
+                memberLists.forEach(ul => this.memberListObserver.observe(ul, { childList: true }));
                 clearInterval(recheckMemberObserver);
+                const idx = this.probeTimers.indexOf(recheckMemberObserver);
+                if (idx > -1) this.probeTimers.splice(idx, 1);
+            } else if (recheckAttempts >= 120) { // 2 minutes max
+                clearInterval(recheckMemberObserver);
+                const idx = this.probeTimers.indexOf(recheckMemberObserver);
+                if (idx > -1) this.probeTimers.splice(idx, 1);
             }
         }, 1000);
+        this.probeTimers.push(recheckMemberObserver);
     },
 
     extractAllMemberLis() {
@@ -288,9 +449,19 @@ const WarMonitorModule = {
 
     async updateStatus(factionId) {
         try {
-            const resp = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic&key=${this.apiKey}`);
-            const data = await resp.json();
-
+            // Background proxy (audit item 9): the key must not sit in a
+            // page-visible URL / DevTools network log.
+            const res = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: `https://api.torn.com/faction/${factionId}?selections=basic&comment=SidekickWarMonitor&key=${encodeURIComponent(this.apiKey)}`,
+                }, (r) => resolve(r));
+            });
+            if (!res?.success) {
+                console.warn('⚔️ Faction data fetch failed:', res?.error);
+                return;
+            }
+            const data = res.data;
             if (data.error || !data.members) return;
 
             const reqTime = Date.now();
@@ -314,12 +485,8 @@ const WarMonitorModule = {
                 const prev = this.memberStatus.get(id);
                 if (prev?.state === status.state) {
                     status.since = prev.since;
-                    status.traveling_error_bar = prev.traveling_error_bar || 0;
                 } else {
                     status.since = Date.now();
-                    if (prev?.state !== 'Traveling') {
-                        status.traveling_error_bar = Date.now() - (prev?.last_req_time || 0);
-                    }
                 }
 
                 this.memberStatus.set(id, status);
@@ -365,6 +532,7 @@ const WarMonitorModule = {
                     dirtySort = this.queueSort(deferredWrites, li, 1, dirtySort);
                     deferredWrites.push([statusDiv, 'data-twse-traveling', 'false']);
                     deferredWrites.push([statusDiv, 'data-twse-highlight', 'false']);
+                    deferredWrites.push([statusDiv, 'data-twse-mid', 'false']);
                     break;
             }
 
@@ -442,9 +610,6 @@ const WarMonitorModule = {
         const remaining = Math.round(status.until - now);
 
         if (!(statusDiv.classList.contains('hospital') || statusDiv.classList.contains('jail'))) {
-            if (remaining >= 0) {
-                writes.push([statusDiv, 'data-twse-status-differs', 'true']);
-            }
             statusDiv.style.setProperty('--twse-content', `"${statusDiv.textContent}"`);
             return;
         }
@@ -455,6 +620,7 @@ const WarMonitorModule = {
 
         if (remaining <= 0) {
             writes.push([statusDiv, 'data-twse-highlight', 'false']);
+            writes.push([statusDiv, 'data-twse-mid', 'false']);
             return;
         }
 
@@ -465,13 +631,11 @@ const WarMonitorModule = {
 
         statusDiv.style.setProperty('--twse-content', `"${timeStr}"`);
         writes.push([statusDiv, 'data-twse-highlight', remaining < 300 ? 'true' : 'false']);
+        writes.push([statusDiv, 'data-twse-mid', (remaining >= 300 && remaining < 600) ? 'true' : 'false']);
     },
 
     handleTravelStatus(statusDiv, status, li, writes) {
         if (!(statusDiv.classList.contains('traveling') || statusDiv.classList.contains('abroad'))) {
-            if (statusDiv.textContent === 'Okay') {
-                writes.push([statusDiv, 'data-twse-status-differs', 'true']);
-            }
             statusDiv.style.setProperty('--twse-content', `"${statusDiv.textContent}"`);
             return '';
         }
@@ -493,6 +657,10 @@ const WarMonitorModule = {
         }
 
         statusDiv.style.setProperty('--twse-content', `"${content}"`);
+        // Out of country → red row (via CSS); clear hospital highlight attrs
+        writes.push([statusDiv, 'data-twse-traveling', 'true']);
+        writes.push([statusDiv, 'data-twse-highlight', 'false']);
+        writes.push([statusDiv, 'data-twse-mid', 'false']);
         this.queueSort(writes, li, sortLevel, false);
         return content;
     },
@@ -572,16 +740,21 @@ const WarMonitorModule = {
     },
 
     queueUntil(writes, node, val, dirty) {
-        if (node.getAttribute('data-until') !== String(val)) {
-            writes.push([node, 'data-until', val]);
+        // Guard against literal "undefined" attributes when status.until is
+        // missing (audit item 6: String(undefined) === 'undefined' was being
+        // written into data-until/since).
+        const str = (val === undefined || val === null) ? '' : String(val);
+        if (node.getAttribute('data-until') !== str) {
+            writes.push([node, 'data-until', str]);
             return true;
         }
         return dirty;
     },
 
     queueSince(writes, node, val, dirty) {
-        if (node.getAttribute('data-since') !== String(val)) {
-            writes.push([node, 'data-since', val]);
+        const str = (val === undefined || val === null) ? '' : String(val);
+        if (node.getAttribute('data-since') !== str) {
+            writes.push([node, 'data-since', str]);
             return true;
         }
         return dirty;

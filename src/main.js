@@ -16,11 +16,6 @@
     // Main initialization function
     async function initializeSidekick() {
         try {
-            if (window.__SIDEKICK_CHAT_POPOUT__) {
-                console.log('💬 Sidekick: Chat popout mode active; regular modules skipped in this window.');
-                return;
-            }
-
             console.log("⏳ Sidekick: Waiting for modules to load...");
 
             console.log("🔍 Sidekick: Checking for Core and UI modules...");
@@ -443,15 +438,6 @@
                 console.warn("⚠️ Chat Alert module not available");
             }
 
-            // Initialize Chat Popout Module
-            console.log('↗️ Sidekick: Initializing Chat Popout...');
-            if (window.SidekickModules.ChatPopout?.init) {
-                await window.SidekickModules.ChatPopout.init();
-                console.log('✅ Sidekick: Chat Popout initialized');
-            } else {
-                console.warn('⚠️ Chat Popout module not available');
-            }
-
             // Initialize Mug Warning Module
             console.log("⚠️ Sidekick: Initializing Mug Warning...");
             if (window.SidekickModules.MugWarning?.init) {
@@ -459,15 +445,6 @@
                 console.log("✅ Sidekick: Mug Warning initialized");
             } else {
                 console.warn("⚠️ Mug Warning module not available");
-            }
-
-            // Initialize Mug Calculator Module
-            console.log("🥊 Sidekick: Initializing Mug Calculator...");
-            if (window.SidekickModules.MugCalculator?.initialize) {
-                await window.SidekickModules.MugCalculator.initialize();
-                console.log("✅ Sidekick: Mug Calculator initialized");
-            } else {
-                console.warn("⚠️ Mug Calculator module not available");
             }
 
             // Initialize Auto Gym Switch

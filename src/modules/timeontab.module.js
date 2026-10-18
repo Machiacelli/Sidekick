@@ -455,9 +455,15 @@
                         try {
                             const apiKey = await window.SidekickModules?.Core?.ChromeStorage?.get('sidekick_api_key');
                             if (apiKey) {
-                                const response = await fetch(`https://api.torn.com/user/${user2ID}?selections=profile&key=${apiKey}`);
-                                const data = await response.json();
-                                if (!data.error && data.name) {
+                                // Background proxy — key never in a page-visible URL.
+                                const res = await new Promise((resolve) => {
+                                    chrome.runtime.sendMessage({
+                                        action: 'proxyFetch',
+                                        url: `https://api.torn.com/user/${user2ID}?selections=profile&comment=SidekickTimeOnTab&key=${encodeURIComponent(apiKey)}`,
+                                    }, (r) => resolve(r));
+                                });
+                                const data = res?.success ? res.data : null;
+                                if (data && !data.error && data.name) {
                                     this._attackTargetName = data.name;
                                     console.log(`⏰ TimeOnTab: Resolved attack target name via API: ${data.name}`);
                                 } else {

@@ -1,9 +1,10 @@
 /**
  * Mug Calculator Module
- * Calculates potential mug value from Item Market, Bazaar, and Point Market listings.
+ * Calculates potential mug value from Item Market and Point Market listings.
  * 100% client-side — uses only Torn's official API via background.js. No third-party servers.
  *
  * Version: 3.1.0 — Fully local, no worker dependency
+ * (v3.1: dead bazaar row code removed; lifecycle is destroy()-able + init is idempotent.)
  */
 
 const MugCalculatorModule = (() => {
@@ -14,6 +15,14 @@ const MugCalculatorModule = (() => {
     let currentPopups = [];
     const processedRows = new WeakSet(); // WeakSet avoids memory leaks on removed DOM nodes
     let isEnabled = false;
+
+    // ── Lifecycle handles (destroy()-able; prevents double-init leaks) ──────
+    let isInitialized = false;
+    let sweepIntervalId = null;
+    let urlLocationChangeListener = null;
+    let historyPatched = false;
+    let documentClickListener = null;
+    const rowObservers = [];
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -728,42 +737,6 @@ const MugCalculatorModule = (() => {
         processedRows.add(row);
     }
 
-    // ── Row attachment (Bazaar) ───────────────────────────────────────────────
-
-    async function attachInfoIconForBazaarRow(row) {
-        if (processedRows.has(row) && row.querySelector('.mugInfoIcon')) return;
-
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 4) return;
-
-        const price    = parseInt(cells[0].innerText.replace('$', '').replace(/,/g, ''), 10);
-        const quantity = parseInt(cells[1].innerText.replace(/,/g, ''), 10);
-        const listingTotal = price * quantity;
-
-        const threshold = parseInt(await window.SidekickModules.Core.ChromeStorage.get('mugThreshold') || 0, 10);
-        if (listingTotal < threshold) return;
-
-        const sellerLink = cells[3].querySelector("a[href*='profiles.php?XID=']");
-        if (!sellerLink) return;
-        if (row.querySelector('.mugInfoIcon')) { processedRows.add(row); return; }
-
-        const playerName = extractSellerName(sellerLink);
-
-        const icon = document.createElement('div');
-        icon.className = 'mugInfoIcon';
-        icon.textContent = 'i';
-        icon.title = 'Mug calculator';
-        cells[3].appendChild(icon);
-
-        icon.addEventListener('click', (e) => {
-            e.stopPropagation();
-            closeAllPopups();
-            handleMugIconClick(listingTotal, quantity, sellerLink, icon, playerName);
-        });
-
-        processedRows.add(row);
-    }
-
     // ── Row attachment (Point Market) ─────────────────────────────────────────
 
     async function attachInfoIconForPMarketRow(li) {
@@ -795,10 +768,14 @@ const MugCalculatorModule = (() => {
         const threshold = parseInt(await window.SidekickModules.Core.ChromeStorage.get('mugThreshold') || 0, 10);
         if (threshold > 0 && listingTotal < threshold) return;
 
-        li.classList.add('sidekick-pm-processed');
-
+        // Don't flag processed until we've actually attached the icon:
+        // rows scanned before React renders the price span must stay
+        // eligible for retry, or they're stranded with no data forever
+        // (audit item 5). The early-return above already filtered rows
+        // with no cost-each payload.
         const costEachSpan = expander.querySelector('span.cost-each');
-        if (!costEachSpan || costEachSpan.querySelector('.mugInfoIcon')) return;
+        if (!costEachSpan) return;
+        if (costEachSpan.querySelector('.mugInfoIcon') || li.classList.contains('sidekick-pm-processed')) return;
 
         const playerName = extractSellerName(sellerLink);
 
@@ -814,6 +791,8 @@ const MugCalculatorModule = (() => {
             closeAllPopups();
             handleMugIconClick(listingTotal, quantity, sellerLink, icon, playerName);
         });
+
+        li.classList.add('sidekick-pm-processed');
     }
 
     // ── Process all ───────────────────────────────────────────────────────────
@@ -830,11 +809,6 @@ const MugCalculatorModule = (() => {
     }
 
 
-    function processAllBazaarRows() {
-        document.querySelectorAll('#fullListingsView table tbody tr, #topCheapestView table tbody tr')
-            .forEach(row => attachInfoIconForBazaarRow(row));
-    }
-
     function processAllPMarketRows() {
         document.querySelectorAll('ul.users-point-sell > li')
             .forEach(li => attachInfoIconForPMarketRow(li));
@@ -844,40 +818,47 @@ const MugCalculatorModule = (() => {
 
     function observeMarketRows() {
         const container = document.querySelector('[class*="sellerListWrapper" i], [class*="items___" i], [class*="itemMarket" i]') || document.body;
-        new MutationObserver(() => processAllMarketRows())
-            .observe(container, { childList: true, subtree: true });
-    }
-
-    function observeBazaarRows() {
-        document.querySelectorAll('#fullListingsView, #topCheapestView').forEach(container => {
-            new MutationObserver((mutations) => {
-                mutations.forEach(m => m.addedNodes.forEach(node => {
-                    if (node.nodeType !== 1) return;
-                    if (node.matches('table tbody tr')) attachInfoIconForBazaarRow(node);
-                    else node.querySelectorAll?.('table tbody tr')?.forEach(r => attachInfoIconForBazaarRow(r));
-                }));
-            }).observe(container, { childList: true, subtree: true });
-        });
+        const obs = new MutationObserver(() => processAllMarketRows());
+        rowObservers.push(obs);
+        obs.observe(container, { childList: true, subtree: true });
     }
 
     function observePMarketRows() {
-        new MutationObserver(() => processAllPMarketRows())
-            .observe(document.body, { childList: true, subtree: true });
+        const obs = new MutationObserver(() => processAllPMarketRows());
+        rowObservers.push(obs);
+        obs.observe(document.body, { childList: true, subtree: true });
     }
 
     // ── URL change listener ───────────────────────────────────────────────────
 
+    function onLocationChange() {
+        processAllMarketRows();
+    }
+
     function setupURLChangeListener() {
-        const origPush = history.pushState;
-        history.pushState = function () {
-            origPush.apply(history, arguments);
-            window.dispatchEvent(new Event('locationchange'));
-        };
-        window.addEventListener('popstate',   () => window.dispatchEvent(new Event('locationchange')));
-        window.addEventListener('hashchange', () => window.dispatchEvent(new Event('locationchange')));
-        window.addEventListener('locationchange', () => {
-            processAllMarketRows();
-        });
+        // Patch history only once across the page lifetime (a second init
+        // after re-enable must not wrap pushState again).
+        if (!historyPatched) {
+            historyPatched = true;
+            const origPush = history.pushState;
+            history.pushState = function () {
+                origPush.apply(history, arguments);
+                window.dispatchEvent(new Event('locationchange'));
+            };
+            window.addEventListener('popstate', () => window.dispatchEvent(new Event('locationchange')));
+            window.addEventListener('hashchange', () => window.dispatchEvent(new Event('locationchange')));
+        }
+        if (!urlLocationChangeListener) {
+            urlLocationChangeListener = onLocationChange;
+            window.addEventListener('locationchange', urlLocationChangeListener);
+        }
+    }
+
+    function teardownURLChangeListener() {
+        if (urlLocationChangeListener) {
+            window.removeEventListener('locationchange', urlLocationChangeListener);
+            urlLocationChangeListener = null;
+        }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -886,7 +867,16 @@ const MugCalculatorModule = (() => {
         name: 'MugCalculator',
 
         async initialize() {
-            console.log('[Sidekick] Initializing Mug Calculator Module (v3.0)...');
+            // Idempotency guard: main.js used to call initialize() twice (no
+            // guard existed), producing two sweep intervals, two document
+            // click listeners and doubled observers. Even with that call
+            // fixed, keep the guard as defense-in-depth.
+            if (isInitialized) {
+                console.log('[Sidekick] Mug Calculator already initialized — skipping');
+                return;
+            }
+
+            console.log('[Sidekick] Initializing Mug Calculator Module (v3.1)...');
 
             if (!window.SidekickModules?.Core?.ChromeStorage) {
                 console.warn('[Sidekick] Core module not available, Mug Calculator disabled');
@@ -902,6 +892,7 @@ const MugCalculatorModule = (() => {
                 return;
             }
 
+            isInitialized = true;
             addGlobalStyles();
             setupURLChangeListener();
 
@@ -911,14 +902,16 @@ const MugCalculatorModule = (() => {
                 this.setup();
             }
 
-            console.log('[Sidekick] Mug Calculator Module v3.0 initialized');
+            console.log('[Sidekick] Mug Calculator Module v3.1 initialized');
         },
 
         setup() {
             setTimeout(() => {
                 const url = window.location.href;
 
-                // Allowlist: only run on Item Market and Points Market
+                // Allowlist: only run on Item Market and Points Market.
+                // (The old "Market & Bazaar" claim was removed — bazaar rows
+                // never had a wired-up scan path; see audit item 5.)
                 const isItemMarket = url.includes('imarket.php') || url.includes('page.php?sid=ItemMarket');
                 const isPMarket    = url.includes('pmarket.php');
 
@@ -933,7 +926,7 @@ const MugCalculatorModule = (() => {
                         observeMarketRows();
                     });
                     // Periodic sweep for lazily loaded rows
-                    setInterval(() => processAllMarketRows(), 2000);
+                    sweepIntervalId = setInterval(() => processAllMarketRows(), 2000);
                 }
 
                 if (isPMarket) {
@@ -944,15 +937,31 @@ const MugCalculatorModule = (() => {
                 }
             }, 1000);
 
-            document.addEventListener('click', (e) => {
+            documentClickListener = (e) => {
                 if (!currentPopups.some(popup => popup.contains(e.target))) {
                     closeAllPopups();
                 }
-            });
+            };
+            document.addEventListener('click', documentClickListener);
         },
 
-        async destroy() {
+        destroy() {
             closeAllPopups();
+            if (sweepIntervalId) {
+                clearInterval(sweepIntervalId);
+                sweepIntervalId = null;
+            }
+            rowObservers.forEach(obs => obs.disconnect());
+            rowObservers.length = 0;
+            if (documentClickListener) {
+                document.removeEventListener('click', documentClickListener);
+                documentClickListener = null;
+            }
+            teardownURLChangeListener();
+            this.clearCache();
+            isInitialized = false;
+            isEnabled = false;
+            console.log('[Sidekick] Mug Calculator destroyed — intervals, observers and listeners cleared');
         },
 
         /** Flush the in-memory cache so the next popup re-fetches with updated settings. */

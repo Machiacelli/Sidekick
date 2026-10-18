@@ -10,6 +10,15 @@
 
     console.log("📋 Loading Sidekick Todo List Module...");
 
+    // Day-start snapshot retry policy (see makeApiCallViaBackground /
+    // makeDirectApiCall): if the historical personalstats request keeps
+    // failing, we retry at most this many times per UTC day per stat, with
+    // at least this spacing between attempts - transient error bursts (e.g.
+    // Torn error 5) must not exhaust the budget in the first minutes after
+    // midnight, and we must never re-request all day on every 1-min check.
+    const MAX_DAY_START_ATTEMPTS = 5;
+    const DAY_START_RETRY_SPACING_MS = 10 * 60 * 1000; // 10 minutes
+
     const TodoListModule = {
         isInitialized: false,
         todoLists: [],
@@ -104,6 +113,16 @@
 
         // API baseline values for daily progress tracking
         apiBaselines: {},
+
+        // Runtime-only retry bookkeeping for day-start snapshots (not persisted):
+        // { day: 'YYYY-MM-DD', xanax: <attempts>, cityItems: <attempts>,
+        //   xanaxLastAt: <epoch ms>, cityItemsLastAt: <epoch ms> }
+        dayStartAttempts: null,
+
+        // Runtime-only: day-start snapshot REJECTIONS are warned once per UTC
+        // day per stat (console.debug afterwards) so a persistently shifted/
+        // stale snapshot doesn't spam the console warnings for every retry.
+        snapshotRejectionWarned: null,
 
         // Initialize the todo list module
         async init() {
@@ -337,7 +356,18 @@
                 : this.apiBaselines.xantaken;
             if (finalXantakenToStore !== undefined) {
                 this.apiBaselines.yesterdayFinalXantaken = finalXantakenToStore;
-                console.log(`📦 Stored yesterday's final xantaken: ${this.apiBaselines.yesterdayFinalXantaken} (from ${this.apiBaselines.lastKnownXantaken !== undefined ? 'lastKnown' : 'baseline'})`);
+                // Carry over the UTC day the value was actually OBSERVED (not
+                // today's date - the extension may have been closed for days).
+                // Smart recovery may only trust this value if it was observed
+                // yesterday; an older/undated observation can carry days of
+                // usage, and crediting that whole gap to today is exactly the
+                // phantom "counter starts at 1-3" bug.
+                this.apiBaselines.yesterdayFinalXantakenDay = this.apiBaselines.lastKnownXantakenDay;
+                console.log(`📦 Stored yesterday's final xantaken: ${this.apiBaselines.yesterdayFinalXantaken} (observed ${this.apiBaselines.yesterdayFinalXantakenDay ?? 'unknown day'})`);
+            } else {
+                delete this.apiBaselines.yesterdayFinalXantaken;
+                delete this.apiBaselines.yesterdayFinalXantakenDay;
+                console.log('📦 No stored xantaken observation - yesterday value dropped (keeps smart recovery phantom-free)');
             }
 
             const finalCityItemsToStore =
@@ -346,7 +376,13 @@
                     : this.apiBaselines.cityitemsbought;
             if (finalCityItemsToStore !== undefined) {
                 this.apiBaselines.yesterdayFinalCityItemsBought = finalCityItemsToStore;
-                console.log(`📦 Stored yesterday's final NPC shop item count: ${finalCityItemsToStore}`);
+                // Same observation-day carry-over as xantaken - see above.
+                this.apiBaselines.yesterdayFinalCityItemsBoughtDay = this.apiBaselines.lastKnownCityItemsBoughtDay;
+                console.log(`📦 Stored yesterday's final NPC shop item count: ${finalCityItemsToStore} (observed ${this.apiBaselines.yesterdayFinalCityItemsBoughtDay ?? 'unknown day'})`);
+            } else {
+                delete this.apiBaselines.yesterdayFinalCityItemsBought;
+                delete this.apiBaselines.yesterdayFinalCityItemsBoughtDay;
+                console.log('📦 No stored city items observation - yesterday value dropped (keeps smart recovery phantom-free)');
             }
 
             // Force reset ALL tasks to incomplete state, preserving user visibility preferences
@@ -372,10 +408,12 @@
             // This will trigger smart recovery on next API check
             delete this.apiBaselines.xantaken;
             delete this.apiBaselines.lastKnownXantaken;
+            delete this.apiBaselines.lastKnownXantakenDay;
             delete this.apiBaselines.xantakenBaselineUtcDay;
             delete this.apiBaselines.xantakenBaselineSource;
             delete this.apiBaselines.cityitemsbought;
             delete this.apiBaselines.lastKnownCityItemsBought;
+            delete this.apiBaselines.lastKnownCityItemsBoughtDay;
             delete this.apiBaselines.cityItemsBaselineUtcDay;
             delete this.apiBaselines.cityItemsBaselineSource;
             console.log("🧹 Cleared today's xantaken baseline - will use smart recovery on next API check");
@@ -601,7 +639,9 @@
                                 backgroundResult.cooldowns,
                                 backgroundResult.refills,
                                 backgroundResult.xanaxDayStart,
-                                backgroundResult.cityItemsBoughtDayStart
+                                backgroundResult.cityItemsBoughtDayStart,
+                                backgroundResult.xanaxDayStartBoundary,
+                                backgroundResult.cityItemsBoughtDayStartBoundary
                             );
                             this.apiCheckFailureCount = 0;
                             return;
@@ -635,19 +675,37 @@
                 }
 
                 const todayUtcDay = new Date().toISOString().slice(0, 10);
+                this.rollDayStartAttempts(todayUtcDay);
+                // '-v2' marker: forces existing installs to revalidate baselines
+                // written by the pre-fix code (which could rest on a broken v1
+                // snapshot or a stale smart-recovery value).
+                // Attempts are capped and SPREAD per UTC day: a transient
+                // failure burst (e.g. Torn error 5 rate-limit) must not burn
+                // the whole day's snapshot budget in the first minutes.
+                const attempts = this.dayStartAttempts;
+                const snapshotDue = (stat) =>
+                    Date.now() - (attempts[stat + 'LastAt'] || 0) >= DAY_START_RETRY_SPACING_MS;
                 const needsXanaxDayStart =
-                    this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay ||
-                    this.apiBaselines.xantakenBaselineSource !== 'utc-snapshot';
+                    (this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay ||
+                     this.apiBaselines.xantakenBaselineSource !== 'utc-snapshot-v2') &&
+                    attempts.xanax < MAX_DAY_START_ATTEMPTS &&
+                    snapshotDue('xanax');
                 const needsCityItemsDayStart =
-                    this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay ||
-                    this.apiBaselines.cityItemsBaselineSource !== 'utc-snapshot';
+                    (this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay ||
+                     this.apiBaselines.cityItemsBaselineSource !== 'utc-snapshot-v2') &&
+                    attempts.cityItems < MAX_DAY_START_ATTEMPTS &&
+                    snapshotDue('cityItems');
 
                 const selections = ['personalstats', 'logs', 'bars', 'cooldowns', 'refills'];
                 if (needsXanaxDayStart) {
                     selections.push('xanaxDayStart');
+                    attempts.xanax++;
+                    attempts.xanaxLastAt = Date.now();
                 }
                 if (needsCityItemsDayStart) {
                     selections.push('cityItemsBoughtDayStart');
+                    attempts.cityItems++;
+                    attempts.cityItemsLastAt = Date.now();
                 }
 
                 const response = await window.SidekickModules.Core.SafeMessageSender.sendToBackground({
@@ -665,6 +723,78 @@
                 }
                 throw error;
             }
+        },
+
+        // Reset the per-day snapshot-attempt counters when the UTC day rolls
+        // over (or on first use after a page load).
+        rollDayStartAttempts(todayUtcDay) {
+            if (!this.dayStartAttempts || this.dayStartAttempts.day !== todayUtcDay) {
+                this.dayStartAttempts = {
+                    day: todayUtcDay,
+                    xanax: 0,
+                    cityItems: 0,
+                    xanaxLastAt: 0,
+                    cityItemsLastAt: 0
+                };
+            }
+        },
+
+        // Log a day-start snapshot rejection as console.warn only ONCE per
+        // UTC day per stat; later rejections the same day log at debug level
+        // (hidden by Chrome's default filter) so the retry budget of up to
+        // 5 attempts/day can never spam the console with repeated warnings.
+        warnSnapshotRejectionOnce(statKey, todayUtcDay, message) {
+            if (!this.snapshotRejectionWarned || this.snapshotRejectionWarned.day !== todayUtcDay) {
+                this.snapshotRejectionWarned = { day: todayUtcDay, xanax: false, cityItems: false };
+            }
+            if (!this.snapshotRejectionWarned[statKey]) {
+                this.snapshotRejectionWarned[statKey] = true;
+                console.warn(message);
+            } else {
+                console.debug(`(repeat, already warned today) ${message}`);
+            }
+        },
+
+        // Shape-agnostic personalstat extractor (mirrors background.js's
+        // extractPersonalStatValue). API v2 can return the requested stat in
+        // the legacy flat form or a nested {stat/name/key, value} form; since
+        // the request is filtered to one stat, a single non-metadata numeric
+        // leaf is also safe to use as a fallback.
+        extractPersonalStatValue(payload, statName) {
+            const normalizedStatName = statName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+            const numericLeaves = [];
+
+            const visit = (value, key = '') => {
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+                    if (normalizedKey === normalizedStatName) {
+                        numericLeaves.unshift({ exact: true, value });
+                    } else if (!/(timestamp|time|id|code|count|offset|limit)/i.test(key)) {
+                        numericLeaves.push({ exact: false, value });
+                    }
+                    return;
+                }
+                if (!value || typeof value !== 'object') return;
+                if (
+                    typeof value.value === 'number' &&
+                    [value.stat, value.name, value.key].some(candidate =>
+                        typeof candidate === 'string' &&
+                        candidate.replace(/[^a-z0-9]/gi, '').toLowerCase() === normalizedStatName
+                    )
+                ) {
+                    numericLeaves.unshift({ exact: true, value: value.value });
+                }
+                Object.entries(value).forEach(([childKey, childValue]) => visit(childValue, childKey));
+            };
+
+            visit(payload);
+            const exact = numericLeaves.find(entry => entry.exact);
+            if (exact) return exact.value;
+
+            const fallbackValues = numericLeaves
+                .filter(entry => !entry.exact)
+                .map(entry => entry.value);
+            return fallbackValues.length === 1 ? fallbackValues[0] : null;
         },
 
         // Make direct API call (fallback method)
@@ -701,6 +831,8 @@
             let cooldownsData = null;
             let xanaxDayStart = null;
             let cityItemsBoughtDayStart = null;
+            let xanaxDayStartBoundary = null;
+            let cityItemsBoughtDayStartBoundary = null;
 
             try {
                 console.log('📊 Fetching personal stats...');
@@ -713,26 +845,45 @@
             }
 
             const todayUtcDay = new Date().toISOString().slice(0, 10);
+            this.rollDayStartAttempts(todayUtcDay);
+            // See makeApiCallViaBackground for the '-v2' marker and for why
+            // snapshot attempts are capped and spread out over the day.
+            const attempts = this.dayStartAttempts;
+            const snapshotDue = (stat) =>
+                Date.now() - (attempts[stat + 'LastAt'] || 0) >= DAY_START_RETRY_SPACING_MS;
             const needsXanaxDayStart =
-                this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay ||
-                this.apiBaselines.xantakenBaselineSource !== 'utc-snapshot';
+                (this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay ||
+                 this.apiBaselines.xantakenBaselineSource !== 'utc-snapshot-v2') &&
+                attempts.xanax < MAX_DAY_START_ATTEMPTS &&
+                snapshotDue('xanax');
             const needsCityItemsDayStart =
-                this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay ||
-                this.apiBaselines.cityItemsBaselineSource !== 'utc-snapshot';
+                (this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay ||
+                 this.apiBaselines.cityItemsBaselineSource !== 'utc-snapshot-v2') &&
+                attempts.cityItems < MAX_DAY_START_ATTEMPTS &&
+                snapshotDue('cityItems');
 
             if (needsXanaxDayStart) {
+                this.dayStartAttempts.xanax++; // count BEFORE attempting - failed attempts must count too
                 try {
                     const todayUtcStart = new Date();
                     todayUtcStart.setUTCHours(0, 0, 0, 0);
                     const beforeTodayUtc = Math.floor(todayUtcStart.getTime() / 1000) - 1;
                     console.log('💊 Fetching Xanax count at the UTC day boundary...');
+                    // v2 is required for a HISTORICAL snapshot - in v1 `timestamp`
+                    // is only a cache-buster and `stat` filtering doesn't exist,
+                    // so the v1 request made the baseline unreliable (see the
+                    // matching request in background.js).
                     const baselineResponse = await fetchWithTimeout(
-                        `https://api.torn.com/user?selections=personalstats&stat=xantaken&timestamp=${beforeTodayUtc}&key=${apiKey}`
+                        `https://api.torn.com/v2/user/personalstats?stat=xantaken&timestamp=${beforeTodayUtc}&key=${apiKey}`
                     );
                     const baselineData = await baselineResponse.json();
-                    if (!baselineData.error && typeof baselineData.personalstats?.xantaken === 'number') {
-                        xanaxDayStart = baselineData.personalstats.xantaken;
-                        console.log('✅ UTC day-start Xanax count received');
+                    if (!baselineData.error) {
+                        const parsedValue = this.extractPersonalStatValue(baselineData, 'xantaken');
+                        if (typeof parsedValue === 'number') {
+                            xanaxDayStart = parsedValue;
+                            xanaxDayStartBoundary = beforeTodayUtc;
+                            console.log('✅ UTC day-start Xanax count received');
+                        }
                     }
                 } catch (error) {
                     console.warn('⚠️ Failed to fetch UTC day-start Xanax count; using saved fallback:', error.message);
@@ -740,6 +891,7 @@
             }
 
             if (needsCityItemsDayStart) {
+                this.dayStartAttempts.cityItems++; // count BEFORE attempting - failed attempts must count too
                 try {
                     const todayUtcStart = new Date();
                     todayUtcStart.setUTCHours(0, 0, 0, 0);
@@ -751,40 +903,10 @@
                     const baselineData = await baselineResponse.json();
 
                     if (!baselineData.error) {
-                        const normalizedStatName = 'cityitemsbought';
-                        const numericLeaves = [];
-                        const visit = (value, key = '') => {
-                            if (typeof value === 'number' && Number.isFinite(value)) {
-                                const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
-                                if (normalizedKey === normalizedStatName) {
-                                    numericLeaves.unshift({ exact: true, value });
-                                } else if (!/(timestamp|time|id|code|count|offset|limit)/i.test(key)) {
-                                    numericLeaves.push({ exact: false, value });
-                                }
-                                return;
-                            }
-                            if (!value || typeof value !== 'object') return;
-                            if (
-                                typeof value.value === 'number' &&
-                                [value.stat, value.name, value.key].some(candidate =>
-                                    typeof candidate === 'string' &&
-                                    candidate.replace(/[^a-z0-9]/gi, '').toLowerCase() === normalizedStatName
-                                )
-                            ) {
-                                numericLeaves.unshift({ exact: true, value: value.value });
-                            }
-                            Object.entries(value).forEach(([childKey, childValue]) => visit(childValue, childKey));
-                        };
-                        visit(baselineData);
-                        const exact = numericLeaves.find(entry => entry.exact);
-                        const fallbackValues = numericLeaves
-                            .filter(entry => !entry.exact)
-                            .map(entry => entry.value);
-                        cityItemsBoughtDayStart = exact
-                            ? exact.value
-                            : (fallbackValues.length === 1 ? fallbackValues[0] : null);
-
-                        if (typeof cityItemsBoughtDayStart === 'number') {
+                        const parsedValue = this.extractPersonalStatValue(baselineData, 'cityitemsbought');
+                        if (typeof parsedValue === 'number') {
+                            cityItemsBoughtDayStart = parsedValue;
+                            cityItemsBoughtDayStartBoundary = beforeTodayUtc;
                             console.log('✅ UTC day-start city item count received');
                         }
                     }
@@ -845,7 +967,9 @@
                     cooldownsData?.cooldowns,
                     refillsData?.refills,
                     xanaxDayStart,
-                    cityItemsBoughtDayStart
+                    cityItemsBoughtDayStart,
+                    xanaxDayStartBoundary,
+                    cityItemsBoughtDayStartBoundary
                 );
 
                 // Reset failure count on successful API call
@@ -997,8 +1121,15 @@
         },
 
         // Update daily task completion based on API data
-        updateTasksFromApi(personalstats, logData = null, barsData = null, cooldownsData = null, refillsData = null, xanaxDayStart = null, cityItemsBoughtDayStart = null) {
+        updateTasksFromApi(personalstats, logData = null, barsData = null, cooldownsData = null, refillsData = null, xanaxDayStart = null, cityItemsBoughtDayStart = null, xanaxDayStartBoundary = null, cityItemsBoughtDayStartBoundary = null) {
             let hasUpdates = false;
+
+            // The exact UTC-epoch second a valid day-start snapshot must be
+            // computed at (today's UTC midnight minus one). Snapshots arriving
+            // with any other boundary were fetched before the last midnight
+            // rollover and MUST be rejected, otherwise yesterday's doses get
+            // credited to today's counter (the phantom 1-3-at-02:00-TCT bug).
+            const expectedDayStartBoundary = Math.floor(Date.now() / 86400000) * 86400 - 1;
 
             // Store API data for debugging
             this.lastApiData = {
@@ -1008,7 +1139,9 @@
                 cooldowns: cooldownsData,
                 refills: refillsData,
                 xanaxDayStart,
-                cityItemsBoughtDayStart
+                cityItemsBoughtDayStart,
+                xanaxDayStartBoundary,
+                cityItemsBoughtDayStartBoundary
             };
 
             console.log('📋 Updating tasks from API data...');
@@ -1033,20 +1166,70 @@
                 const currentXan = personalstats.xantaken;
                 const xanTask = this.dailyTasks.xanaxDose;
                 const todayUtcDay = new Date().toISOString().slice(0, 10);
+                const yesterdayUtcDay = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
                 const dayStartDelta = currentXan - xanaxDayStart;
                 let refreshedDayStartBaseline = false;
+                // Midnight race guard: an API check can land in the window after
+                // 00:00 UTC but before the reset timer has fired (up to 60s).
+                // A baseline stamped on a PREVIOUS day would credit all of
+                // yesterday's usage to today's counter — drop it and let the
+                // snapshot/recovery logic below re-derive today's baseline.
+                if (this.apiBaselines.xantaken !== undefined &&
+                    this.apiBaselines.xantakenBaselineUtcDay !== todayUtcDay) {
+                    console.log(`💊 Dropping stale xantaken baseline from ${this.apiBaselines.xantakenBaselineUtcDay ?? 'unknown day'} (today is ${todayUtcDay})`);
+                    delete this.apiBaselines.xantaken;
+                }
+                // Plausibility ceiling is deliberately generous - NOT the daily
+                // task target. Users CAN legitimately take more than 4 Xanax a
+                // day; rejecting an exact snapshot for exceeding 4 would push
+                // every heavy user into the (less reliable) recovery path AND
+                // re-request the snapshot on every API check all day (quota burn).
+                // 24/day is beyond any real usage while still catching garbage.
+                const MAX_PLAUSIBLE_DAILY_XANAX = 24;
+                const boundaryIsCurrent = xanaxDayStartBoundary === expectedDayStartBoundary;
+                if (Number.isInteger(xanaxDayStart) && !boundaryIsCurrent) {
+                    this.warnSnapshotRejectionOnce('xanax', todayUtcDay,
+                        `💊 Rejecting day-start Xanax snapshot ${xanaxDayStart}: boundary ${xanaxDayStartBoundary} is not today's ${expectedDayStartBoundary} (response crossed UTC midnight) - re-fetching next check`);
+                }
+                // Monotonic floor guard: xantaken is CUMULATIVE and never
+                // decreases. Any value WE observed yesterday is a hard lower
+                // bound on the true end-of-yesterday baseline. The v2 snapshot
+                // serves data at DATE granularity ("converted to nearest
+                // date") and may be shifted (start-of-date convention) or
+                // stale; a snapshot BELOW the observed floor is provably
+                // wrong - accepting it re-credits yesterday's doses to today
+                // (the "2/4 right after the UTC reset" bug). Only trust the
+                // snapshot when it is consistent with the observed history.
+                // The live currentXan is ALWAYS a valid floor too (it is the
+                // newest observation) but the snapshot must equal or exceed
+                // yesterday's observation, since doses taken between that
+                // observation and midnight happened yesterday, not today.
+                const observedFloorXan =
+                    (this.apiBaselines.yesterdayFinalXantakenDay === yesterdayUtcDay)
+                        ? this.apiBaselines.yesterdayFinalXantaken
+                        : undefined;
+                const snapshotBelowObservedFloor =
+                    Number.isInteger(xanaxDayStart) &&
+                    observedFloorXan !== undefined &&
+                    xanaxDayStart < observedFloorXan;
+                if (snapshotBelowObservedFloor) {
+                    this.warnSnapshotRejectionOnce('xanax', todayUtcDay,
+                        `💊 Rejecting day-start Xanax snapshot ${xanaxDayStart}: below yesterday's observed cumulative value ${observedFloorXan} (stale/shifted snapshot) - keeping observed-floor baseline`);
+                }
                 const hasValidDayStart =
                     Number.isInteger(xanaxDayStart) &&
                     xanaxDayStart >= 0 &&
                     dayStartDelta >= 0 &&
-                    dayStartDelta <= xanTask.maxCount;
+                    dayStartDelta <= MAX_PLAUSIBLE_DAILY_XANAX &&
+                    boundaryIsCurrent &&
+                    !snapshotBelowObservedFloor;
 
                 // A historical snapshot from 23:59:59 UTC gives us an exact day boundary.
                 // This detects Xanax taken on mobile while excluding every intake before 00:00 UTC.
                 if (hasValidDayStart) {
                     this.apiBaselines.xantaken = xanaxDayStart;
                     this.apiBaselines.xantakenBaselineUtcDay = todayUtcDay;
-                    this.apiBaselines.xantakenBaselineSource = 'utc-snapshot';
+                    this.apiBaselines.xantakenBaselineSource = 'utc-snapshot-v2';
                     console.log(`💊 UTC day-start baseline set to ${xanaxDayStart} for ${todayUtcDay}`);
                     refreshedDayStartBaseline = true;
                 }
@@ -1058,17 +1241,33 @@
                     // Check if we have yesterday's final value (stored at midnight)
                     if (this.apiBaselines.yesterdayFinalXantaken !== undefined) {
                         const yesterdayFinal = this.apiBaselines.yesterdayFinalXantaken;
-                        const xanUsedSinceMidnight = Math.max(0, currentXan - yesterdayFinal);
+                        // Only trust a value OBSERVED YESTERDAY (UTC). An
+                        // unstamped (pre-fix) or older-dated value can be many
+                        // days old; counting its whole usage gap as "today's"
+                        // doses is the phantom 1-3-at-02:00-TCT bug. Not fresh
+                        // => fail safe to 0; the v2 UTC-snapshot retry will
+                        // correct the count as soon as it succeeds.
+                        const recoveredDay = this.apiBaselines.yesterdayFinalXantakenDay;
+                        const canRecover = recoveredDay === yesterdayUtcDay && yesterdayFinal <= currentXan;
+                        const xanUsedSinceMidnight = canRecover ? currentXan - yesterdayFinal : 0;
 
-                        console.log('💊 SMART RECOVERY: Using yesterday\'s final value');
-                        console.log(`💊   Yesterday final: ${yesterdayFinal}`);
-                        console.log(`💊   Current: ${currentXan}`);
-                        console.log(`💊   Usage since midnight: ${xanUsedSinceMidnight}`);
+                        console.log(canRecover
+                            ? `💊 SMART RECOVERY: using yesterday's observed value (yesterday final: ${yesterdayFinal}, current: ${currentXan}, usage since midnight: ${xanUsedSinceMidnight})`
+                            : `💊 SMART RECOVERY SKIPPED: stored value ${yesterdayFinal} (observed day: ${recoveredDay ?? 'unstamped'}) is not from yesterday - starting today at 0`);
 
                         // Set baseline to show correct usage
                         // If the user took Xanax on mobile before PC startup,
                         // preserve that progress against the configured daily target.
-                        this.apiBaselines.xantaken = currentXan - xanUsedSinceMidnight;
+                        this.apiBaselines.xantaken = canRecover
+                            ? currentXan - xanUsedSinceMidnight
+                            : currentXan;
+                        // Stamp the recovered baseline with today + a distinct
+                        // source so (a) the stale-day guard above doesn't drop
+                        // it on every later check, and (b) the snapshot keeps
+                        // being retried (capped) until an EXACT v2 snapshot can
+                        // replace this approximation.
+                        this.apiBaselines.xantakenBaselineUtcDay = todayUtcDay;
+                        this.apiBaselines.xantakenBaselineSource = 'recovered';
 
                         console.log(`💊   Setting baseline to: ${this.apiBaselines.xantaken}`);
                     } else {
@@ -1082,7 +1281,29 @@
 
                 // Always update lastKnownXantaken so resets use the actual final value
                 this.apiBaselines.lastKnownXantaken = currentXan;
+                this.apiBaselines.lastKnownXantakenDay = todayUtcDay;
                 if (refreshedDayStartBaseline) {
+                    this.saveDailyTasks();
+                }
+
+                // Self-heal an already-established baseline: if the baseline
+                // for TODAY sits below yesterday's observed cumulative value,
+                // it can only have come from a shifted/stale snapshot accepted
+                // before the floor guard above existed (e.g. this fix rolling
+                // out mid-day, or pre-fix persisted state). Raise it to the
+                // observed floor - every unit of shortfall was re-crediting a
+                // yesterday dose to today's counter (2/4 at reset).
+                if (observedFloorXan !== undefined &&
+                    this.apiBaselines.xantaken !== undefined &&
+                    this.apiBaselines.xantaken < observedFloorXan &&
+                    observedFloorXan <= currentXan) {
+                    console.warn(`💊 Self-heal: today's baseline ${this.apiBaselines.xantaken} was below yesterday's observed value ${observedFloorXan} - raising to the observed floor`);
+                    this.apiBaselines.xantaken = observedFloorXan;
+                    // Downgrade the source marker so the (capped) snapshot retry
+                    // logic keeps trying to refine this with an exact value.
+                    if (this.apiBaselines.xantakenBaselineSource === 'utc-snapshot-v2') {
+                        this.apiBaselines.xantakenBaselineSource = 'recovered';
+                    }
                     this.saveDailyTasks();
                 }
 
@@ -1110,32 +1331,87 @@
                 const shopTask = this.dailyTasks.dailyBoughtItems;
                 const todayUtcDay = new Date().toISOString().slice(0, 10);
                 const dayStartDelta = currentCityItems - cityItemsBoughtDayStart;
+                // Same midnight race guard as the xanax block above.
+                if (this.apiBaselines.cityitemsbought !== undefined &&
+                    this.apiBaselines.cityItemsBaselineUtcDay !== todayUtcDay) {
+                    console.log(`🛒 Dropping stale city-items baseline from ${this.apiBaselines.cityItemsBaselineUtcDay ?? 'unknown day'} (today is ${todayUtcDay})`);
+                    delete this.apiBaselines.cityitemsbought;
+                }
+                const boundaryIsCurrent = cityItemsBoughtDayStartBoundary === expectedDayStartBoundary;
+                if (Number.isInteger(cityItemsBoughtDayStart) && !boundaryIsCurrent) {
+                    this.warnSnapshotRejectionOnce('cityItems', todayUtcDay,
+                        `🛒 Rejecting day-start city-items snapshot ${cityItemsBoughtDayStart}: boundary ${cityItemsBoughtDayStartBoundary} is not today's ${expectedDayStartBoundary} (response crossed UTC midnight) - re-fetching next check`);
+                }
+                // Same monotonic floor guard as the Xanax block: only a value
+                // WE observed yesterday bounds the true end-of-yesterday
+                // baseline from below. A snapshot below it is shifted/stale and
+                // would re-credit yesterday's purchases to today.
+                const yesterdayUtcDayCity =
+                    new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                const observedFloorCityItems =
+                    (this.apiBaselines.yesterdayFinalCityItemsBoughtDay === yesterdayUtcDayCity)
+                        ? this.apiBaselines.yesterdayFinalCityItemsBought
+                        : undefined;
+                const snapshotBelowObservedFloorCity = Number.isInteger(cityItemsBoughtDayStart) &&
+                    observedFloorCityItems !== undefined &&
+                    cityItemsBoughtDayStart < observedFloorCityItems;
+                if (snapshotBelowObservedFloorCity) {
+                    this.warnSnapshotRejectionOnce('cityItems', todayUtcDay,
+                        `🛒 Rejecting day-start city-items snapshot ${cityItemsBoughtDayStart}: below yesterday's observed cumulative value ${observedFloorCityItems} (stale/shifted snapshot)`);
+                }
                 const hasValidDayStart =
                     Number.isInteger(cityItemsBoughtDayStart) &&
                     cityItemsBoughtDayStart >= 0 &&
-                    dayStartDelta >= 0;
+                    dayStartDelta >= 0 &&
+                    boundaryIsCurrent &&
+                    !snapshotBelowObservedFloorCity;
                 let baselineChanged = false;
 
                 if (hasValidDayStart) {
                     this.apiBaselines.cityitemsbought = cityItemsBoughtDayStart;
                     this.apiBaselines.cityItemsBaselineUtcDay = todayUtcDay;
-                    this.apiBaselines.cityItemsBaselineSource = 'utc-snapshot';
+                    this.apiBaselines.cityItemsBaselineSource = 'utc-snapshot-v2';
                     baselineChanged = true;
                 }
 
                 if (this.apiBaselines.cityitemsbought === undefined) {
                     const yesterdayFinal =
                         this.apiBaselines.yesterdayFinalCityItemsBought;
+                    // Same freshness rule as the Xanax smart recovery: only a
+                    // value OBSERVED YESTERDAY (UTC) may seed the baseline.
+                    const yesterdayFinalDay =
+                        this.apiBaselines.yesterdayFinalCityItemsBoughtDay;
+                    const yesterdayUtcDay = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                    const canRecover =
+                        Number.isInteger(yesterdayFinal) &&
+                        yesterdayFinal <= currentCityItems &&
+                        yesterdayFinalDay === yesterdayUtcDay;
 
                     this.apiBaselines.cityitemsbought =
-                        Number.isInteger(yesterdayFinal) &&
-                        yesterdayFinal <= currentCityItems
-                            ? yesterdayFinal
-                            : currentCityItems;
+                        canRecover ? yesterdayFinal : currentCityItems;
+                    // Same stamping rationale as the Xanax smart recovery.
+                    this.apiBaselines.cityItemsBaselineUtcDay = todayUtcDay;
+                    this.apiBaselines.cityItemsBaselineSource = 'recovered';
                     baselineChanged = true;
                 }
 
                 this.apiBaselines.lastKnownCityItemsBought = currentCityItems;
+                this.apiBaselines.lastKnownCityItemsBoughtDay = todayUtcDay;
+
+                // Self-heal an already-established baseline: same rationale as
+                // the Xanax block (shifted snapshot accepted pre-fix must not
+                // keep re-crediting yesterday's purchases to today).
+                if (observedFloorCityItems !== undefined &&
+                    this.apiBaselines.cityitemsbought !== undefined &&
+                    this.apiBaselines.cityitemsbought < observedFloorCityItems &&
+                    observedFloorCityItems <= currentCityItems) {
+                    console.warn(`🛒 Self-heal: today's baseline ${this.apiBaselines.cityitemsbought} was below yesterday's observed value ${observedFloorCityItems} - raising to the observed floor`);
+                    this.apiBaselines.cityitemsbought = observedFloorCityItems;
+                    if (this.apiBaselines.cityItemsBaselineSource === 'utc-snapshot-v2') {
+                        this.apiBaselines.cityItemsBaselineSource = 'recovered';
+                    }
+                    baselineChanged = true;
+                }
 
                 const boughtToday = Math.max(
                     0,
@@ -1720,7 +1996,7 @@
                 }
 
                 // Check for specific nerve refill log IDs
-                if (!isNaN(numericCode) && nerveRefillLogIds.includes(numericCode)) {
+                if (!isNaN(numericCode) && this.getLogCodesForItem('Nerve Refill').includes(numericCode)) {
                     nerveRelated.push({
                         time: new Date(entry.timestamp * 1000).toISOString(),
                         log: entry.log,

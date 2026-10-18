@@ -322,13 +322,19 @@
 
             try {
                 console.log('🔄 Fetching points market data...');
-                const response = await fetch(`https://api.torn.com/market/?selections=pointsmarket&key=${this.apiKey}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                // Background proxy (architectural observation: direct-fetch →
+                // proxy standardization) — key never in a page-visible URL.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `https://api.torn.com/market/?selections=pointsmarket&comment=SidekickClock&key=${encodeURIComponent(this.apiKey)}`,
+                    }, (r) => resolve(r));
+                });
+                if (!res?.success) {
+                    throw new Error(res?.error || 'Background fetch failed');
                 }
 
-                const data = await response.json();
+                const data = res.data;
                 
                 if (data.error) {
                     console.error('API Error:', data.error);

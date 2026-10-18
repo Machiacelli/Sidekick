@@ -22,15 +22,31 @@
         tornEvents: null,
         nearestEvent: null,
         userEventStartTime: null,
-        userEventEndTime: null,
         lastApiUpdate: 0,
         apiUpdateInterval: 1800,
-        userCalendarUpdateInterval: 60,
+        // Personal calendar start times change rarely (bar usage); 15 min
+        // staleness is far below notification granularity but stops the old
+        // 60-second cadence from costing one API call per minute, forever,
+        // on every open Torn tab.
+        userCalendarUpdateInterval: 900,
         countdownInterval: null,
         tickerWrapper: null,
         tickerAnimation: null,
         tickerAnimationDuration: 12000,
         calendarRefreshInFlight: false,
+        // Retry-storm guard state: the countdown loop re-kicks
+        // fetchNearestEvent once per SECOND while the current nearest event
+        // sits in the past. If calendar fetches keep failing (e.g. Torn 504s)
+        // that turns into a request per second, maxing the user's 100/min
+        // API quota and starving every other module. These fields back off
+        // exponentially until one fetch succeeds.
+        calendarFailureCount: 0,
+        calendarBackoffUntil: 0,
+        // Timestamp (ms) of the countdown loop's last fetchNearestEvent kick
+        // while a future countdown was on display. Bounds those re-kicks to
+        // one per minute so the 15/30-min cache TTLs stay effective inside a
+        // long-lived tab without adding API pressure.
+        lastFetchKick: 0,
 
         events: [
             {
@@ -66,7 +82,8 @@
                 endMonth: 3, endDay: 18,
                 name: "St. Patrick's Day",
                 feature: "2× alcohol effects; Green Stout item",
-                notification: "Drink up – St. Patrick's Day bonuses live."
+                notification: "Drink up – St. Patrick's Day bonuses live.",
+                blockCooldown: "booster"
             },
             {
                 startMonth: 4, startDay: 1,
@@ -94,7 +111,8 @@
                 endMonth: 6, endDay: 14,
                 name: "World Blood Donor Day",
                 feature: "50% medical cooldown & life loss reduction",
-                notification: "Half-price blood loss today. Go stab someone to celebrate."
+                notification: "Half-price blood loss today. Go stab someone to celebrate.",
+                blockCooldown: "medical"
             },
             {
                 startMonth: 7, startDay: 6,
@@ -115,7 +133,8 @@
                 endMonth: 8, endDay: 1,
                 name: "International Beer Day",
                 feature: "5× nerve from beer items",
-                notification: "Cheers! Every pint is five crimes closer to jail."
+                notification: "Cheers! Every pint is five crimes closer to jail.",
+                blockCooldown: "booster"
             },
             {
                 startMonth: 9, startDay: 26,
@@ -129,7 +148,8 @@
                 endMonth: 10, endDay: 11,
                 name: "CaffeineCon 2025",
                 feature: "2× energy drink effects",
-                notification: "Stock the Red Cow, it's CaffeineCon time."
+                notification: "Stock the Red Cow, it's CaffeineCon time.",
+                blockCooldown: "booster"
             },
             {
                 startMonth: 10, startDay: 24,
@@ -150,7 +170,8 @@
                 endMonth: 11, endDay: 15,
                 name: "World Diabetes Day",
                 feature: "3× happy from candy",
-                notification: "World Diabetes Day: Torn's running on pure sugar highs."
+                notification: "World Diabetes Day: Torn's running on pure sugar highs.",
+                blockCooldown: "booster"
             },
             {
                 startMonth: 11, startDay: 27,
@@ -209,15 +230,16 @@
                 }
             });
 
+            // Load persisted date corrections (written by autoCorrectEventDates
+            // from the live API calendar) into the static table IN MEMORY.
+            // The old code DELETED 'event_calendar_overrides' on every boot
+            // (leftover debug line), which made corrections never persist —
+            // the static fallback data could never self-heal. Keep the array
+            // as bootstrap-of-last-resort, let the API keep its dates current.
             try {
-                if (window.SidekickModules?.Core?.ChromeStorage?.remove) {
-                    await window.SidekickModules.Core.ChromeStorage.remove(
-                        "event_calendar_overrides"
-                    );
-                    console.log("🗑️ Removed cached event overrides");
-                }
+                await this.applyKnownDateCorrections();
             } catch (e) {
-                console.warn("Failed to clear cached overrides", e);
+                console.warn("Failed to load event date corrections", e);
             }
 
             console.log('🎪 Event Ticker: Initializing...');
@@ -236,22 +258,6 @@
                     console.log(
                         '📦 Event Ticker: Loaded cached user event start time:',
                         this.userEventStartTime
-                    );
-                }
-
-                const storedEndTime =
-                    await window.SidekickModules.Core.ChromeStorage.get(
-                        'userEventEndTime'
-                    );
-
-                if (
-                    typeof storedEndTime === 'string' &&
-                    storedEndTime.trim()
-                ) {
-                    this.userEventEndTime = storedEndTime.trim();
-                    console.log(
-                        '📦 Event Ticker: Loaded cached user event end time:',
-                        this.userEventEndTime
                     );
                 }
             } catch (error) {
@@ -278,15 +284,15 @@
                     '🎂 Event Ticker: Fetching player birthday from Torn API...'
                 );
 
-                const storage =
-                    await window.SidekickModules.Core.ChromeStorage.get(
-                        'torn_api_key'
-                    );
-
+                // Storage reads use the ChromeStorage wrapper (chrome.storage
+                // with localStorage fallback). This used to read 'torn_api_key'
+                // — a key NOTHING in the codebase ever writes — so the
+                // birthday countdown silently never worked. The real key is
+                // 'sidekick_api_key'. Fixed 2026-10-08.
                 const apiKey =
-                    storage && storage.torn_api_key
-                        ? storage.torn_api_key
-                        : '';
+                    await window.SidekickModules.Core.ChromeStorage.get(
+                        'sidekick_api_key'
+                    ) || '';
 
                 if (!apiKey) {
                     console.log(
@@ -296,25 +302,37 @@
                     return;
                 }
 
-                const response = await fetch(
-                    `https://api.torn.com/user/?selections=profile&key=${apiKey}`
-                );
-                const data = await response.json();
+                // Background proxy — never expose the key on a page-visible
+                // request (rule #14). 'profile' returns { name, signup, ... }.
+                const response = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'fetchTornApi',
+                        apiKey,
+                        selections: ['profile']
+                    }, (r) => resolve(r));
+                });
 
-                if (data.error) {
-                    console.error(
-                        '❌ Event Ticker: API error:',
-                        data.error
+                if (!response?.success) {
+                    console.warn(
+                        '❌ Event Ticker: Birthday API proxy failed:',
+                        response?.error
                     );
                     this.playerBirthdayChecked = true;
                     return;
                 }
 
-                if (data.signup) {
-                    this.playerSignupDate = new Date(data.signup);
+                // The proxy stores the raw v1 `user?selections=profile`
+                // response object under `profile`; depending on API version
+                // the `signup` field sits at the top level or inside the
+                // nested `profile` object — accept both.
+                const signup = response.profile?.signup
+                    || response.profile?.profile?.signup;
+
+                if (signup) {
+                    this.playerSignupDate = new Date(signup);
                     console.log(
                         '✅ Event Ticker: Player joined Torn on',
-                        data.signup
+                        signup
                     );
 
                     const yearsInTorn = this.getYearsInTorn();
@@ -387,6 +405,17 @@
                     return;
                 }
 
+                // Backoff: skip the fetch entirely (but keep rendering from
+                // cached data) while a previous failure's cooldown is active.
+                if (
+                    (shouldFetchEvents || shouldFetchUserTime) &&
+                    Date.now() < this.calendarBackoffUntil
+                ) {
+                    this.calculateNearestEvent();
+                    this.refreshTickerIfReady();
+                    return;
+                }
+
                 const apiKey = await storage.get('sidekick_api_key');
 
                 if (!apiKey) {
@@ -431,6 +460,15 @@
                     requests.push(
                         this.fetchUserCalendarStartTime(apiKey).then(
                             async startTime => {
+                                // Stamp the refresh cadence even when the
+                                // response carries no start_time — otherwise
+                                // shouldFetchUserTime stays true forever and
+                                // every later cycle re-attempts the call.
+                                await storage.set(
+                                    'user_calendar_update',
+                                    currentTime
+                                );
+
                                 if (!startTime) return;
 
                                 this.userEventStartTime = startTime;
@@ -438,10 +476,6 @@
                                 await storage.set(
                                     'userEventStartTime',
                                     startTime
-                                );
-                                await storage.set(
-                                    'user_calendar_update',
-                                    currentTime
                                 );
 
                                 console.log(
@@ -456,14 +490,27 @@
 
                 const results = await Promise.allSettled(requests);
 
-                results.forEach(result => {
-                    if (result.status === 'rejected') {
-                        console.warn(
-                            '⚠️ Event Ticker: Calendar request failed (using cached/global fallback):',
-                            result.reason
-                        );
-                    }
-                });
+                const failedCount = results.filter(
+                    result => result.status === 'rejected'
+                ).length;
+
+                if (failedCount > 0) {
+                    this.calendarFailureCount++;
+                    const backoffMs = Math.min(
+                        60000 * Math.pow(2, this.calendarFailureCount - 1),
+                        this.apiUpdateInterval * 1000
+                    );
+                    this.calendarBackoffUntil = Date.now() + backoffMs;
+                    console.warn(
+                        `⚠️ Event Ticker: Calendar request failed (${failedCount}/${results.length}); retrying in ${Math.round(backoffMs / 1000)}s (using cached/global fallback):`,
+                        ...results
+                            .filter(result => result.status === 'rejected')
+                            .map(result => result.reason)
+                    );
+                } else {
+                    this.calendarFailureCount = 0;
+                    this.calendarBackoffUntil = 0;
+                }
 
                 this.calculateNearestEvent();
                 this.refreshTickerIfReady();
@@ -480,27 +527,36 @@
         },
 
         async fetchCalendarJson(path, apiKey) {
-            const response = await fetch(
-                `https://api.torn.com/v2/${path}`,
-                {
-                    method: 'GET',
+            // Background proxy — Authorization header (with the key) lives in
+            // the isolated world, never on a page-visible fetch (rule #14).
+            const response = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: `https://api.torn.com/v2/${path}`,
                     headers: {
                         'Accept': 'application/json',
                         'Authorization': `ApiKey ${apiKey}`
-                    },
-                    cache: 'no-store'
-                }
-            );
+                    }
+                }, (r) => resolve(r));
+            });
 
-            let data;
-
-            try {
-                data = await response.json();
-            } catch (error) {
-                throw new Error(`${path} returned invalid JSON`);
+            if (!response?.success) {
+                throw new Error(`${path}: ${response?.error || 'background proxy failed'}`);
             }
 
-            if (!response.ok || data?.error) {
+            let data = response.data;
+
+            // The proxy JSON-parses the body for us; tolerate a raw string
+            // just in case.
+            if (typeof data === 'string') {
+                try {
+                    data = JSON.parse(data);
+                } catch (error) {
+                    throw new Error(`${path} returned invalid JSON`);
+                }
+            }
+
+            if (data?.error) {
                 const apiError = data?.error;
                 const message =
                     apiError?.error ||
@@ -630,6 +686,96 @@
             }
         },
 
+        // Tolerant reader for the overrides map: ChromeStorage.get returns
+        // the stored VALUE directly (the map itself), but legacy writes may
+        // have wrapped it as { event_calendar_overrides: {...} }. Accept both
+        // shapes so auto-corrected dates actually get applied.
+        extractOverridesMap(storage) {
+            if (!storage || typeof storage !== 'object') return {};
+            if (storage.event_calendar_overrides && typeof storage.event_calendar_overrides === 'object') {
+                return storage.event_calendar_overrides;
+            }
+            return storage;
+        },
+
+        // Year-suffix-tolerant event-name matching: live API titles can drop
+        // or change a trailing year ("CaffeineCon" vs "CaffeineCon 2025"),
+        // which made exact-name corrections silently miss. Strip a trailing
+        // 4-digit year before comparing (same convention as the notifier).
+        stripEventYearSuffix(name) {
+            return String(name || '').replace(/\s*20\d{2}\s*$/, '').trim();
+        },
+
+        findStaticEventByApiTitle(apiTitle) {
+            const normalized = this.normalizeEventName(apiTitle);
+            if (!normalized) return null;
+
+            // Exact normalized match first
+            const exact = this.events.find(
+                event => this.normalizeEventName(event.name) === normalized
+            );
+            if (exact) return exact;
+
+            // Then year-stripped match ("CaffeineCon" ↔ "CaffeineCon 2025")
+            const apiBase = this.stripEventYearSuffix(normalized);
+            if (!apiBase) return null;
+
+            return this.events.find(event => {
+                const staticNorm = this.normalizeEventName(event.name);
+                return staticNorm &&
+                    this.stripEventYearSuffix(staticNorm) === apiBase;
+            }) || null;
+        },
+
+        /**
+         * Merge persisted date corrections (from the live API calendar) back
+         * into `this.events` IN MEMORY. This is what makes the hardcoded
+         * fallback data updatable: once the API has supplied the correct
+         * dates for an occurrence, every consumer of `ticker.events` — the
+         * roller's upcoming/active lists, getDaysUntil, the notifier's
+         * settings list — sees corrected dates without each having to call
+         * getEventDates(). Text (feature/notification) stays code-owned; only
+         * month/day fields are corrected.
+         */
+        async applyKnownDateCorrections() {
+            const storage = await window.SidekickModules.Core.ChromeStorage.get(
+                'event_calendar_overrides'
+            );
+
+            const overrides = this.extractOverridesMap(storage);
+            const overrideEntries = Object.entries(overrides || {});
+            if (overrideEntries.length === 0) return 0;
+
+            let applied = 0;
+
+            for (const [normalizedApiName, correction] of overrideEntries) {
+                if (!correction || typeof correction !== 'object') continue;
+
+                const startMonth = Number(correction.startMonth);
+                const startDay = Number(correction.startDay);
+                if (!startMonth || !startDay) continue;
+
+                // Map the API-normalized key onto a static entry (exact match
+                // first, year-suffix-stripped fallback).
+                const staticEvent = this.findStaticEventByApiTitle(normalizedApiName);
+                if (!staticEvent) continue;
+
+                staticEvent.startMonth = startMonth;
+                staticEvent.startDay = startDay;
+                if (Number(correction.endMonth) && Number(correction.endDay)) {
+                    staticEvent.endMonth = Number(correction.endMonth);
+                    staticEvent.endDay = Number(correction.endDay);
+                }
+                applied++;
+            }
+
+            if (applied > 0) {
+                console.log(`📅 Event Ticker: Applied ${applied} persisted date correction(s) to the static table`);
+            }
+
+            return applied;
+        },
+
         async autoCorrectEventDates(apiEvents) {
             try {
                 const storage =
@@ -638,36 +784,49 @@
                     );
 
                 const overrides =
-                    storage?.event_calendar_overrides || {};
+                    this.extractOverridesMap(storage);
 
                 let correctionsMade = 0;
 
                 for (const apiEvent of apiEvents) {
                     if (!apiEvent.title || !apiEvent.start) continue;
 
-                    const normalizedApiName =
-                        this.normalizeEventName(apiEvent.title);
-
-                    const hardcodedEvent = this.events.find(
-                        event =>
-                            this.normalizeEventName(event.name) ===
-                            normalizedApiName
-                    );
+                    // Year-suffix tolerant: live title "CaffeineCon" updates
+                    // the curated "CaffeineCon 2025" entry.
+                    const hardcodedEvent =
+                        this.findStaticEventByApiTitle(apiEvent.title);
 
                     if (hardcodedEvent) {
+                        // Derive month/day in UTC (TCT) — local getDate()
+                        // can write off-by-one dates for starts near
+                        // midnight UTC.
                         const apiStartDate =
                             new Date(apiEvent.start * 1000);
 
+                        // The static table's endDay is an EXCLUSIVE day
+                        // boundary (a one-day event is "10 okt // 11 okt"),
+                        // while the API end timestamp is the last live
+                        // second (…23:59:59). Round the API end UP to the
+                        // next UTC-day boundary so auto-corrected events
+                        // keep their final day instead of ending a day (or,
+                        // for one-day events, the WHOLE window) early.
                         const apiEndDate = apiEvent.end
-                            ? new Date(apiEvent.end * 1000)
+                            ? new Date(
+                                Math.ceil(apiEvent.end / 86400) *
+                                86400 *
+                                1000
+                            )
                             : apiStartDate;
 
                         const apiDates = {
-                            startMonth: apiStartDate.getMonth() + 1,
-                            startDay: apiStartDate.getDate(),
-                            endMonth: apiEndDate.getMonth() + 1,
-                            endDay: apiEndDate.getDate()
+                            startMonth: apiStartDate.getUTCMonth() + 1,
+                            startDay: apiStartDate.getUTCDate(),
+                            endMonth: apiEndDate.getUTCMonth() + 1,
+                            endDay: apiEndDate.getUTCDate()
                         };
+
+                        const normalizedApiName =
+                            this.normalizeEventName(apiEvent.title);
 
                         const datesDiffer =
                             apiDates.startMonth !==
@@ -683,8 +842,16 @@
                             overrides[normalizedApiName] = apiDates;
                             correctionsMade++;
 
+                            // Apply in memory immediately too, so this page
+                            // load's roller/settings list show corrected
+                            // dates without waiting for a reload.
+                            hardcodedEvent.startMonth = apiDates.startMonth;
+                            hardcodedEvent.startDay = apiDates.startDay;
+                            hardcodedEvent.endMonth = apiDates.endMonth;
+                            hardcodedEvent.endDay = apiDates.endDay;
+
                             console.log(
-                                `📅 AUTO-CORRECTED "${hardcodedEvent.name}": ${hardcodedEvent.startMonth}/${hardcodedEvent.startDay} → ${apiDates.startMonth}/${apiDates.startDay}`
+                                `📅 AUTO-CORRECTED "${hardcodedEvent.name}": → ${apiDates.startMonth}/${apiDates.startDay}`
                             );
                         }
                     }
@@ -716,52 +883,33 @@
             const currentTime = Math.round(Date.now() / 1000);
             const upcomingEvents = [];
 
-            let userEventEnded = false;
-            let userEndTimestamp = null;
-
-            if (this.userEventEndTime) {
-                try {
-                    const userEndDate =
-                        new Date(this.userEventEndTime);
-
-                    userEndTimestamp = Math.round(
-                        userEndDate.getTime() / 1000
-                    );
-
-                    if (currentTime >= userEndTimestamp) {
-                        userEventEnded = true;
-                        console.log(
-                            '⏰ Event Ticker: User\'s personal event period has ended'
-                        );
-                    }
-                } catch (error) {
-                    console.warn(
-                        'Failed to parse user event end time:',
-                        error
-                    );
-                }
-            }
-
             for (const event of this.tornEvents) {
+                const globalStart = Number(event?.start);
+                const globalEnd = Number(event?.end);
+
+                if (!Number.isFinite(globalStart)) continue;
+
+                // The GLOBAL window decides liveness: once the world-start
+                // has passed, the event is live (shown by the rotation) and
+                // must never re-qualify as a "next" countdown — even when a
+                // personal start-time stamp still sits in the future (the
+                // live-CaffeineCon-countdown bug: a globally-live event kept
+                // counting down to its 16:00 TCT personal anchor). Personal
+                // anchors may only adjust the countdown BEFORE the global
+                // start; a window that already closed is dropped as well.
+                if (currentTime >= globalStart) continue;
+
+                if (
+                    Number.isFinite(globalEnd) &&
+                    currentTime >= globalEnd
+                ) {
+                    continue;
+                }
+
                 const eventStartTime =
                     this.resolveEventStartTime(event);
 
                 if (eventStartTime === null) continue;
-
-                if (
-                    userEventEnded &&
-                    event.title &&
-                    event.title.toLowerCase().includes('competition')
-                ) {
-                    const diff = eventStartTime - currentTime;
-
-                    if (diff < 0) {
-                        console.log(
-                            `⏰ Skipping active ${event.title} - user's event period ended`
-                        );
-                        continue;
-                    }
-                }
 
                 const diff = eventStartTime - currentTime;
 
@@ -836,6 +984,18 @@
                         this.nearestEvent.start - currentTime;
 
                     if (timeUntil <= 0) {
+                        this.fetchNearestEvent();
+                    } else if (
+                        Date.now() - this.lastFetchKick >= 60000
+                    ) {
+                        // A displayed (future) countdown must not freeze the
+                        // data behind it: without a bounded re-kick the
+                        // 15/30-min cache TTLs only ever apply on page load,
+                        // so stale calendar/personal-anchor data would sit
+                        // on screen until the countdown hits zero. Quota-safe:
+                        // fetchNearestEvent still self-throttles via its
+                        // in-flight guard, cache TTLs and failure backoff.
+                        this.lastFetchKick = Date.now();
                         this.fetchNearestEvent();
                     }
                 }
@@ -1329,7 +1489,178 @@
             return upcomingEvents;
         },
 
-        async updateTickerDisplay() {
+        // Live events straight from the API calendar (global window
+        // [start, end) contains now) that the static active rotation does
+        // not already show — matched year-suffix-tolerantly, so API
+        // "CaffeineCon 2026" dedupes against the curated "CaffeineCon 2025"
+        // entry while brand-new events with no static twin still display.
+        getApiLiveEvents(activeEvents) {
+            if (!Array.isArray(this.tornEvents)) return [];
+
+            const currentTime = Math.round(Date.now() / 1000);
+
+            const liveNames = new Set(
+                activeEvents
+                    .map(event =>
+                        this.stripEventYearSuffix(
+                            this.normalizeEventName(event?.name)
+                        )
+                    )
+                    .filter(Boolean)
+            );
+
+            const out = [];
+
+            for (const event of this.tornEvents) {
+                const globalStart = Number(event?.start);
+                const globalEnd = Number(event?.end);
+
+                if (!Number.isFinite(globalStart)) continue;
+                if (currentTime < globalStart) continue;
+
+                if (
+                    Number.isFinite(globalEnd) &&
+                    currentTime >= globalEnd
+                ) {
+                    continue;
+                }
+
+                const baseName = this.stripEventYearSuffix(
+                    this.normalizeEventName(event?.title)
+                );
+
+                if (!baseName) continue;
+                if (liveNames.has(baseName)) continue;
+
+                out.push({
+                    name: event.title,
+                    feature: event.subtitle || '',
+                    notification: event.description || '',
+                    start: globalStart
+                });
+            }
+
+            return out;
+        },
+
+        /**
+         * One entry list for the whole ticker rotation: static actives
+         * (auto-corrected dates), API-window live events, the countdown to
+         * the nearest future API event, and static upcomings. The countdown
+         * used to early-return and monopolize the ticker — folding it in as
+         * a rotation entry is what lets a live event display WHILE the
+         * next-event timer keeps ticking.
+         */
+        async buildRotationEntries() {
+            const entries = [];
+
+            const activeEvents =
+                await this.getActiveEvents();
+
+            activeEvents.forEach(event => {
+                entries.push({
+                    ...event,
+                    type: 'active',
+                    displayText: event.isBirthday
+                        ? event.notification
+                        : `🔴 LIVE: ${event.notification}`
+                });
+            });
+
+            this.getApiLiveEvents(activeEvents).forEach(event => {
+                entries.push({
+                    ...event,
+                    type: 'active',
+                    displayText:
+                        `🔴 LIVE: ${event.notification || event.name}`
+                });
+            });
+
+            if (this.nearestEvent) {
+                const currentTime =
+                    Math.round(Date.now() / 1000);
+
+                const timeUntil =
+                    this.nearestEvent.start - currentTime;
+
+                if (timeUntil > 0) {
+                    entries.push({
+                        name: this.nearestEvent.title,
+                        type: 'countdown',
+                        displayText:
+                            `⏰ Next Event: ${this.nearestEvent.title} in ${this.formatCountdown(timeUntil)}`
+                    });
+                }
+            }
+
+            const nearestBaseName =
+                this.stripEventYearSuffix(
+                    this.normalizeEventName(
+                        this.nearestEvent?.title
+                    )
+                );
+
+            this.getUpcomingEvents(7)
+                .filter(event => {
+                    const daysUntil =
+                        this.getDaysUntil(event);
+
+                    if (daysUntil > 7) return false;
+
+                    // The nearest event already has its own countdown
+                    // entry — don't duplicate it as a "Coming" line.
+                    const baseName =
+                        this.stripEventYearSuffix(
+                            this.normalizeEventName(event.name)
+                        );
+
+                    return (
+                        !nearestBaseName ||
+                        baseName !== nearestBaseName
+                    );
+                })
+                .forEach(event => {
+                    if (
+                        event.isBirthday &&
+                        event.daysUntil !== undefined
+                    ) {
+                        const daysText =
+                            event.daysUntil === 0
+                                ? 'tomorrow'
+                                : event.daysUntil === 1
+                                    ? 'in 1 day'
+                                    : `in ${event.daysUntil} days`;
+
+                        entries.push({
+                            ...event,
+                            type: 'upcoming',
+                            displayText:
+                                `🎂 Your Torn Birthday is ${daysText}! (${event.feature})`
+                        });
+                    } else {
+                        const daysUntil =
+                            this.getDaysUntil(event);
+
+                        const timeText =
+                            daysUntil === 0
+                                ? 'tomorrow'
+                                : daysUntil === 1
+                                    ? 'in 1 day'
+                                    : `in ${daysUntil + 1} days`;
+
+                        entries.push({
+                            ...event,
+                            type: 'upcoming',
+                            displayText:
+                                `📅 Coming ${timeText}: ${event.name} - ${event.feature}`
+                        });
+                    }
+                });
+
+            return entries;
+        },
+
+        async updateTickerDisplay(prebuiltEntries) {
             if (!this.tickerElement) {
                 console.warn(
                     '⚠️ Event Ticker: tickerElement not ready, skipping update'
@@ -1347,11 +1678,9 @@
             this.isUpdating = true;
 
             try {
-                const activeEvents =
-                    await this.getActiveEvents();
-
-                const upcomingEvents =
-                    this.getUpcomingEvents(7);
+                const allRelevantEvents = Array.isArray(prebuiltEntries)
+                    ? prebuiltEntries
+                    : await this.buildRotationEntries();
 
                 let displayText = '';
 
@@ -1359,90 +1688,10 @@
                     '🔄 Event Ticker: Updating display...',
                     {
                         nearestEvent: !!this.nearestEvent,
-                        activeCount: activeEvents.length,
-                        upcomingCount: upcomingEvents.length,
+                        rotationCount: allRelevantEvents.length,
                         currentIndex: this.currentEventIndex
                     }
                 );
-
-                if (this.nearestEvent) {
-                    const currentTime =
-                        Math.round(Date.now() / 1000);
-
-                    const timeUntil =
-                        this.nearestEvent.start -
-                        currentTime;
-
-                    if (timeUntil > 0) {
-                        displayText =
-                            `⏰ Next Event: ${this.nearestEvent.title} in ${this.formatCountdown(timeUntil)}`;
-
-                        console.log(
-                            '✅ Event Ticker: Showing API countdown:',
-                            displayText
-                        );
-
-                        this.setTickerText(displayText);
-                        return;
-                    }
-                }
-
-                const allRelevantEvents = [];
-
-                activeEvents.forEach(event => {
-                    allRelevantEvents.push({
-                        ...event,
-                        type: 'active',
-                        displayText: event.isBirthday
-                            ? event.notification
-                            : `🔴 LIVE: ${event.notification}`
-                    });
-                });
-
-                upcomingEvents
-                    .filter(event => {
-                        const daysUntil =
-                            this.getDaysUntil(event);
-
-                        return daysUntil <= 7;
-                    })
-                    .forEach(event => {
-                        if (
-                            event.isBirthday &&
-                            event.daysUntil !== undefined
-                        ) {
-                            const daysText =
-                                event.daysUntil === 0
-                                    ? 'tomorrow'
-                                    : event.daysUntil === 1
-                                        ? 'in 1 day'
-                                        : `in ${event.daysUntil} days`;
-
-                            allRelevantEvents.push({
-                                ...event,
-                                type: 'upcoming',
-                                displayText:
-                                    `🎂 Your Torn Birthday is ${daysText}! (${event.feature})`
-                            });
-                        } else {
-                            const daysUntil =
-                                this.getDaysUntil(event);
-
-                            const timeText =
-                                daysUntil === 0
-                                    ? 'tomorrow'
-                                    : daysUntil === 1
-                                        ? 'in 1 day'
-                                        : `in ${daysUntil + 1} days`;
-
-                            allRelevantEvents.push({
-                                ...event,
-                                type: 'upcoming',
-                                displayText:
-                                    `📅 Coming ${timeText}: ${event.name} - ${event.feature}`
-                            });
-                        }
-                    });
 
                 if (allRelevantEvents.length > 0) {
                     const eventToShow =
@@ -1605,20 +1854,12 @@
         },
 
         async scheduleNextRotation() {
-            const activeEvents =
-                await this.getActiveEvents();
+            // Build the same entry list the display renders so the
+            // rotation index and logged X/Y totals match reality.
+            const entries =
+                await this.buildRotationEntries();
 
-            const upcomingEvents =
-                this.getUpcomingEvents(7).filter(event => {
-                    const daysUntil =
-                        this.getDaysUntil(event);
-
-                    return daysUntil <= 7;
-                });
-
-            const totalEvents =
-                activeEvents.length +
-                upcomingEvents.length;
+            const totalEvents = entries.length;
 
             if (totalEvents > 1) {
                 this.currentEventIndex++;
@@ -1628,7 +1869,7 @@
                 );
             }
 
-            await this.updateTickerDisplay();
+            await this.updateTickerDisplay(entries);
 
             this.rotationInterval = setTimeout(() => {
                 this.scheduleNextRotation();
@@ -1653,7 +1894,7 @@
                     );
 
                 const overrides =
-                    storage?.event_calendar_overrides || {};
+                    this.extractOverridesMap(storage);
 
                 const normalized =
                     this.normalizeEventName(event.name);

@@ -29,6 +29,15 @@
     // Debt Module Implementation
     const DebtModule = {
         isInitialized: false,
+        // (Audit item 17) Verbose payment-scanning logs flooded the console
+        // on every init (~full log objects dumped). They now hide behind a
+        // debug flag — enable temporarily via
+        //   window.SidekickModules.Debt.DEBUG = true
+        // Errors/important events still log unconditionally.
+        DEBUG: false,
+        debugLog(...args) {
+            if (this.DEBUG) console.log(...args);
+        },
         debtsAndLoans: [], // Combined array for all debt/loan entries
         alerts: [],
         alertCheckInterval: null,
@@ -510,10 +519,16 @@
                 }
 
                 console.log(`💰 API key ready, fetching name for player ID: ${playerId}`);
-                const response = await fetch(`https://api.torn.com/user/${playerId}?selections=basic,profile&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy — key never in a page-visible URL.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `https://api.torn.com/user/${playerId}?selections=basic,profile&comment=SidekickDebt&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => resolve(r));
+                });
+                const data = res?.success ? res.data : null;
 
-                console.log(`💰 API response for player ${playerId}:`, data);
+                this.debugLog(`💰 API response for player ${playerId}:`, data);
 
                 if (data && data.error) {
                     console.error(`💰 API Error fetching player ${playerId}:`, data.error);
@@ -786,28 +801,22 @@
 
                 recentLogs++;
 
-                // Debug: Show ALL recent log entries to see the format
-                if (recentLogs <= 5) {
-                    console.log(`💰 DEBUG - Recent log ${recentLogs}:`);
-                    console.log(`  timestamp: ${log.timestamp}`);
-                    console.log(`  log text: "${log.log}"`);
-                    console.log(`  log type: ${typeof log.log}`);
-                    console.log(`  log length: ${log.log ? log.log.length : 0}`);
-                    console.log(`  full object:`, JSON.stringify(log, null, 2));
-                }
+                // (Audit item 17) Raw log dumps removed — they printed full
+                // objects unconditionally on every init. Debug summary above
+                // (DEBUG flag) covers inspection when needed.
 
                 // Check the log for money transfers
                 if (log.category && log.category === 'Money sending') {
                     // Check if this looks like a money transfer
                     if (log.title === 'Money receive' || log.title === 'Money send') {
                         moneyTransferLogs++;
-                        console.log(`💰 Found money transfer log (${log.timestamp}): ${log.title} - $${log.data?.money || 0}`);
+                        this.debugLog(`💰 Found money transfer log (${log.timestamp}): ${log.title} - $${log.data?.money || 0}`);
                     }
                     this.handleMoneyTransfer(log);
                 }
             }
 
-            console.log(`💰 Processed: ${recentLogs} recent logs (last 2 hours), ${moneyTransferLogs} money transfers found`);
+            this.debugLog(`💰 Processed: ${recentLogs} recent logs (last 2 hours), ${moneyTransferLogs} money transfers found`);
         },
 
 
@@ -824,7 +833,7 @@
                 const title = log.title || '';
                 const data = log.data || {};
 
-                console.log(`💰 Checking money transfer log: ${title}`, data);
+                this.debugLog(`💰 Checking money transfer log: ${title}`, data);
 
                 // Pattern 1: Money received (someone paying us)
                 // Title: "Money receive", data: { sender: ID, money: amount, message: "text" }
@@ -837,32 +846,31 @@
                     // Create unique payment ID to prevent duplicates
                     const paymentId = `receive_${senderId}_${amount}_${logTimestamp}`;
                     if (this.processedPayments.has(paymentId)) {
-                        console.log(`💰 Skipping duplicate received payment: ${paymentId}`);
+                        this.debugLog(`💰 Skipping duplicate received payment: ${paymentId}`);
                         return;
                     }
 
-                    console.log(`💰 Detected RECEIVED payment: $${amount} from sender ID ${senderId} with message: "${message}" (ID: ${paymentId})`);
+                    this.debugLog(`💰 Detected RECEIVED payment: $${amount} from sender ID ${senderId} with message: "${message}" (ID: ${paymentId})`);
 
                     // Check if message contains "loan" (case insensitive)
                     if (message.toLowerCase().includes('loan')) {
-                        console.log('💰 Received payment contains "loan" - checking for matching loan entries (money you loaned out)');
+                        this.debugLog('💰 Received payment contains "loan" - checking for matching loan entries (money you loaned out)');
 
-                        // Debug: Show all current loans YOU gave (others owe YOU)
                         const allLoans = this.debtsAndLoans.filter(e => !e.isDebt);
-                        console.log(`💰 Current loans given: ${allLoans.map(l => `${l.playerName} (ID: ${l.playerId})`).join(', ')}`);
+                        this.debugLog(`💰 Current loans given: ${allLoans.map(l => `${l.playerName} (ID: ${l.playerId})`).join(', ')}`);
 
                         // Find loan entries where YOU loaned money to this sender (they owe YOU)
                         const matchingEntries = this.debtsAndLoans.filter(entry => {
                             const matches = !entry.isDebt && (entry.playerId == senderId);
                             if (!entry.isDebt) {
-                                console.log(`💰 Checking loan given: ${entry.playerName} (ID: ${entry.playerId}) vs sender ID ${senderId} - matches: ${matches}`);
+                                this.debugLog(`💰 Checking loan given: ${entry.playerName} (ID: ${entry.playerId}) vs sender ID ${senderId} - matches: ${matches}`);
                             }
                             return matches;
                         });
 
                         if (matchingEntries.length > 0) {
                             const entry = matchingEntries[0];
-                            console.log(`💰 Auto-applying received payment of $${amount} to debt from ${entry.playerName}`);
+                            this.debugLog(`💰 Auto-applying received payment of $${amount} to debt from ${entry.playerName}`);
 
                             // Mark as processed ONLY after successfully applying it
                             this.processedPayments.add(paymentId);
@@ -871,11 +879,11 @@
                             this.addRepayment(entry.id, amount, `Auto-detected payment: ${message}`, true);
                             return;
                         } else {
-                            console.log(`💰 No matching debt entries found for received payment from sender ID ${senderId}`);
+                            this.debugLog(`💰 No matching debt entries found for received payment from sender ID ${senderId}`);
                             // Don't mark as processed if we didn't find a matching debt/loan
                         }
                     } else {
-                        console.log(`💰 Payment message does not contain "loan": "${message}"`);
+                        this.debugLog(`💰 Payment message does not contain "loan": "${message}"`);
                     }
                 }
 
@@ -890,32 +898,31 @@
                     // Create unique payment ID to prevent duplicates
                     const paymentId = `send_${receiverId}_${amount}_${logTimestamp}`;
                     if (this.processedPayments.has(paymentId)) {
-                        console.log(`💰 Skipping duplicate sent payment: ${paymentId}`);
+                        this.debugLog(`💰 Skipping duplicate sent payment: ${paymentId}`);
                         return; // Exit the function early to prevent further processing
                     }
 
-                    console.log(`💰 Detected SENT payment: $${amount} to receiver ID ${receiverId} with message: "${message}" (ID: ${paymentId})`);
+                    this.debugLog(`💰 Detected SENT payment: $${amount} to receiver ID ${receiverId} with message: "${message}" (ID: ${paymentId})`);
 
                     // Check if message contains "loan" (case insensitive)
                     if (message.toLowerCase().includes('loan')) {
-                        console.log('💰 Sent payment contains "loan" - checking for matching debt entries (money you owe)');
+                        this.debugLog('💰 Sent payment contains "loan" - checking for matching debt entries (money you owe)');
 
-                        // Debug: Show all current debts YOU owe
                         const allDebts = this.debtsAndLoans.filter(e => e.isDebt);
-                        console.log(`💰 Current debts owed: ${allDebts.map(d => `${d.playerName} (ID: ${d.playerId})`).join(', ')}`);
+                        this.debugLog(`💰 Current debts owed: ${allDebts.map(d => `${d.playerName} (ID: ${d.playerId})`).join(', ')}`);
 
                         // Find debt entries where YOU owe this person money
                         const matchingEntries = this.debtsAndLoans.filter(entry => {
                             const matches = entry.isDebt && (entry.playerId == receiverId);
                             if (entry.isDebt) {
-                                console.log(`💰 Checking debt owed: ${entry.playerName} (ID: ${entry.playerId}) vs receiver ID ${receiverId} - matches: ${matches}`);
+                                this.debugLog(`💰 Checking debt owed: ${entry.playerName} (ID: ${entry.playerId}) vs receiver ID ${receiverId} - matches: ${matches}`);
                             }
                             return matches;
                         });
 
                         if (matchingEntries.length > 0) {
                             const entry = matchingEntries[0];
-                            console.log(`💰 Auto-applying sent payment of $${amount} to loan to ${entry.playerName}`);
+                            this.debugLog(`💰 Auto-applying sent payment of $${amount} to loan to ${entry.playerName}`);
 
                             // Mark as processed ONLY after successfully applying it
                             this.processedPayments.add(paymentId);
@@ -924,7 +931,7 @@
                             this.addRepayment(entry.id, amount, `Auto-detected payment: ${message}`, true);
                             return;
                         } else {
-                            console.log(`💰 No matching loan entries found for sent payment to receiver ID ${receiverId}`);
+                            this.debugLog(`💰 No matching loan entries found for sent payment to receiver ID ${receiverId}`);
                             // Don't mark as processed if we didn't find a matching debt/loan
                         }
                     }

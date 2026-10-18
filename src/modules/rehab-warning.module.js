@@ -26,6 +26,18 @@ const RehabWarningModule = (() => {
         return match ? parseFloat(match[1]) : 0;
     }
 
+    // Background proxyFetch wrapper (audit item 9) — keeps the API key out of
+    // page-visible URLs / DevTools network logs.
+    function proxyFetchJson(url) {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ action: 'proxyFetch', url }, (res) => {
+                if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                else if (!res?.success) reject(new Error(res?.error || 'Request failed'));
+                else resolve(res.data);
+            });
+        });
+    }
+
     async function fetchRehabData() {
         const cs = await CS();
         const apiKey = await cs.get('sidekick_api_key');
@@ -33,9 +45,7 @@ const RehabWarningModule = (() => {
 
         try {
             // Use API v1 since it provides a flat structure and known employee dictionary
-            const userRes = await fetch(`https://api.torn.com/user/?selections=profile,icons,personalstats&key=${apiKey}&comment=SidekickRehab`);
-            const userData = await userRes.json();
-            
+            const userData = await proxyFetchJson(`https://api.torn.com/user/?selections=profile,icons,personalstats&key=${encodeURIComponent(apiKey)}&comment=SidekickRehab`);
             if (userData.error) return null;
 
             let addictionPercent = 0;
@@ -59,9 +69,8 @@ const RehabWarningModule = (() => {
                 try {
                     if (userData.job && userData.job.company_id) {
                         // Fetch own company data without passing compId, as v1 defaults to own company
-                        const empRes = await fetch(`https://api.torn.com/company/?selections=employees&key=${apiKey}&comment=SidekickRehab`);
-                        const empData = await empRes.json();
-                        
+                        const empData = await proxyFetchJson(`https://api.torn.com/company/?selections=employees&key=${encodeURIComponent(apiKey)}&comment=SidekickRehab`);
+
                         if (empData.company_employees && empData.company_employees[userData.player_id]) {
                             const myEmp = empData.company_employees[userData.player_id];
                             companyPenaltyVal = myEmp.effectiveness?.addiction || 0;
@@ -102,7 +111,18 @@ const RehabWarningModule = (() => {
         let data = state;
 
         if (now - state.lastFetch > API_CACHE_TTL) {
-            const freshData = await fetchRehabData();
+            let freshData = await fetchRehabData();
+
+            if (!freshData) {
+                // One delayed retry: transient upstream failures (Torn 5xx /
+                // gateway 504s) are common during Torn-side slowness, and
+                // waiting a full 5-min cycle leaves the warning stale.
+                await new Promise(resolve =>
+                    setTimeout(resolve, 5000)
+                );
+                freshData = await fetchRehabData();
+            }
+
             if (freshData) {
                 data = {
                     ...state,

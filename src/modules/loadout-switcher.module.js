@@ -36,6 +36,24 @@
                 this.isEnabled = await this.loadSettings();
                 if (this.isEnabled) await this.enable();
                 this.isInitialized = true;
+
+                // (Audit item 19) enable() early-returns off item.php, so a
+                // toggle from any OTHER page used to leave the buttons painted
+                // on an open item.php tab until reload. Storage listener makes
+                // settings changes propagate live to every tab.
+                if (!this._storageListener) {
+                    this._storageListener = async (changes, area) => {
+                        if (area !== 'local' || !changes['sidekick_settings']) return;
+                        const nowEnabled = await this.loadSettings();
+                        if (nowEnabled && !this.isEnabled && window.location.pathname.startsWith('/item.php')) {
+                            await this.enable();
+                        } else if (!nowEnabled && this.isEnabled) {
+                            await this.disable();
+                        }
+                    };
+                    chrome.storage.onChanged.addListener(this._storageListener);
+                }
+
                 console.log('✅ Loadout Switcher Module initialized');
             } catch (err) {
                 console.error('❌ Loadout Switcher init failed:', err);

@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sidekick",
-    "version": "1.2.26",
+    "version": "1.2.27",
     "description": "Enhanced sidebar and tools for Torn.com",
     "permissions": [
         "storage",
@@ -32,7 +32,6 @@
                 "https://*.torn.com/*"
             ],
             "js": [
-                "src/modules/chat-popout.module.js",
                 "src/core/notification-center.js",
                 "src/core/notification-preferences.js",
                 "src/modules/core.module.js",

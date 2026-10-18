@@ -53,8 +53,19 @@ const RefillBlockerModule = (() => {
             }
 
             try {
-                const response = await fetch(`https://api.torn.com/user/?selections=bars&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy (audit item 9): the key must not appear in a
+                // page-visible URL / DevTools network log.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `https://api.torn.com/user/?selections=bars&comment=SidekickRefillBlocker&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => resolve(r));
+                });
+                if (!res?.success) {
+                    console.error('[Sidekick] Bars fetch failed:', res?.error);
+                    return null;
+                }
+                const data = res.data;
 
                 if (data.error) {
                     console.error('[Sidekick] API Error:', data.error);

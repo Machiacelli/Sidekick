@@ -27,7 +27,7 @@
         isInitialized: false,
         isEnabled: false,
         floatingButton: null,
-        observer: null,
+        buttonCheckInterval: null, // 3s existence check (replaces whole-body MutationObserver)
         buttonPosition: { x: 100, y: 100 },
 
         // Initialize the random target module
@@ -223,6 +223,16 @@
 
         // Remove floating button
         removeFloatingButton() {
+            // Take the document-level drag handlers off FIRST — they close
+            // over this button (audit item 11 leak fix).
+            if (this._dragMoveHandler) {
+                document.removeEventListener('mousemove', this._dragMoveHandler);
+                this._dragMoveHandler = null;
+            }
+            if (this._dragEndHandler) {
+                document.removeEventListener('mouseup', this._dragEndHandler);
+                this._dragEndHandler = null;
+            }
             if (this.floatingButton) {
                 this.floatingButton.remove();
                 this.floatingButton = null;
@@ -247,7 +257,13 @@
                 e.preventDefault();
             });
 
-            document.addEventListener('mousemove', (e) => {
+            // Document-level handlers are NAMED + stored so the next
+            // removeFloatingButton() can take them off. The old code added
+            // fresh anonymous mousemove/mouseup listeners on every button
+            // recreation (whole-page re-render wiped the button several
+            // times per session) and never removed them — a straight
+            // document-listener leak (audit item 11).
+            this._dragMoveHandler = (e) => {
                 if (!isDragging) return;
 
                 const dx = e.clientX - startX;
@@ -275,9 +291,9 @@
 
                 // Update position
                 this.buttonPosition = { x: boundedLeft, y: boundedTop };
-            });
+            };
 
-            document.addEventListener('mouseup', (e) => {
+            this._dragEndHandler = (e) => {
                 if (isDragging) {
                     isDragging = false;
                     element.style.cursor = 'grab';
@@ -293,7 +309,10 @@
                         }, 50);
                     }
                 }
-            });
+            };
+
+            document.addEventListener('mousemove', this._dragMoveHandler);
+            document.addEventListener('mouseup', this._dragEndHandler);
 
             // Prevent click events if the button was dragged
             element.addEventListener('click', (e) => {
@@ -323,15 +342,28 @@
         },
 
         // Attack random target (double click)
-        async attackRandomTarget() {
+        async attackRandomTarget(attempt = 0) {
             console.log("🎯 Finding random target with proper filtering...");
 
-            // Use stored configuration
+            // Bounded retries (audit item 11): the old code re-called itself
+            // with NO cap, so a run of invalid IDs chained dozens of PAID API
+            // calls. Cap attempts and back off between them; give up with a
+            // clear message instead of recursing forever.
+            const MAX_ATTEMPTS = 5;
+            if (attempt >= MAX_ATTEMPTS) {
+                this.showNotification("Random Target", `No suitable target found after ${MAX_ATTEMPTS} tries — double-click again for another round`, "warning");
+                this.resetButtonAppearance();
+                return;
+            }
+
+            // Use stored configuration — same defaults as loadSettings()
+            // (the old inline fallback used 1000/500/1 and silently diverged
+            // from the persisted 10/10/0; audit item 11)
             const config = this.config || {
                 enableApiChecks: false,
-                maxXanax: 1000,
-                maxRefills: 500,
-                maxSEs: 1,
+                maxXanax: 10,
+                maxRefills: 10,
+                maxSEs: 0,
                 minID: 1000000,
                 maxID: 3400000
             };
@@ -353,9 +385,22 @@
 
             if (config.enableApiChecks && apiKey) {
                 try {
-                    console.log(`🔄 Checking user ${randomId} with API...`);
-                    const response = await fetch(`https://api.torn.com/user/${randomId}?selections=profile,personalstats&key=${apiKey}`);
-                    const user = await response.json();
+                    console.log(`🔄 Checking user ${randomId} with API... (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+                    // Background proxy (audit item 9): key never in a
+                    // page-visible URL / DevTools network log.
+                    const res = await new Promise((resolve) => {
+                        chrome.runtime.sendMessage({
+                            action: 'proxyFetch',
+                            url: `https://api.torn.com/user/${randomId}?selections=profile,personalstats&comment=SidekickRandomTarget&key=${encodeURIComponent(apiKey)}`,
+                        }, (r) => resolve(r));
+                    });
+                    if (!res?.success) {
+                        console.warn(`⚠️ API transport error for user ${randomId}:`, res?.error);
+                        // Skip API checks and proceed anyway
+                        this.openAttackPage(randomId);
+                        return;
+                    }
+                    const user = res.data;
 
                     if (user.error) {
                         console.warn(`⚠️ API error for user ${randomId}:`, user.error);
@@ -392,20 +437,21 @@
                         console.log(`✅ Valid target found: ${randomId}`);
                         this.openAttackPage(randomId);
                     } else {
-                        console.log(`❌ Invalid target ${randomId}: ${reason}. Retrying...`);
+                        console.log(`❌ Invalid target ${randomId}: ${reason}. Retrying (attempt ${attempt + 1}/${MAX_ATTEMPTS})...`);
                         this.showNotification("Invalid Target", `User ${randomId} skipped: ${reason}`, "warning");
-                        // Reset button and retry after short delay
+                        // Reset button, then retry with linear backoff
                         setTimeout(() => {
                             this.resetButtonAppearance();
                         }, 500);
                         setTimeout(() => {
-                            this.attackRandomTarget();
-                        }, 1000);
+                            this.attackRandomTarget(attempt + 1);
+                        }, 1000 + attempt * 500);
                     }
 
                 } catch (error) {
                     console.error('❌ Error checking user via API:', error);
-                    // Fallback to opening without checks
+                    // Fail open to navigation — but no retry on transport
+                    // errors: a blip must not consume another paid API call.
                     this.openAttackPage(randomId);
                 }
             } else {
@@ -433,194 +479,30 @@
             this.showNotification("Random Attack", `Attacking random target ID: ${userId}`, "success");
         },
 
-        // Find all possible attack targets on the page
-        findAllAttackTargets() {
-            const targets = [];
-
-            // Primary attack selectors - more comprehensive
-            const attackSelectors = [
-                'a[href*="attack"]',
-                'a[href*="loader.php?sid=attack"]',
-                'button[onclick*="attack"]',
-                '.attack-link',
-                '.attack-btn',
-                'a[href*="profiles.php?XID="]', // Profile links that can be attacked
-                'a[href*="/profiles.php"][href*="XID"]',
-                '[data-action="attack"]',
-                '[onclick*="attack"]'
-            ];
-
-            for (const selector of attackSelectors) {
-                try {
-                    const elements = document.querySelectorAll(selector);
-                    elements.forEach(el => {
-                        if (this.isValidTarget(el)) {
-                            targets.push(el);
-                        }
-                    });
-                } catch (error) {
-                    console.warn('Error with selector:', selector, error);
-                }
-            }
-
-            // Also look for any links with user IDs that could be attacked
-            if (targets.length === 0) {
-                const userLinks = document.querySelectorAll('a[href*="XID="]');
-                userLinks.forEach(link => {
-                    if (this.isValidTarget(link) && this.couldBeAttackTarget(link)) {
-                        targets.push(link);
-                    }
-                });
-            }
-
-            // Remove duplicates based on href or onclick
-            const uniqueTargets = targets.filter((target, index, self) => {
-                const identifier = target.href || target.onclick?.toString() || target.outerHTML;
-                return self.findIndex(t => {
-                    const tIdentifier = t.href || t.onclick?.toString() || t.outerHTML;
-                    return tIdentifier === identifier;
-                }) === index;
-            });
-
-            console.log(`🔍 Found ${uniqueTargets.length} unique attack targets`);
-            return uniqueTargets;
-        },
-
-        // Check if element is a valid target
-        isValidTarget(element) {
-            if (!element || !element.style) return false;
-
-            // Skip hidden elements
-            const style = window.getComputedStyle(element);
-            if (style.display === 'none' || style.visibility === 'hidden') {
-                return false;
-            }
-
-            // Skip disabled elements
-            if (element.disabled) return false;
-
-            // Skip our own button
-            if (element.id === 'sidekick-random-target-float') return false;
-
-            return true;
-        },
-
-        // Check if a user link could be an attack target
-        couldBeAttackTarget(element) {
-            const href = element.href || '';
-            const text = element.textContent || '';
-            const parent = element.parentElement;
-
-            // Skip if it's clearly not an attack context
-            const excludeTexts = ['yourself', 'profile', 'view', 'details', 'info', 'edit', 'settings'];
-            if (excludeTexts.some(exclude => text.toLowerCase().includes(exclude))) {
-                return false;
-            }
-
-            // Must have a user ID to be attackable
-            if (!href.includes('XID=')) {
-                return false;
-            }
-
-            // Check if in an attack-related context
-            if (parent) {
-                const parentText = parent.textContent.toLowerCase();
-                const attackContext = ['attack', 'enemy', 'target', 'faction', 'war', 'bounty', 'hit'];
-                const hasAttackContext = attackContext.some(context => parentText.includes(context));
-
-                // Also check for general user lists that could be attackable
-                const userListContext = ['member', 'player', 'user', 'level', 'respect'];
-                const hasUserContext = userListContext.some(context => parentText.includes(context));
-
-                return hasAttackContext || hasUserContext;
-            }
-
-            // If we can't determine context, assume it's attackable if it has a user ID
-            return true;
-        },
-
-        // Highlight the selected target
-        highlightTarget(target) {
-            if (!target) return;
-
-            // Add highlight class for styling
-            target.classList.add('sidekick-target-highlight');
-
-            // Create temporary highlight overlay
-            const highlight = document.createElement('div');
-            highlight.className = 'sidekick-target-overlay';
-            highlight.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(76, 175, 80, 0.2);
-                border: 2px solid #4CAF50;
-                border-radius: 4px;
-                pointer-events: none;
-                z-index: 10000;
-                animation: pulse 1s ease-in-out;
-            `;
-
-            // Position overlay over target
-            const rect = target.getBoundingClientRect();
-            highlight.style.position = 'fixed';
-            highlight.style.top = rect.top + 'px';
-            highlight.style.left = rect.left + 'px';
-            highlight.style.width = rect.width + 'px';
-            highlight.style.height = rect.height + 'px';
-
-            document.body.appendChild(highlight);
-
-            // Remove highlight after 2 seconds
-            setTimeout(() => {
-                target.classList.remove('sidekick-target-highlight');
-                if (highlight.parentNode) {
-                    highlight.remove();
-                }
-            }, 2000);
-        },
-
-        // Clear all previous highlights
-        clearHighlights() {
-            const highlights = document.querySelectorAll('.sidekick-target-highlight');
-            highlights.forEach(el => el.classList.remove('sidekick-target-highlight'));
-
-            const overlays = document.querySelectorAll('.sidekick-target-overlay');
-            overlays.forEach(el => el.remove());
-        },
-
         // Start mutation observer to maintain button on page changes
         startObserver() {
-            if (this.observer) {
-                this.observer.disconnect();
-            }
-
-            this.observer = new MutationObserver((mutations) => {
-                // Check if button still exists
+            // (Audit item 11) The old implementation ran a whole-body
+            // MutationObserver (childList+subtree on document.body) purely to
+            // notice when our own button disappeared — one callback on EVERY
+            // DOM change on the page. A 3s existence check is far cheaper and
+            // does the same job.
+            this.stopObserver();
+            this.buttonCheckInterval = setInterval(() => {
                 if (this.isEnabled && !document.getElementById('sidekick-random-target-float')) {
                     console.log("🔄 Random Target button missing, recreating...");
-                    setTimeout(() => {
-                        this.createFloatingButton();
-                    }, 500);
+                    this.createFloatingButton();
                 }
-            });
+            }, 3000);
 
-            this.observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
-            console.log("👀 Random Target observer started");
+            console.log("👀 Random Target button watcher started");
         },
 
-        // Stop mutation observer
+        // Stop button watcher
         stopObserver() {
-            if (this.observer) {
-                this.observer.disconnect();
-                this.observer = null;
-                console.log("🛑 Random Target observer stopped");
+            if (this.buttonCheckInterval) {
+                clearInterval(this.buttonCheckInterval);
+                this.buttonCheckInterval = null;
+                console.log("🛑 Random Target button watcher stopped");
             }
         },
 
@@ -655,22 +537,8 @@
         }
     };
 
-    // Add CSS for highlight animation
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes pulse {
-            0% { opacity: 0; transform: scale(0.8); }
-            50% { opacity: 1; transform: scale(1.05); }
-            100% { opacity: 0.7; transform: scale(1); }
-        }
-        
-        .sidekick-target-highlight {
-            background: rgba(76, 175, 80, 0.1) !important;
-            outline: 2px solid #4CAF50 !important;
-            outline-offset: 2px !important;
-        }
-    `;
-    document.head.appendChild(style);
+    // (Audit item 11) The old highlight/overlay CSS block was removed with the
+    // dead findAllAttackTargets/highlightTarget code — no live path referenced it.
 
     // Initialize global namespace if it doesn't exist
     if (!window.SidekickModules) {

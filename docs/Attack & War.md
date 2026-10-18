@@ -67,10 +67,11 @@ Hospital/jail rows show a live HH:MM:SS countdown, travelers show direction and 
 
 🎯 **FactionOps Target Caller**
 
-Thanks to RussianRob & Dead Fragment exclusive!
-Where to find it: Settings → War → FactionOps Target Caller (also toggleable from the toolbar popup) · Off by default · Runs on the faction war page
+Where to find it: Settings → War → FactionOps Target Caller (also toggleable from the toolbar popup) · Off by default · Runs on the faction war page · Dead Fragment Faction Exclusive Mode
 
 A "called it" system for wars: click ✔️ on an enemy row to claim that target so your faction mates don't waste hits on it, with claims shared live (5-second sync) between Sidekick users and FactionOps userscript users via the FactionOps server. Claims show the caller's name in a stable per-player color; double-click the badge to jump to the attack, right-click your own claim to release it. Claims auto-expire after 20 minutes and auto-release when your own hit lands. Players outside the supported faction get copy mode — clicking ✔️ copies a "Hitting <name> [id]" message to the clipboard instead of syncing with a server.
+
+Thanks to the creator RussianRob!
 
 ---
 

@@ -320,8 +320,14 @@
                     try {
                         const apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key');
                         if (apiKey) {
-                            const response = await fetch(`https://api.torn.com/user/${playerId}?selections=profile&key=${apiKey}`);
-                            const data = await response.json();
+                            // Background proxy — key never in a page-visible URL.
+                            const res = await new Promise((resolve) => {
+                                chrome.runtime.sendMessage({
+                                    action: 'proxyFetch',
+                                    url: `https://api.torn.com/user/${playerId}?selections=profile&comment=SidekickFlightTracker&key=${encodeURIComponent(apiKey)}`,
+                                }, (r) => resolve(r));
+                            });
+                            const data = res?.success ? res.data : null;
                             if (data && data.name) {
                                 username = data.name;
                             }

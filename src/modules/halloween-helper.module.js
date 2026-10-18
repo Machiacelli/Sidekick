@@ -89,8 +89,15 @@
                 try {
                     const apiKey = await window.SidekickModules.Core.ChromeStorage.get('sidekick_api_key');
                     if (apiKey) {
-                        const response = await fetch(`https://api.torn.com/user/?selections=attacks&key=${apiKey}`);
-                        const data = await response.json();
+                        // Background proxy (audit item 9): key never in a
+                        // page-visible URL.
+                        const res = await new Promise((resolve) => {
+                            chrome.runtime.sendMessage({
+                                action: 'proxyFetch',
+                                url: `https://api.torn.com/user/?selections=attacks&comment=SidekickHalloween&key=${encodeURIComponent(apiKey)}`,
+                            }, (r) => resolve(r));
+                        });
+                        const data = res?.success ? res.data : null;
                         if (data && data.attacks) {
                             // Find the most recent attack where the defender is this target
                             const attacks = Object.values(data.attacks);

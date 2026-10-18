@@ -146,9 +146,19 @@
                     return null;
                 }
 
-                // Direct fetch to Torn API
-                const response = await fetch(`https://api.torn.com/user/?selections=battlestats&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy (architectural observation: direct-fetch →
+                // proxy standardization) — key never in a page-visible URL.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `https://api.torn.com/user/?selections=battlestats&comment=SidekickStatsTracker&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => resolve(r));
+                });
+                if (!res?.success) {
+                    console.error("📊 Fetch failed:", res?.error);
+                    return null;
+                }
+                const data = res.data;
 
                 if (data.error) {
                     console.error("📊 API error:", data.error);

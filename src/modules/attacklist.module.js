@@ -65,18 +65,22 @@
         // Save attack lists to Chrome storage with debouncing
         async saveAttackLists() {
             try {
-                // Use StateManager for debounced saves (1 second delay)
-                if (window.SidekickModules?.Core?.StateManager) {
-                    await window.SidekickModules.Core.StateManager.saveModuleState(
-                        'attacklist',
-                        { lists: this.attackLists },
-                        1000 // 1 second debounce
-                    );
-                }
-
-                // Legacy direct save for backwards compatibility
-                await window.SidekickModules.Core.ChromeStorage.set('sidekick_attacklists', this.attackLists);
-                console.log('💾 Attack lists saved successfully to Chrome storage');
+                // NOTE (audit item 7): the old code wrote through StateManager
+                // AND directly. StateManager's key/shape (`sidekick_attacklist_state`
+                // → `{lists}`) does NOT match what loadAttackLists() reads
+                // (`sidekick_attacklists`, the raw array), so the direct write
+                // was the only one that actually persisted — and because it ran
+                // immediately it defeated the StateManager debounce. Fixed:
+                // ONE debounced write, to the key we read from.
+                if (this._saveDebounceTimer) clearTimeout(this._saveDebounceTimer);
+                const listsSnapshot = this.attackLists;
+                this._saveDebounceTimer = setTimeout(async () => {
+                    try {
+                        await window.SidekickModules.Core.ChromeStorage.set('sidekick_attacklists', listsSnapshot);
+                    } catch (err) {
+                        console.error('Failed to persist attack lists:', err);
+                    }
+                }, 500);
             } catch (error) {
                 console.error('Failed to save attack lists to Chrome storage:', error);
             }
@@ -138,6 +142,14 @@
             if (existingElement) {
                 existingElement.remove();
             }
+
+            // (Audit item 7) On re-render the old portaled dropdown stays
+            // orphaned in document.body — purge portals that belong to THIS
+            // list before a fresh one is created below.
+            if (attackList._portaledDropdown?.isConnected) {
+                attackList._portaledDropdown.remove();
+            }
+            attackList._portaledDropdown = null;
 
             const attackListElement = document.createElement('div');
             attackListElement.className = 'movable-attacklist';
@@ -361,7 +373,7 @@
                     </a>
                     
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <div style="font-size: 11px;">
+                        <div class="status-text" style="font-size: 11px;">
                             ${statusDisplay}
                         </div>
                         <button class="remove-target-btn" data-target-id="${target.id}" style="
@@ -388,6 +400,8 @@
 
         // Render target status with color coding
         renderTargetStatus(target) {
+            // NOTE: output is swapped into `.status-text` nodes by
+            // updateTimerDisplays() — keep it a single inline element.
             if (!target.data) {
                 return '<span style="color: #888;">Loading...</span>';
             }
@@ -492,10 +506,22 @@
                     }
                 });
 
-                // Close dropdown when clicking outside
-                document.addEventListener('click', () => {
-                    dropdownContent.style.display = 'none';
-                });
+                // Close dropdown when clicking outside — ONE shared document
+                // listener instead of one per rendered list (audit item 7),
+                // and never removed per-render. Reuses the same handler so
+                // re-renders don't stack copies.
+                if (!this._outsideClickListener) {
+                    this._outsideClickListener = () => {
+                        document.querySelectorAll('.attacklist-dropdown-content').forEach(dd => {
+                            dd.style.display = 'none';
+                        });
+                    };
+                    document.addEventListener('click', this._outsideClickListener);
+                }
+                // Stash the portal + handlers on the element record so
+                // deleteAttackList can remove everything (audit item 7:
+                // portaled dropdowns were orphaned on delete/re-render).
+                attackList._portaledDropdown = dropdownContent;
             }
 
             // Add target button
@@ -552,8 +578,6 @@
             // Close button
             const closeBtn = element.querySelector('.attacklist-close');
 
-            console.log("Close button found:", closeBtn);
-
             if (closeBtn) {
                 closeBtn.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -579,7 +603,6 @@
                         clearTimeout(resizeTimeout);
                         resizeTimeout = setTimeout(() => {
                             this.saveAttackLists();
-                            console.log(`📏 Saved attack list '${attackList.name}' size: ${attackList.width}x${attackList.height}`);
                         }, 500);
                     }
                 }
@@ -588,42 +611,81 @@
 
             // Make draggable
             this.makeDraggable(element, attackList);
+
+            // Cleanup registry: everything this element registered on the
+            // DOCUMENT (not the element) must be removable when the list is
+            // deleted or re-rendered (audit item 7: ResizeObserver was never
+            // disconnected and document drag listeners accumulated).
+            this._elementCleanup = this._elementCleanup || new Map();
+            this._elementCleanup.set(attackList.id, () => {
+                clearTimeout(resizeTimeout);
+                resizeObserver.disconnect();
+            });
         },
 
-        // Show add target dialog
+        // Show add target dialog (non-blocking: an inline input row inside the
+        // list, replacing the old window-blocking prompt())
         showAddTargetDialog(attackList) {
-            const playerId = prompt('Enter Player ID:');
-            if (!playerId || !playerId.trim()) return;
+            const listEl = document.getElementById(`sidekick-attacklist-${attackList.id}`);
+            if (!listEl) return;
+            const container = listEl.querySelector('.targets-container');
+            if (!container || container.querySelector('.add-target-row')) return;
 
-            const targetId = playerId.trim();
-            if (isNaN(targetId) || targetId <= 0) {
-                alert('Please enter a valid player ID');
-                return;
-            }
+            const row = document.createElement('div');
+            row.className = 'add-target-row';
+            row.style.cssText = 'display:flex;gap:4px;padding:4px 0;align-items:center;';
+            row.innerHTML = `
+                <input class="add-target-input" type="text" inputmode="numeric" placeholder="Player ID"
+                    style="flex:1;min-width:0;background:#222;border:1px solid #555;border-radius:3px;color:#fff;padding:3px 5px;font-size:11px;">
+                <button class="add-target-confirm" style="background:#4CAF50;border:none;color:#fff;border-radius:3px;padding:3px 7px;font-size:11px;cursor:pointer;">Add</button>
+                <button class="add-target-cancel" style="background:#666;border:none;color:#fff;border-radius:3px;padding:3px 7px;font-size:11px;cursor:pointer;">×</button>
+            `;
+            container.prepend(row);
+            const input = row.querySelector('.add-target-input');
+            input.focus();
 
-            // Check if target already exists
-            if (attackList.targets.find(t => t.id === targetId)) {
-                alert('This target is already in the list');
-                return;
-            }
+            const finish = () => row.remove();
 
-            const target = {
-                id: targetId,
-                name: null,
-                data: null,
-                lastUpdated: null,
-                addedAt: Date.now()
+            const submit = () => {
+                const raw = (input.value || '').trim();
+                const targetId = raw;
+                if (!targetId || isNaN(targetId) || Number(targetId) <= 0) {
+                    input.style.borderColor = '#f44336';
+                    input.placeholder = 'Valid player ID required';
+                    return;
+                }
+                if (attackList.targets.find(t => t.id === targetId)) {
+                    input.style.borderColor = '#f44336';
+                    input.placeholder = 'Already in this list';
+                    return;
+                }
+
+                const target = {
+                    id: targetId,
+                    name: null,
+                    data: null,
+                    lastUpdated: null,
+                    addedAt: Date.now()
+                };
+
+                attackList.targets.push(target);
+                attackList.modified = new Date().toISOString();
+                this.saveAttackLists();
+                finish();
+                this.renderTargets(attackList);
+
+                // Update target data immediately
+                this.updateTargetStatus(target).then(() => {
+                    this.renderTargets(attackList);
+                    this.saveAttackLists();
+                });
             };
 
-            attackList.targets.push(target);
-            attackList.modified = new Date().toISOString();
-            this.saveAttackLists();
-            this.renderTargets(attackList);
-
-            // Update target data immediately
-            this.updateTargetStatus(target).then(() => {
-                this.renderTargets(attackList);
-                this.saveAttackLists();
+            row.querySelector('.add-target-confirm').addEventListener('click', submit);
+            row.querySelector('.add-target-cancel').addEventListener('click', finish);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submit();
+                if (e.key === 'Escape') finish();
             });
         },
 
@@ -655,6 +717,21 @@
                 element.remove();
             }
 
+            // (Audit item 7) Remove the portaled dropdown + document-level
+            // cleanup handles — these lived outside `element` and were
+            // orphaned before.
+            const attackList = this.attackLists.find(al => al.id === id);
+            if (attackList?._portaledDropdown?.isConnected) {
+                attackList._portaledDropdown.remove();
+            }
+            delete attackList?._portaledDropdown;
+            if (this._elementCleanup?.has(id)) {
+                try {
+                    this._elementCleanup.get(id)();
+                } catch (_) { /* best-effort teardown */ }
+                this._elementCleanup.delete(id);
+            }
+
             this.attackLists = this.attackLists.filter(al => al.id !== id);
             this.saveAttackLists();
 
@@ -664,17 +741,24 @@
         // Update target status via API
         async updateTargetStatus(target) {
             try {
-                console.log(`🎯 Fetching data for player ${target.id}...`);
-
                 // Get API key from settings
                 const apiKey = await window.SidekickModules.Settings.getApiKey();
                 if (!apiKey) {
                     throw new Error('API key not configured');
                 }
 
-                // Fetch player data using Torn API
-                const response = await fetch(`https://api.torn.com/user/${target.id}?selections=basic,profile&key=${apiKey}`);
-                const data = await response.json();
+                // Background proxy (audit items 7/9): the key must not sit in
+                // a page-visible URL / DevTools network log.
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        action: 'proxyFetch',
+                        url: `https://api.torn.com/user/${target.id}?selections=basic,profile&comment=SidekickAttackList&key=${encodeURIComponent(apiKey)}`,
+                    }, (r) => resolve(r));
+                });
+                if (!res?.success) {
+                    throw new Error(res?.error || 'Transport failed');
+                }
+                const data = res.data;
 
                 if (data && !data.error) {
                     target.name = data.name || `Player ${target.id}`;
@@ -684,49 +768,71 @@
                         last_action: data.last_action
                     };
                     target.lastUpdated = Date.now();
-                    console.log(`✅ Updated data for ${target.name} (${target.id}):`, target.data.status);
                 } else if (data && data.error) {
-                    console.error(`❌ API Error for player ${target.id}:`, data.error);
+                    console.warn(`⚔️ API error for player ${target.id}:`, data.error.error, `(code ${data.error.code})`);
                     target.name = `Player ${target.id}`;
                     target.data = { error: data.error.error || 'Unknown error' };
-
-                    // Show user-friendly error message
-                    if (data.error.code === 6) {
-                        console.warn(`Player ID ${target.id} not found`);
-                    } else if (data.error.code === 7) {
-                        console.warn(`No access to player ${target.id} data`);
-                    }
                 } else {
-                    console.warn(`⚠️ No data returned for player ${target.id}`);
                     target.name = `Player ${target.id}`;
                     target.data = { error: 'No data available' };
                 }
             } catch (error) {
-                console.error(`❌ Error fetching target data for ${target.id}:`, error);
-                target.name = `Player ${target.id}`;
+                console.warn(`⚔️ Target ${target.id} update failed:`, error.message);
+                target.name = target.name || `Player ${target.id}`;
                 target.data = { error: error.message };
             }
         },
 
         // Start periodic status updates
         startStatusUpdates() {
-            // Update every 5 minutes
+            // Guard against double-arming from repeated init() (defense in
+            // depth for the init guard) (audit item 7).
+            this.stopStatusUpdates();
+
+            // Update every 5 minutes — but only when the sidebar is visible.
+            // The old loop polled every target in every list on every Torn
+            // page load even with the sidebar closed (audit item 7).
             this.updateInterval = setInterval(() => {
                 this.updateAllTargets();
             }, 300000); // 5 minutes
+            this.updateAllTargets(); // initial fetch
 
-            // Update display every second for countdown timers
+            // Display countdown refresh (1s): cheap targeted DOM updates only.
             this.displayUpdateInterval = setInterval(() => {
                 this.updateTimerDisplays();
-            }, 1000); // 1 second
+            }, 1000);
+        },
 
-            console.log('⚔️ Status updates started (5-minute interval)');
-            console.log('⚔️ Display timer updates started (1-second interval)');
+        // Stop periodic status updates
+        stopStatusUpdates() {
+            if (this.updateInterval) {
+                clearInterval(this.updateInterval);
+                this.updateInterval = null;
+            }
+            if (this.displayUpdateInterval) {
+                clearInterval(this.displayUpdateInterval);
+                this.displayUpdateInterval = null;
+            }
+        },
+
+        // True when the sidebar housing the attack lists is actually on
+        // screen. When it's closed there is nothing to refresh — skip both
+        // API polling and display work (audit item 7).
+        isAnyListVisible() {
+            const ui = window.SidekickModules?.UI;
+            if (ui && typeof ui.sidebarVisible === 'boolean' && !ui.sidebarVisible) return false;
+            // Direct DOM check covers the moment right before UI sets its flag
+            return !!document.querySelector('[id^="sidekick-attacklist-"]');
+        },
+
+        // Should this page drive API polling at all?
+        shouldPoll() {
+            return this.isAnyListVisible() && this.attackLists.some(al => al.targets.length > 0);
         },
 
         // Update all targets in all attack lists
         async updateAllTargets() {
-            console.log('⚔️ Updating all target statuses...');
+            if (!this.shouldPoll()) return;
 
             for (const attackList of this.attackLists) {
                 for (const target of attackList.targets) {
@@ -734,17 +840,37 @@
                     // Small delay to avoid API rate limits
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
-                this.renderTargets(attackList);
+                // Render list-by-list so partial progress shows even on error
+                if (this.isAnyListVisible()) this.renderTargets(attackList);
             }
 
             this.saveAttackLists();
-            console.log('✅ All targets updated');
         },
 
-        // Update only the timer displays without API calls
+        // Refresh ONLY the status/countdown text each second. The old code
+        // rebuilt every list's full innerHTML every second — wiping hover
+        // state and re-attaching all listeners continuously (audit item 7).
         updateTimerDisplays() {
+            if (!this.isAnyListVisible()) return;
+
+            const now = Math.floor(Date.now() / 1000);
             for (const attackList of this.attackLists) {
-                this.renderTargets(attackList);
+                for (const target of attackList.targets) {
+                    const row = document.querySelector(
+                        `[data-target-id="${target.id}"] .status-text`
+                    );
+                    if (!row || !target.data?.status) continue;
+
+                    const expected = this.renderTargetStatus(target);
+                    if (row.dataset.lastRender !== `${target.data.status.until || 0}|${now}`) {
+                        // Only rewrite when the rendered output actually
+                        // changed (formatTimeRemaining is second-granular).
+                        if (row.innerHTML !== expected) {
+                            row.innerHTML = expected;
+                        }
+                        row.dataset.lastRender = `${target.data.status.until || 0}|${now}`;
+                    }
+                }
             }
         },
 
@@ -753,72 +879,89 @@
             const header = element.querySelector('.attacklist-header');
             if (!header) return;
 
-            let isDragging = false;
-            let currentX = attackList.x || 0;
-            let currentY = attackList.y || 0;
-            let initialX;
-            let initialY;
-            let xOffset = currentX;
-            let yOffset = currentY;
-
-            header.addEventListener('mousedown', dragStart);
-            document.addEventListener('mousemove', drag);
-            document.addEventListener('mouseup', dragEnd);
-
-            function dragStart(e) {
-                if (e.target.closest('input') || e.target.closest('button') || attackList.pinned) return;
-
-                initialX = e.clientX - xOffset;
-                initialY = e.clientY - yOffset;
-
-                if (e.target === header || header.contains(e.target)) {
-                    isDragging = true;
-                    element.style.cursor = 'grabbing';
-                }
+            // (Audit item 7) ONE shared pair of document-level drag handlers
+            // drives whichever list is actively being dragged — the old code
+            // registered fresh document mousemove/mouseup listeners per
+            // rendered list and never removed them (leak per render/re-render).
+            if (!this._dragState) {
+                this._dragState = { active: null }; // { element, attackList, isDragging, initialX, initialY, currentX, currentY }
             }
 
-            function drag(e) {
-                if (isDragging) {
-                    e.preventDefault();
-                    currentX = e.clientX - initialX;
-                    currentY = e.clientY - initialY;
+            // Anchor for this element's drag sessions: dragging is relative
+            // to the list's persisted position.
+            const xOffset = attackList.x || 0;
+            const yOffset = attackList.y || 0;
 
-                    xOffset = currentX;
-                    yOffset = currentY;
+            header.addEventListener('mousedown', (e) => {
+                const st = this._dragState;
+                if (e.target.closest('input') || e.target.closest('button') || attackList.pinned) return;
+                if (!(e.target === header || header.contains(e.target))) return;
+
+                st.active = {
+                    element,
+                    attackList,
+                    isDragging: true,
+                    initialX: e.clientX - xOffset,
+                    initialY: e.clientY - yOffset,
+                    currentX: xOffset,
+                    currentY: yOffset,
+                };
+                element.style.cursor = 'grabbing';
+            });
+
+            if (!this._docDragHandlersInstalled) {
+                this._docDragHandlersInstalled = true;
+
+                const drag = (e) => {
+                    const st = this._dragState;
+                    const a = st.active;
+                    if (!a || !a.isDragging) return;
+
+                    const list = a.attackList;
+                    const el = a.element;
+                    e.preventDefault();
+
+                    // Reconstruct position from the mousedown anchor,
+                    // matching the original drag math.
+                    let currentX = e.clientX - a.initialX;
+                    let currentY = e.clientY - a.initialY;
 
                     const contentArea = document.getElementById('sidekick-content');
                     if (contentArea) {
                         const bounds = contentArea.getBoundingClientRect();
-                        const elementBounds = element.getBoundingClientRect();
+                        const elementBounds = el.getBoundingClientRect();
 
                         currentX = Math.max(0, Math.min(currentX, bounds.width - elementBounds.width));
                         currentY = Math.max(0, Math.min(currentY, bounds.height - elementBounds.height));
-
-                        xOffset = currentX;
-                        yOffset = currentY;
                     }
 
-                    element.style.left = currentX + 'px';
-                    element.style.top = currentY + 'px';
-                }
-            }
+                    a.currentX = currentX;
+                    a.currentY = currentY;
 
-            function dragEnd(e) {
-                if (isDragging) {
-                    isDragging = false;
-                    element.style.cursor = 'default';
+                    el.style.left = currentX + 'px';
+                    el.style.top = currentY + 'px';
+                };
 
-                    // Save position
-                    attackList.x = currentX;
-                    attackList.y = currentY;
-                    attackList.modified = new Date().toISOString();
+                const dragEnd = () => {
+                    const st = this._dragState;
+                    const a = st.active;
+                    if (a && a.isDragging) {
+                        a.isDragging = false;
+                        a.element.style.cursor = 'default';
 
-                    if (window.SidekickModules?.AttackList?.saveAttackLists) {
-                        window.SidekickModules.AttackList.saveAttackLists();
+                        // Save position
+                        a.attackList.x = a.currentX ?? a.attackList.x;
+                        a.attackList.y = a.currentY ?? a.attackList.y;
+                        a.attackList.modified = new Date().toISOString();
+                        this.saveAttackLists();
+
+                        st.active = null;
                     }
+                };
 
-                    console.log(`⚔️ Attack list position saved: x=${currentX}, y=${currentY}`);
-                }
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', dragEnd);
+                this._docDragHandlers = { drag, dragEnd };
             }
         },
 

@@ -266,16 +266,13 @@ const CrimeNotifierModule = {
 
     // Proxy an API call through the background service worker (avoids content-script fetch issues)
     async _proxyFetch(url) {
-        try {
-            const response = await chrome.runtime.sendMessage({ action: 'proxyFetch', url });
-            if (response && response.success) return response.data;
-            throw new Error(response?.error || 'Background fetch failed');
-        } catch (bgErr) {
-            console.warn('🚨 Background fetch failed, trying direct:', bgErr.message);
-            // Fallback to direct fetch
-            const r = await fetch(url);
-            return r.json();
-        }
+        // (Audit item 9) The old direct-fetch fallback leaked the API key
+        // into a page-visible URL whenever the background proxy failed —
+        // exactly the thing the proxy exists to prevent. Fail explicitly now;
+        // callers already degrade gracefully (skip the check this tick).
+        const response = await chrome.runtime.sendMessage({ action: 'proxyFetch', url });
+        if (response && response.success) return response.data;
+        throw new Error(response?.error || 'Background fetch failed');
     },
 
     // Check shoplifting security status
@@ -503,8 +500,13 @@ const CrimeNotifierModule = {
             return;
         }
 
-        const response = await fetch(`https://api.torn.com/torn/?selections=shoplifting&key=${apiKey}`);
-        const data = await response.json();
+        let data;
+        try {
+            data = await this._proxyFetch(`https://api.torn.com/torn/?selections=shoplifting&key=${apiKey}`);
+        } catch (e) {
+            console.warn('🔍 Shoplifting state fetch failed:', e.message);
+            return;
+        }
 
         console.log('🔍 Current Shoplifting Security State:');
         console.log('=====================================');

@@ -45,7 +45,7 @@ Shows the Bunker Buck value of weapons and armor right on market listings. Uses 
 
 Where to find it: Settings → Utility → OC Weights (toggleable from the toolbar popup) · On by default · Runs on the faction OC page
 
-Shows each organized-crime slot's weight percentage (the chance each role has of being succesfull in the crime) directly under the role slots, so your faction can spread members.
+Shows each organized-crime slot's weight percentage (the chance each role has of being picked for the crime) directly under the role slots, so your faction can spread members to beat slot competition. Pulls the freshest weights from tornprobability.com; every successful sync is cached locally (at most one fetch per day), so newly released OCs are learned after a single online fetch and keep working even if the third-party API goes down. A hard-coded table remains the instant fallback from a fresh install.
 
 ---
 
