@@ -4,6 +4,7 @@
 const pages = [
   {id:"overview", title:"Overview", file:"README.md", icon:"Assets/Icons/General.png", group:"Getting started"},
   {id:"installation", title:"Installation", file:"Installation.md", icon:"Assets/Icons/General.png", group:"Getting started"},
+  {id:"privacy", title:"Privacy Policy", file:"Privacy.md", icon:"Assets/Icons/General.png", group:"Getting started"},
   {id:"sidebar", title:"Sidebar Modules", file:"Sidebar%20Modules.md", icon:"Assets/Icons/Features.png", group:"Modules"},
   {id:"attack-war", title:"Attack & War", file:"Attack%20%26%20War.md", icon:"Assets/Icons/War.png", group:"Modules"},
   {id:"crimes", title:"Crimes", file:"Crimes.md", icon:"Assets/Icons/Crimes.png", group:"Modules"},
@@ -110,7 +111,8 @@ function addHeadingIds(){
 }
 
 function buildHero(){
-  const cards=pages.filter(page=>page.id!=="overview" && page.id!=="installation").map(page=>{
+  const hiddenPages=["overview","installation","privacy"];
+  const cards=pages.filter(page=>!hiddenPages.includes(page.id)).map(page=>{
     const description=moduleDescriptions[page.id]||"Documentation for this Sidekick module group.";
 
     return '<a class="module-card" href="#'+page.id+'">' +

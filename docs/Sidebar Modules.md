@@ -66,8 +66,9 @@ Historical record of your battle stats. The window (resizable, draggable) shows 
 
 Where to find it: no settings toggle · Lives in the sidebar (with a "Track" button on auction pages) · Open sidebar **+ → Auction Tracker**
 
-Track auction-house listings without bidding on them. Use the "Track" button Sidekick adds next to any auction listing to add it to a live window showing bidder counts, current price (with last-price color coding), time left, per-bidder profit calc, and category color coding. Auto-refreshes every 60 seconds.
+Display auction-house listings without bidding on them. Use the "Track" button Sidekick adds next to any auction listing to add it to a window showing bidder counts, last price , time left and category color coding. Also displays price history of said item.
 
+Does not track the listing live in the background, for price updating the user needs to be in the auction house to trigger due to API limitations! 
 ---
 
 *For modules that live on Torn's own pages, see the other catalogue pages.*

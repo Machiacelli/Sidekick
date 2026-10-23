@@ -22,6 +22,7 @@ Sidekick modules live in one of two places:
 | [Items & Inventory](https://machiacelli.github.io/Sidekick/#items-inventory)                    | Inventory Sorter, Loadout Switcher, Locked Items Manager, Weapon XP Tracker, Player ID Linker, Legible Player Names, Auction Weapon Bonus                                                                                              |
 | [Economy & Market](https://machiacelli.github.io/Sidekick/#economy-market)                      | Item Market Max Quantity, Price Filler, Bazaar Filler, Quick Deposit, Bunker Bucks, OC Weights, Debt Receipt Sharing                                                                                                                   |
 | [Travel, Utility & Reminders](https://machiacelli.github.io/Sidekick/#travel-utility-reminders) | Travel Blocker, Flight Tracker, Time on Tab, Refill Blocker, Racing Alert, Mission Tracker, Book Notifier, Event Notifier, Chat Alert, Chat Popout, Random Target, Easter Egg Helper, Halloween Helper, Christmas Helper, Bug Reporter |
+| [Privacy Policy](https://machiacelli.github.io/Sidekick/#privacy) | How Sidekick stores data, handles your Torn API key, and which third-party services its features may contact |
 
 ## Settings locations at a glance
 

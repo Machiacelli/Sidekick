@@ -37,7 +37,7 @@ Adds a **[DEPOSIT]** button inside the money display in Torn's sidebar. One clic
 
 Where to find it: Settings → Economy → Bunker Bucks (toggleable from the toolbar popup) · Off by default · Runs on the item market
 
-Shows the Bunker Buck value of weapons and armor right on market listings. Uses an accurate hard-coded table (Yellow/Orange/Red star ÷ by weapon class: pistol vs melee vs shotgun vs armor vs heavies) so you can compare bunker value against market sale price at a glance.
+Shows the Bunker Buck value of weapons and armor. Uses an accurate hard-coded table (Yellow/Orange/Red star ÷ by weapon class: pistol vs melee vs shotgun vs armor vs heavies) so you can compare bunker value against market sale price at a glance.
 
 ---
 

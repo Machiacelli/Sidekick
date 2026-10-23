@@ -209,6 +209,11 @@
 .sk-btn-ghost:hover{color:var(--text);}
 .sk-btn-danger{background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.25);color:#ff6b6b;}
 .sk-info{padding:10px 12px;background:rgba(33,150,243,.08);border-left:3px solid #2196F3;border-radius:0 8px 8px 0;font-size:11px;color:rgba(255,255,255,.65);line-height:1.5;margin-bottom:12px;}
+.sk-api-tos-wrap{overflow-x:auto;margin-bottom:8px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);}
+.sk-api-tos-table{border-collapse:collapse;width:100%;min-width:640px;font-size:10.5px;line-height:1.45;}
+.sk-api-tos-table th{background:var(--surface3);color:var(--text);font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+.sk-api-tos-table th,.sk-api-tos-table td{border:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top;}
+.sk-api-tos-table td{color:var(--muted);}
 .sk-ph{padding:36px 16px;text-align:center;background:var(--surface2);border:1px dashed var(--border2);border-radius:12px;margin-bottom:10px;}
 .sk-ph-icon{font-size:34px;margin-bottom:8px;display:block;}
 .sk-ph-title{font-size:13px;font-weight:600;color:rgba(255,255,255,.45);margin-bottom:3px;}
@@ -373,12 +378,37 @@
             <input type="password" class="sk-input" id="sidekick-api-key" placeholder="Enter your Torn API key..." style="flex:1;">
           </div>
           
-          <div class="sk-hint" style="margin-bottom:8px;">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a></div>
+          <div class="sk-hint" style="margin-bottom:8px;">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a> &middot; Documentation: <a href="https://www.torn.com/api.html" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/api.html</a></div>
+          <div class="sk-info" style="margin-bottom:12px;"><strong style="color:var(--text);">Tip:</strong> Sidekick works best with a higher access level key &mdash; more features become available as your key's access increases. Grant only the access you are comfortable with; Torn supports custom keys with only the selections you choose.</div>
           
           <div class="sk-btn-row">
             <button class="sk-btn sk-btn-primary" id="sidekick-test-api">Test Connection</button>
             <button class="sk-btn sk-btn-ghost" id="sidekick-show-key">Show Key</button>
           </div>
+          <div class="sk-sh">API Usage Disclosure</div>
+          <div class="sk-api-tos-wrap">
+            <table class="sk-api-tos-table">
+              <thead>
+                <tr>
+                  <th>Data Storage</th>
+                  <th>Data Sharing</th>
+                  <th>Purpose of Use</th>
+                  <th>Key Storage &amp; Sharing</th>
+                  <th>Key Access Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Persistent storage in the user's browser using Chrome extension storage. Some API responses may be cached temporarily in memory or locally.</td>
+                  <td>API requests are sent to Torn. Certain features may communicate with third-party services, such as YATA, TornProbability, Weav3r, TornWar, GitLab, or Sidekick's bug-reporting service.</td>
+                  <td>Provides gameplay tools, statistics, calculations, reminders, notifications, and other Sidekick features requested by the user.</td>
+                  <td>The Torn API key is stored locally in the user's browser and sent to Torn when required for API requests. It is not intentionally sent to Sidekick's bug-reporting service.</td>
+                  <td>Depends on the features used and the permissions granted to the API key. Users should grant only the minimum access required by their chosen features.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="sk-hint" style="margin-top:0;">Disclosure required by Torn's <a href="https://www.torn.com/api.html" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">API Terms of Service guidelines</a>. Full details in the <a href="https://machiacelli.github.io/Sidekick/#privacy" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">Sidekick Privacy Policy</a>.</div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-backup">
           <div class="sk-sh">Data Export &amp; Import</div>

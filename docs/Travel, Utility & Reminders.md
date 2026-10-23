@@ -138,6 +138,6 @@ Two quality-of-life toggles for Christmas Town: **Bigger window** enlarges the�
 
 🐛 **Bug Reporter**
 
-Where to find it: press **Ctrl+Shift+B** anywhere on Torn
+Where to find it: In the toolbar quick menu or press **Ctrl+Shift+B** anywhere on Torn
 
 Opens a small modal to send a bug report straight from the game into the Sidekick developers' Notion board — no Discord detour. Works on every Torn page.

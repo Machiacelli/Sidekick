@@ -13,7 +13,8 @@
     const AttackListModule = {
         isInitialized: false,
         attackLists: [],
-        updateInterval: null,
+        _polling: false,
+        POLL_SPACING_MS: 1500,
         displayUpdateInterval: null,
 
         // Initialize the attack list module
@@ -26,15 +27,8 @@
             console.log("⚔️ Initializing Attack List Module...");
 
             try {
-                // Clear any existing intervals
-                if (this.updateInterval) {
-                    clearInterval(this.updateInterval);
-                    this.updateInterval = null;
-                }
-                if (this.displayUpdateInterval) {
-                    clearInterval(this.displayUpdateInterval);
-                    this.displayUpdateInterval = null;
-                }
+                // Stop any poller/intervals left over from a previous init
+                this.stopStatusUpdates();
 
                 await this.loadAttackLists();
                 this.startStatusUpdates();
@@ -245,7 +239,7 @@
                                     font-size: 12px;
                                     transition: background 0.2s;
                                 ">
-                                    🎯 Add Target
+                                    Add Target
                                 </button>
                                 <button class="color-attacklist-btn" style="
                                     background: none;
@@ -258,7 +252,7 @@
                                     font-size: 12px;
                                     transition: background 0.2s;
                                 ">
-                                    🎨 Change Color
+                                    Change Color
                                 </button>
                                 <button class="pin-attacklist-btn" style="
                                     background: none;
@@ -271,7 +265,7 @@
                                     font-size: 12px;
                                     transition: background 0.2s;
                                 ">
-                                    ${attackList.pinned ? '📌 Unpin' : '📌 Pin'}
+                                    ${attackList.pinned ? 'Unpin' : 'Pin'}
                                 </button>
                             </div>
                         </div>
@@ -423,19 +417,19 @@
             // Hospital status (red with timer)
             if (data.status.state === 'Hospital') {
                 const timeLeft = data.status.until ? this.formatTimeRemaining(data.status.until) : '';
-                return `<span style="color: #f44336; font-weight: bold;">🏥 ${timeLeft}</span>`;
+                return `<span style="color: #f44336; font-weight: bold;">Hospital${timeLeft ? ' ' + timeLeft : ''}</span>`;
             }
 
             // Jail status (purple with timer)
             if (data.status.state === 'Jail') {
                 const timeLeft = data.status.until ? this.formatTimeRemaining(data.status.until) : '';
-                return `<span style="color: #9c27b0; font-weight: bold;">🔒 ${timeLeft}</span>`;
+                return `<span style="color: #9c27b0; font-weight: bold;">Jail${timeLeft ? ' ' + timeLeft : ''}</span>`;
             }
 
             // Flying status (blue with timer)
             if (data.status.state === 'Traveling') {
                 const timeLeft = data.status.until ? this.formatTimeRemaining(data.status.until) : '';
-                return `<span style="color: #2196f3; font-weight: bold;">✈️ ${timeLeft}</span>`;
+                return `<span style="color: #2196f3; font-weight: bold;">Traveling${timeLeft ? ' ' + timeLeft : ''}</span>`;
             }
 
             // Other statuses
@@ -447,7 +441,10 @@
             const now = Math.floor(Date.now() / 1000);
             const timeLeft = timestamp - now;
 
-            if (timeLeft <= 0) return 'Available';
+            // Countdown finished: return '' so only the state label shows —
+            // the next poll confirms the actual status (never claim
+            // "Available").
+            if (timeLeft <= 0) return '';
 
             const hours = Math.floor(timeLeft / 3600);
             const minutes = Math.floor((timeLeft % 3600) / 60);
@@ -738,7 +735,8 @@
             console.log('⚔️ Attack list deleted');
         },
 
-        // Update target status via API
+        // Update target status via API. Returns the Torn API error code
+        // when the API responds with an error (5 = rate limited), else null.
         async updateTargetStatus(target) {
             try {
                 // Get API key from settings
@@ -771,7 +769,8 @@
                 } else if (data && data.error) {
                     console.warn(`⚔️ API error for player ${target.id}:`, data.error.error, `(code ${data.error.code})`);
                     target.name = `Player ${target.id}`;
-                    target.data = { error: data.error.error || 'Unknown error' };
+                    target.data = { error: data.error.error || 'Unknown error', code: data.error.code };
+                    return data.error.code;
                 } else {
                     target.name = `Player ${target.id}`;
                     target.data = { error: 'No data available' };
@@ -781,6 +780,7 @@
                 target.name = target.name || `Player ${target.id}`;
                 target.data = { error: error.message };
             }
+            return null;
         },
 
         // Start periodic status updates
@@ -789,13 +789,12 @@
             // depth for the init guard) (audit item 7).
             this.stopStatusUpdates();
 
-            // Update every 5 minutes — but only when the sidebar is visible.
-            // The old loop polled every target in every list on every Torn
-            // page load even with the sidebar closed (audit item 7).
-            this.updateInterval = setInterval(() => {
-                this.updateAllTargets();
-            }, 300000); // 5 minutes
-            this.updateAllTargets(); // initial fetch
+            // Continuous rolling poller: one target at a time, in sequence,
+            // forever. A single loop means cycles can never overlap, and the
+            // loop notices a freshly opened sidebar within its 250ms idle
+            // granularity — no separate "refresh on open" hook needed.
+            this._polling = true;
+            this.pollLoop();
 
             // Display countdown refresh (1s): cheap targeted DOM updates only.
             this.displayUpdateInterval = setInterval(() => {
@@ -805,10 +804,7 @@
 
         // Stop periodic status updates
         stopStatusUpdates() {
-            if (this.updateInterval) {
-                clearInterval(this.updateInterval);
-                this.updateInterval = null;
-            }
+            this._polling = false;
             if (this.displayUpdateInterval) {
                 clearInterval(this.displayUpdateInterval);
                 this.displayUpdateInterval = null;
@@ -827,24 +823,53 @@
 
         // Should this page drive API polling at all?
         shouldPoll() {
+            // The tab must be focused: sidebar state syncs open across all
+            // Torn tabs, so without this check every open tab would run its
+            // own poller and multiply the API usage.
+            if (document.visibilityState !== 'visible') return false;
             return this.isAnyListVisible() && this.attackLists.some(al => al.targets.length > 0);
         },
 
-        // Update all targets in all attack lists
-        async updateAllTargets() {
-            if (!this.shouldPoll()) return;
-
-            for (const attackList of this.attackLists) {
-                for (const target of attackList.targets) {
-                    await this.updateTargetStatus(target);
-                    // Small delay to avoid API rate limits
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+        // Rolling poll loop. Fetches every target in sequence with
+        // POLL_SPACING_MS between requests, so the total budget is capped at
+        // ~60/1.5 = 40 calls/min (Torn allows 100/min per key) while each
+        // target's freshness is targets × (fetch + spacing) — seconds for
+        // typical lists instead of the old 5-minute burst interval.
+        async pollLoop() {
+            while (this._polling) {
+                if (!this.shouldPoll()) {
+                    await this._sleep(250);
+                    continue;
                 }
-                // Render list-by-list so partial progress shows even on error
-                if (this.isAnyListVisible()) this.renderTargets(attackList);
-            }
 
-            this.saveAttackLists();
+                let rateLimited = false;
+
+                cycle: for (const attackList of this.attackLists) {
+                    for (const target of attackList.targets) {
+                        if (!this.shouldPoll()) break cycle;
+                        const errorCode = await this.updateTargetStatus(target);
+                        if (errorCode === 5) {
+                            rateLimited = true;
+                            break cycle;
+                        }
+                        await this._sleep(this.POLL_SPACING_MS);
+                    }
+                    // Render list-by-list so partial progress shows even on error
+                    if (this.isAnyListVisible()) this.renderTargets(attackList);
+                }
+
+                if (rateLimited) {
+                    // Torn says we're going too fast — back off, don't hammer
+                    console.warn('⚔️ Torn API rate limit reached — attack list poller backing off 30s');
+                    await this._sleep(30000);
+                } else {
+                    this.saveAttackLists();
+                }
+            }
+        },
+
+        _sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         },
 
         // Refresh ONLY the status/countdown text each second. The old code
@@ -887,24 +912,28 @@
                 this._dragState = { active: null }; // { element, attackList, isDragging, initialX, initialY, currentX, currentY }
             }
 
-            // Anchor for this element's drag sessions: dragging is relative
-            // to the list's persisted position.
-            const xOffset = attackList.x || 0;
-            const yOffset = attackList.y || 0;
-
             header.addEventListener('mousedown', (e) => {
                 const st = this._dragState;
                 if (e.target.closest('input') || e.target.closest('button') || attackList.pinned) return;
                 if (!(e.target === header || header.contains(e.target))) return;
 
+                // Anchor to the element's CURRENT on-screen position, not the
+                // render-time snapshot: after a completed drag the persisted
+                // attackList.x/y is updated but this closure isn't, so a
+                // stale anchor teleports the window on the next drag.
+                const styleX = parseFloat(element.style.left);
+                const styleY = parseFloat(element.style.top);
+                const curX = Number.isFinite(styleX) ? styleX : (attackList.x || 0);
+                const curY = Number.isFinite(styleY) ? styleY : (attackList.y || 0);
+
                 st.active = {
                     element,
                     attackList,
                     isDragging: true,
-                    initialX: e.clientX - xOffset,
-                    initialY: e.clientY - yOffset,
-                    currentX: xOffset,
-                    currentY: yOffset,
+                    initialX: e.clientX - curX,
+                    initialY: e.clientY - curY,
+                    currentX: curX,
+                    currentY: curY,
                 };
                 element.style.cursor = 'grabbing';
             });
