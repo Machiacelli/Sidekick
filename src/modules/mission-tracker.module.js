@@ -11,22 +11,27 @@ const MissionTrackerModule = {
     STORAGE_KEY: 'mission-tracker',
     ICON_ID: 'sidekick-mission-tracker-icon',
     STYLES_ID: 'sidekick-mission-tracker-styles',
+    NOTIFIED_KEY: 'sidekick_mission_expiry_notified',
 
     // State
     isEnabled: false,
     openInNewTab: false,
     checkIntervalMinutes: 30,
+    expiryNotificationMinutes: 0,
 
     pollTimer: null,
     urgencyTimer: null,
     observer: null,
     activeMissions: null,
+    settingsLoaded: false,
+    expiryNotified: {},
 
     // ─── Init ────────────────────────────────────────────────────────────────
 
     async init() {
         console.log('🎯 Mission Tracker: initializing...');
         await this.loadSettings();
+        await this.loadNotifiedExpiries();
         await this.loadCachedMissions();
 
         if (this.isEnabled) {
@@ -62,6 +67,14 @@ const MissionTrackerModule = {
                 this.isEnabled = s.isEnabled || false;
                 this.openInNewTab = s.openInNewTab || false;
                 this.checkIntervalMinutes = s.checkIntervalMinutes || 5;
+                const newExpiryMins = s.expiryNotificationMinutes || 0;
+                if (this.settingsLoaded && newExpiryMins !== this.expiryNotificationMinutes) {
+                    this.expiryNotificationMinutes = newExpiryMins;
+                    this.clearExpiryNotifications();
+                } else {
+                    this.expiryNotificationMinutes = newExpiryMins;
+                }
+                this.settingsLoaded = true;
             }
         } catch (e) {
             console.error('🎯 Mission Tracker: failed to load settings:', e);
@@ -74,7 +87,8 @@ const MissionTrackerModule = {
             data[this.STORAGE_KEY] = {
                 isEnabled: this.isEnabled,
                 openInNewTab: this.openInNewTab,
-                checkIntervalMinutes: this.checkIntervalMinutes
+                checkIntervalMinutes: this.checkIntervalMinutes,
+                expiryNotificationMinutes: this.expiryNotificationMinutes
             };
             await window.SidekickModules.Core.ChromeStorage.set('sidekick_settings', data);
         } catch (e) {
@@ -86,7 +100,8 @@ const MissionTrackerModule = {
         try {
             const data = await window.SidekickModules.Core.ChromeStorage.get('sidekick_missions_cache');
             if (data && data.timestamp && (Date.now() - data.timestamp < 3600000)) { // 1 hour max cache age
-                this.activeMissions = data.missions || null;
+                const cached = (data.missions || []).filter(m => this.isMissionActive(m));
+                this.activeMissions = cached.length > 0 ? cached : null;
             }
         } catch (e) {
             console.error('🎯 Mission Tracker: failed to load cache:', e);
@@ -132,7 +147,10 @@ const MissionTrackerModule = {
         this.checkMissions();
         this.pollTimer = setInterval(() => this.checkMissions(), this.checkIntervalMinutes * 60 * 1000);
         this.urgencyTimer = setInterval(() => {
-            if (this.activeMissions?.length) this.showIcon(this.activeMissions);
+            if (this.activeMissions?.length) {
+                this.showIcon(this.activeMissions);
+                this.checkExpiryNotifications();
+            }
         }, 60000);
     },
 
@@ -145,6 +163,14 @@ const MissionTrackerModule = {
             clearInterval(this.urgencyTimer);
             this.urgencyTimer = null;
         }
+    },
+
+    // ─── Mission state ───────────────────────────────────────────────────────
+
+    isMissionActive(mission) {
+        // Only accepted, in-progress missions count as active
+        const s = (mission?.status || '').toLowerCase();
+        return s === 'accepted';
     },
 
     async checkMissions() {
@@ -166,14 +192,12 @@ const MissionTrackerModule = {
                 }
             });
 
-            const active = allMissions.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                return s !== 'completed' && s !== 'failed' && s !== 'declined';
-            });
+            const active = allMissions.filter(m => this.isMissionActive(m));
 
             if (active.length > 0) {
                 this.activeMissions = active;
                 this.showIcon(active);
+                this.checkExpiryNotifications();
             } else {
                 this.activeMissions = null;
                 this.removeIcon();
@@ -181,6 +205,101 @@ const MissionTrackerModule = {
             this.saveCachedMissions();
         } catch (e) {
             console.error('🎯 Mission Tracker: check failed:', e);
+        }
+    },
+
+    // ─── Expiry notifications ───────────────────────────────────────────────
+
+    getMissionKey(mission) {
+        const id = mission?.id ?? mission?.mission_id ?? mission?.contract_id;
+        return id != null ? String(id) : `${mission?.name || ''}|${mission?.status || ''}`;
+    },
+
+    async loadNotifiedExpiries() {
+        try {
+            const data = await window.SidekickModules.Core.ChromeStorage.get(this.NOTIFIED_KEY);
+            if (data && typeof data === 'object') {
+                this.expiryNotified = this.pruneNotifiedExpiries(data);
+            }
+        } catch (e) {
+            console.error('🎯 Mission Tracker: failed to load notified expiries:', e);
+        }
+    },
+
+    pruneNotifiedExpiries(entries) {
+        const cutoff = Date.now() - 7 * 86400000;
+        const out = {};
+        Object.entries(entries || {}).forEach(([key, ts]) => {
+            if (typeof ts === 'number' && ts > cutoff) out[key] = ts;
+        });
+        return out;
+    },
+
+    async saveNotifiedExpiries() {
+        try {
+            this.expiryNotified = this.pruneNotifiedExpiries(this.expiryNotified);
+            await window.SidekickModules.Core.ChromeStorage.set(this.NOTIFIED_KEY, this.expiryNotified);
+        } catch (e) {
+            console.error('🎯 Mission Tracker: failed to save notified expiries:', e);
+        }
+    },
+
+    async clearExpiryNotifications() {
+        this.expiryNotified = {};
+        await this.saveNotifiedExpiries();
+    },
+
+    async checkExpiryNotifications() {
+        if (!this.expiryNotificationMinutes || !this.activeMissions?.length) return;
+
+        const nowSeconds = Date.now() / 1000;
+        const thresholdSeconds = this.expiryNotificationMinutes * 60;
+        let changed = false;
+
+        for (const mission of this.activeMissions) {
+            const key = this.getMissionKey(mission);
+            if (this.expiryNotified[key]) continue;
+
+            const expiry = this.getMissionExpiry(mission);
+            if (expiry == null) continue;
+
+            const remaining = expiry - nowSeconds;
+            if (remaining > 0 && remaining <= thresholdSeconds) {
+                this.expiryNotified[key] = Date.now();
+                changed = true;
+                this.sendExpiryNotification(mission, remaining);
+            }
+        }
+
+        if (changed) this.saveNotifiedExpiries();
+    },
+
+    async sendExpiryNotification(mission, remainingSeconds) {
+        const timeText = this.formatTimeLeft(remainingSeconds);
+        const name = mission?.name || 'A mission';
+        const title = 'Mission ends soon';
+        const message = `${name} ends in ${timeText}.`;
+
+        if (window.NotificationCenter) {
+            NotificationCenter.emit({
+                moduleId: 'mission-tracker',
+                type: 'warning',
+                title,
+                message
+            });
+        }
+
+        try {
+            const prefs = await window.SidekickModules.Core.ChromeStorage.get('sidekick_notification_prefs') || {};
+            if (prefs.windowsNotifications === true) {
+                await chrome.runtime.sendMessage({
+                    action: 'notification',
+                    title: `⏰ ${title}`,
+                    message
+                });
+            }
+        } catch (e) {
+            console.warn('🎯 Mission Tracker: system notification failed:', e);
         }
     },
 

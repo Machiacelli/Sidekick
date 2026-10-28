@@ -102,6 +102,7 @@
                 "src/modules/rehab-warning.module.js",
                 "src/modules/merit-calculator.module.js",
                 "src/modules/halloween-helper.module.js",
+                "src/modules/halloween-treat-counter.module.js",
                 "src/modules/christmas-helper.module.js",
                 "src/modules/hustling-helper.module.js",
                 "src/modules/trade-assistant.module.js",

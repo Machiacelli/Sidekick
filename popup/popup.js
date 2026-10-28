@@ -88,6 +88,7 @@
         { id: 'event-calendar', name: 'Event Calendar', category: 'Events', storageKey: 'sidekick_settings', subKey: 'event-calendar', defaultEnabled: false },
         { id: 'easter-helper', name: 'Easter Egg Helper', category: 'Events', storageKey: 'sidekick_egg_helper', defaultEnabled: false },
         { id: 'halloween-helper', name: 'Halloween Helper', category: 'Events', storageKey: 'sidekick_halloween', defaultEnabled: false },
+        { id: 'halloween-treat-counter', name: 'Halloween Treat Counter', category: 'Events', storageKey: 'sidekick_halloween_treats', defaultEnabled: false },
         { id: 'christmas-zoom', name: 'Christmas Zoom', category: 'Events', storageKey: 'sidekick_settings', subKey: 'christmas_zoom', defaultEnabled: false },
         { id: 'christmas-beers', name: 'Christmas Beer Counter', category: 'Events', storageKey: 'sidekick_settings', subKey: 'christmas_beers', defaultEnabled: false },
 

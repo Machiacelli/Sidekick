@@ -929,7 +929,20 @@
     <div class="sk-sec-page" id="skp-missions">
       <div class="sk-scroll">
         <div class="sk-sh">Mission &amp; Book Tracking</div>
-        <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Mission Tracker</div><div class="sk-row-desc">Tracks if there is an active mission and displays an icon</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-mission-tracker"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        <div class="sk-row" style="align-items:flex-start;gap:12px;"><div class="sk-row-info"><div class="sk-row-title">Mission Tracker</div><div class="sk-row-desc">Tracks if there is an active mission and displays an icon</div><div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-missiontracker" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div></div><label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-mission-tracker"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+        <div class="sk-shelf" id="skp-shelf-missiontracker" style="display:none; margin-bottom:10px;">
+          <label class="sk-field-label" style="margin-top:10px;">Expiry Notification</label>
+          <select class="sk-select" id="skp-mission-expiry-notify">
+            <option value="0" selected>Disabled</option>
+            <option value="15">15 minutes before mission ends</option>
+            <option value="30">30 minutes before mission ends</option>
+            <option value="60">1 hour before mission ends</option>
+            <option value="360">6 hours before mission ends</option>
+            <option value="720">12 hours before mission ends</option>
+            <option value="1440">24 hours before mission ends</option>
+          </select>
+          <div class="sk-hint">Shows a notification when an accepted mission is about to end</div>
+        </div>
         <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Book Notifier</div><div class="sk-row-desc">Displays an icon when you have unclaimed book rewards</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-book-notifier"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
       </div>
     </div>
@@ -995,6 +1008,7 @@
             <div id="skp-halloween-targets-list" style="margin-bottom:10px;"></div>
             <button class="sk-btn sk-btn-primary" id="skp-btn-open-halloween" style="width:auto; margin:0 auto; display:block; padding:4px 10px; font-size:10px;">Open in a new window</button>
           </div>
+          <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Treat Counter</div><div class="sk-row-desc">Show your Halloween basket treat balance and event total on the attack page (requires your Sidekick API key, Limited Access for the balance)</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-halloween-treats"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-ev-christmas">
           <div class="sk-sh">Christmas</div>
@@ -2176,6 +2190,7 @@
                 ['#skp-tog-event-notifier', 'sidekick_event_notifier', null, false],
                 ['#skp-tog-easter', 'sidekick_egg_helper', null, false],
                 ['#skp-tog-halloween', 'sidekick_halloween', null, false],
+                ['#skp-tog-halloween-treats', 'sidekick_halloween_treats', null, false],
                 ['#skp-tog-christmas-zoom', 'sidekick_settings', 'christmas_zoom', false],
                 ['#skp-tog-christmas-beers', 'sidekick_settings', 'christmas_beers', false],
                 // Medical
@@ -4356,6 +4371,18 @@
                 });
             }
 
+            const expirySelect = panel.querySelector('#skp-mission-expiry-notify');
+            if (expirySelect) {
+                expirySelect.addEventListener('change', async () => {
+                    if (window.SidekickModules.MissionTracker) {
+                        const mins = parseInt(expirySelect.value, 10) || 0;
+                        window.SidekickModules.MissionTracker.expiryNotificationMinutes = mins;
+                        await window.SidekickModules.MissionTracker.saveSettings();
+                        await window.SidekickModules.MissionTracker.clearExpiryNotifications();
+                    }
+                });
+            }
+
             // Load current values
             this.loadMissionTrackerSettings(panel);
         },
@@ -4367,11 +4394,13 @@
                 const intervalSlider = panel.querySelector('#mission-tracker-interval');
                 const intervalDisplay = panel.querySelector('#mission-tracker-interval-display');
                 const newTabCheck = panel.querySelector('#mission-tracker-newtab');
+                const expirySelect = panel.querySelector('#skp-mission-expiry-notify');
                 const mins = s.checkIntervalMinutes || 30;
                 if (intervalSlider) intervalSlider.value = mins;
                 const label = mins >= 60 ? (mins % 60 === 0 ? (mins / 60) + 'h' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm') : mins + ' min';
                 if (intervalDisplay) intervalDisplay.textContent = label;
                 if (newTabCheck) newTabCheck.checked = s.openInNewTab || false;
+                if (expirySelect) expirySelect.value = String(s.expiryNotificationMinutes || 0);
             } catch (e) {
                 console.error('Failed to load Mission Tracker settings:', e);
             }
