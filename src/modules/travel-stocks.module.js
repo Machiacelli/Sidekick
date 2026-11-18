@@ -588,6 +588,7 @@ const TravelStocksModule = {
                     <button class="travel-refresh-btn">Refresh</button>
                     <span class="travel-meta"></span>
                 </div>
+                <div class="travel-table-wrap">
                     <table class="travel-table">
                         <thead>
                             <tr>
@@ -602,6 +603,7 @@ const TravelStocksModule = {
                             <tr><td colspan="5" class="travel-loading">Click Refresh to load data</td></tr>
                         </tbody>
                     </table>
+                </div>
                 </div>
             </div>
         `;

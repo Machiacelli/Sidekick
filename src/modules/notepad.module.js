@@ -97,9 +97,6 @@
                 this.notepads = stored || [];
                 console.log(`📝 Loaded ${this.notepads.length} notepads`);
 
-                // Refresh display after loading
-                this.refreshDisplay();
-
             } catch (error) {
                 console.error('Failed to load notepads:', error);
                 console.error('Error stack:', error.stack);
@@ -164,7 +161,7 @@
         },
 
         // Create a new notepad window in the sidebar
-        addNotepad(title = 'New Note') {
+        addNotepad: async function (title = 'New Note') {
             console.log('📝 Adding new notepad:', title);
 
             const contentArea = document.getElementById('sidekick-content');
@@ -187,7 +184,7 @@
             };
 
             this.notepads.push(notepad);
-            this.saveNotepads();
+            await this.saveNotepads();
 
             // Render the new notepad window
             this.renderNotepad(notepad);
@@ -196,8 +193,7 @@
                 window.SidekickModules.Core.NotificationSystem.show(
                     'Notepad',
                     'New notepad created',
-                    'info',
-                    2000
+                    'info'
                 );
             }
 
@@ -227,6 +223,16 @@
                 // Remove from DOM
                 const element = document.querySelector(`[data-notepad-id="${id}"]`);
                 if (element) {
+                    // Disconnect ResizeObserver to prevent leak
+                    if (element._notepadResizeObserver) {
+                        element._notepadResizeObserver.disconnect();
+                        element._notepadResizeObserver = null;
+                    }
+                    // Remove document-level dropdown click listener to prevent leak
+                    if (element._notepadDropdownListener) {
+                        document.removeEventListener('click', element._notepadDropdownListener);
+                        element._notepadDropdownListener = null;
+                    }
                     element.remove();
                     console.log('📝 Removed notepad element from DOM');
                 }
@@ -243,8 +249,7 @@
                     window.SidekickModules.Core.NotificationSystem.show(
                         'Notepad',
                         'Notepad deleted',
-                        'success',
-                        2000
+                        'success'
                     );
                 }
 
@@ -572,12 +577,10 @@
                             1000
                         );
                     }
-                    this.saveNotepads();
+                    await this.saveNotepads();
                 };
 
                 editor.addEventListener('input', saveContent);
-
-                // Placeholder simulation for contenteditable
                 const updatePlaceholder = () => {
                     if (editor.innerHTML === '' || editor.innerHTML === '<br>') {
                         editor.dataset.empty = 'true';
@@ -651,9 +654,13 @@
                 });
 
                 // Close dropdown when clicking outside
-                document.addEventListener('click', () => {
+                const closeDropdownOnClick = () => {
                     dropdownContent.style.display = 'none';
-                });
+                };
+                document.addEventListener('click', closeDropdownOnClick);
+
+                // Store reference for cleanup
+                notepadElement._notepadDropdownListener = closeDropdownOnClick;
             }
 
             // Pin functionality
@@ -735,7 +742,7 @@
                             );
                         }
 
-                        this.saveNotepads();
+                        await this.saveNotepads();
                     }
                 });
             }
@@ -762,13 +769,16 @@
                                 );
                             }
 
-                            this.saveNotepads();
+                            await this.saveNotepads();
                             console.log(`📏 Saved notepad '${notepad.name}' size: ${notepad.width}x${notepad.height}`);
                         }, 500);
                     }
                 }
             });
             resizeObserver.observe(notepadElement);
+
+            // Store observer reference for cleanup on removal
+            notepadElement._notepadResizeObserver = resizeObserver;
         },
 
         // Show color picker for notepad

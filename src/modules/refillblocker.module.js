@@ -159,8 +159,7 @@ const RefillBlockerModule = (() => {
                 window.SidekickModules.Core.NotificationSystem.show(
                     'Refill Blocked',
                     `${barType} is not empty! Uncheck safety to refill anyway.`,
-                    'warning',
-                    3000
+                    'warning'
                 );
             }
         },

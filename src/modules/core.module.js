@@ -27,44 +27,81 @@
     // === NOTIFICATION SYSTEM ===
     const NotificationSystem = {
         notifications: [], // Track active notifications
+        pendingMessages: new Set(), // Messages currently being prepared (duplicate guard)
         baseTop: 20, // Fixed top position for new notifications
         minSpacing: 15, // Minimum spacing between notifications
+        DEFAULT_DURATION: 5000, // Fallback when the user has no valid duration preference
+        MIN_DURATION: 1000, // 1 second — slider minimum
+        MAX_DURATION: 10000, // 10 seconds — slider maximum
 
         // Read user prefs once per show() — cheap (storage is local) and always fresh
         async getPrefs() {
             try {
-                return (await ChromeStorage.get('sidekick_notification_prefs')) || {};
+                const prefs = await ChromeStorage.get('sidekick_notification_prefs');
+                return (prefs && typeof prefs === 'object') ? prefs : {};
             } catch (e) {
                 return {};
             }
         },
 
-        // show(title, message, type, duration) — regular toast.
-        // Resolution order for duration: explicit arg > stored pref > 4000ms default.
-        // If autoDismiss pref is false and no explicit duration arg given, the
-        // toast stays until clicked (sticky / acknowledge-required).
-        // opts: { sticky: true } — force sticky regardless of prefs (used by
-        // acknowledge-required alerts like the event notifier).
-        async show(title, message, type = 'info', duration, opts = {}) {
+        // Clamp a duration in milliseconds into the supported 1-10 second range.
+        // Returns null for missing, zero, negative or non-numeric values.
+        clampDuration(value) {
+            const ms = Number(value);
+            if (!Number.isFinite(ms) || ms <= 0) return null;
+            return Math.min(this.MAX_DURATION, Math.max(this.MIN_DURATION, Math.round(ms)));
+        },
+
+        // Duration resolution: explicit options.duration > stored user preference > default.
+        resolveDuration(prefs, opts = {}) {
+            const explicit = this.clampDuration(opts.duration);
+            if (explicit !== null) return explicit;
+            const stored = this.clampDuration(prefs?.duration);
+            if (stored !== null) return stored;
+            return this.DEFAULT_DURATION;
+        },
+
+        // Auto-dismiss follows the user preference; options.sticky keeps a
+        // notification on screen until it is clicked.
+        resolveAutoDismiss(prefs, opts = {}) {
+            if (opts.sticky === true) return false;
+            return prefs.autoDismiss !== false;
+        },
+
+        // show(title, message, type, options) — regular toast.
+        // options: { duration, sticky, onClick }
+        // The duration saved in the notification preferences controls how long a
+        // toast stays visible; only an explicit options.duration overrides it.
+        async show(title, message, type = 'info', options = {}) {
+            const opts = (options && typeof options === 'object' && !Array.isArray(options))
+                ? { ...options }
+                : {};
+
+            const messageText = (message === undefined || message === null) ? '' : String(message);
+
             // Prevent duplicate notifications with same message
-            const existingNotification = this.notifications.find(n =>
-                n.element && n.element.textContent.includes(message)
+            const existingNotification = messageText !== '' && this.notifications.some(n =>
+                n.element && n.element.textContent.includes(messageText)
             );
-            if (existingNotification) {
-                console.log('🔔 Duplicate notification prevented:', message);
+            if (existingNotification || this.pendingMessages.has(messageText)) {
+                console.log('🔔 Duplicate notification prevented:', messageText);
                 return;
             }
+            this.pendingMessages.add(messageText);
 
-            const prefs = await this.getPrefs();
+            let prefs;
+            try {
+                prefs = await this.getPrefs();
+            } finally {
+                this.pendingMessages.delete(messageText);
+            }
 
             // Play notification sound if enabled
             this.playNotificationSound();
 
-            // Decide whether this notification auto-dismisses
-            let autoDismiss = prefs.autoDismiss !== false; // default true
-            let finalDuration = typeof duration === 'number' ? duration : (prefs.duration || 4000);
-            if (duration === undefined && prefs.autoDismiss === false) autoDismiss = false;
-            if (opts.sticky) autoDismiss = false;
+            // Decide whether this notification auto-dismisses and for how long
+            const autoDismiss = this.resolveAutoDismiss(prefs, opts);
+            const finalDuration = this.resolveDuration(prefs, opts);
 
             const notification = document.createElement('div');
             notification.className = `sidekick-notification ${type}`;
@@ -110,6 +147,13 @@
 
             // Add click to dismiss functionality
             notification.addEventListener('click', () => {
+                if (typeof opts.onClick === 'function') {
+                    try {
+                        opts.onClick(notification);
+                    } catch (error) {
+                        console.error('🔔 Notification click handler failed:', error);
+                    }
+                }
                 this.removeNotification(notificationId);
             });
 
@@ -122,17 +166,22 @@
             });
 
             // Add new notification to array
-            this.notifications.push({
+            const record = {
                 id: notificationId,
                 element: notification,
-                position: newPosition
-            });
+                position: newPosition,
+                dismissTimer: null,
+                removalTimer: null,
+                removing: false
+            };
+            this.notifications.push(record);
 
             // Auto remove with repositioning — only when auto-dismiss is active.
             // Sticky notifications (opts.sticky or autoDismiss pref off) stay
             // until clicked (acknowledge-required behaviour).
             if (autoDismiss) {
-                setTimeout(() => {
+                record.dismissTimer = setTimeout(() => {
+                    record.dismissTimer = null;
                     this.removeNotification(notificationId);
                 }, finalDuration);
             } else {
@@ -177,13 +226,23 @@
             if (notificationIndex === -1) return;
 
             const notification = this.notifications[notificationIndex];
+            if (notification.removing) return;
+            notification.removing = true;
+
+            // Cancel the pending auto-dismiss timer — it must not fire for a
+            // notification that was already dismissed by a click.
+            if (notification.dismissTimer) {
+                clearTimeout(notification.dismissTimer);
+                notification.dismissTimer = null;
+            }
 
             // Animate out
             if (notification.element && notification.element.parentNode) {
                 notification.element.style.transform = 'translateX(100%)';
                 notification.element.style.opacity = '0';
 
-                setTimeout(() => {
+                notification.removalTimer = setTimeout(() => {
+                    notification.removalTimer = null;
                     if (notification.element && notification.element.parentNode) {
                         notification.element.parentNode.removeChild(notification.element);
                     }
@@ -233,6 +292,14 @@
         // Clear all existing notifications
         clearAll() {
             this.notifications.forEach(notification => {
+                if (notification.dismissTimer) {
+                    clearTimeout(notification.dismissTimer);
+                    notification.dismissTimer = null;
+                }
+                if (notification.removalTimer) {
+                    clearTimeout(notification.removalTimer);
+                    notification.removalTimer = null;
+                }
                 if (notification.element && notification.element.parentNode) {
                     notification.element.parentNode.removeChild(notification.element);
                 }
@@ -496,8 +563,10 @@
                             'Extension Connection Lost',
                             'Some features may not work. Click to refresh page.',
                             'warning',
-                            0,
-                            () => { window.location.reload(); }
+                            {
+                                sticky: true,
+                                onClick: () => { window.location.reload(); }
+                            }
                         );
                     }
                 }
@@ -509,8 +578,7 @@
                     window.SidekickModules.Core.NotificationSystem.show(
                         'Extension Reconnected',
                         'Extension connection has been restored.',
-                        'success',
-                        3000
+                        'success'
                     );
                 }
             }
@@ -610,8 +678,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Connection Restored',
                                 'Extension connection has been restored.',
-                                'success',
-                                3000
+                                'success'
                             );
                         }
                     }
@@ -667,8 +734,10 @@
                     'Extension Connection Lost',
                     'Extension needs to reconnect. Click here to refresh the page.',
                     'error',
-                    0, // No auto-dismiss
-                    () => { window.location.reload(); }
+                    {
+                        sticky: true,
+                        onClick: () => { window.location.reload(); }
+                    }
                 );
             } else {
                 // Fallback notification if NotificationSystem isn't available
@@ -1083,9 +1152,9 @@
                 sessionStorage.setItem('sidekick_api_alert_shown', '1');
                 setTimeout(() => {
                     if (window.SidekickModules.UI?.showNotification) {
-                        window.SidekickModules.UI.showNotification('Sidekick Needs an API Key', 'Most features require an API key to work correctly.', 'warning', 6000);
+                        window.SidekickModules.UI.showNotification('Sidekick Needs an API Key', 'Most features require an API key to work correctly.', 'warning');
                     } else {
-                        NotificationSystem.show('Sidekick Needs an API Key', 'Most features require an API key to work correctly.', 'warning', 6000);
+                        NotificationSystem.show('Sidekick Needs an API Key', 'Most features require an API key to work correctly.', 'warning');
                     }
                 }, 2000);
             }

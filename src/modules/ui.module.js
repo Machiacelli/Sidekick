@@ -1440,7 +1440,7 @@
 
             // Use Core notification system if available
             if (window.SidekickModules?.Core?.NotificationSystem) {
-                window.SidekickModules.Core.NotificationSystem.show(title, message, type, 3000);
+                window.SidekickModules.Core.NotificationSystem.show(title, message, type);
             }
         },
 

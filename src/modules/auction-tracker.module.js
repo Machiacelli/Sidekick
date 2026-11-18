@@ -92,6 +92,17 @@
         return s.trim();
     }
 
+    // Books cannot be sold on the Torn Auction House (they are consumed on
+    // use / traded directly), so they have no sale history to display.
+    // Torn book item IDs are 744–787; also match names starting with "Book:".
+    function isBookItem(seed) {
+        if (!seed) return false;
+        const id = Number(seed.itemId);
+        if (Number.isFinite(id) && id >= 744 && id <= 787) return true;
+        const name = String(seed.name || '');
+        return /^book:/i.test(name.trim());
+    }
+
     // Harvest one auction row. Live data comes from the page itself: Torn's
     // API only publishes COMPLETED auction sales, so active auctions have no
     // API representation to poll — the card is seeded here and re-seeded by
@@ -400,7 +411,7 @@
             if (!this._sales) this._sales = {};
             const ledger = this._sales[itemId];
             if (!force && ledger?.lastSync && Date.now() - ledger.lastSync < LEDGER_SYNC_MS) return true;
-            if (this._ledgerSyncing?.has(itemId)) return true; // a walk is running — render partial data
+            if (this._ledgerSyncing?.has(itemId)) return true;
             if (!this._ledgerSyncing) this._ledgerSyncing = new Set();
             this._ledgerSyncing.add(itemId);
 
@@ -409,14 +420,14 @@
                 let to = Math.floor(Date.now() / 1000);
                 for (let page = 0; page < LEDGER_MAX_PAGES; page++) {
                     const entries = await this._fetchItemSales(itemId, 0, to);
-                    if (entries === null) return false; // no API key
+                    if (entries === null) return false;
                     if (!entries.length) break;
                     this._ingestSales(itemId, entries);
                     if (onProgress) onProgress(page + 1, this._sales[itemId]?.records?.length || 0);
                     const pageOldest = Math.min(...entries.map(s => s.timestamp));
-                    if (oldestStored != null && pageOldest <= oldestStored) break; // reached known data
-                    if (entries.length < 100) break;                                // end of archive
-                    if (pageOldest >= to) break;                                    // no progress guard
+                    if (oldestStored != null && pageOldest <= oldestStored) break;
+                    if (entries.length < 100) break;
+                    if (pageOldest >= to) break;
                     to = pageOldest;
                     await new Promise(r => setTimeout(r, LEDGER_PAGE_GAP_MS));
                 }
@@ -515,9 +526,25 @@
                 .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
             const wantR = seed?.rarity || null;
 
-            // No bonus data = no variant. A rarity-only median is meaningless
-            // for pricing (different bonuses sell for wildly different amounts).
-            if (!wantB.length) return { variant: null, recent: [] };
+            // No bonus data (collectibles — keepsakes, masks, clothing):
+            // fall back to an item-level median across ALL sales of this
+            // itemId, regardless of bonuses/rolls. DOM rarity (e.g. 'red'
+            // from glow class) may not match Torn's API rarity string, so
+            // if a rarity filter yields nothing, fall back to all records.
+            if (!wantB.length) {
+                let pooled = ledger;
+                if (wantR) {
+                    const rarityFiltered = ledger.filter(r => r.r === wantR);
+                    if (rarityFiltered.length) pooled = rarityFiltered;
+                }
+                if (!pooled.length) return { variant: null, recent: [] };
+                const st = this._statsOf(pooled);
+                if (!st) return { variant: null, recent: [] };
+                st.window = 'all time';
+                st.band = VARIANT_VALUE_BAND;
+                st.itemLevel = true;
+                return { variant: st, recent: [] };
+            }
 
             const nowSec = Date.now() / 1000;
             const windows = [
@@ -587,7 +614,21 @@
                 if (tier) primaryBonusOnly = true;
             }
 
-            if (!tier) return { variant: null, recent: [] };
+            // No bonus match found: fall back to item-level median across
+            // ALL sales of this itemId (collectibles / unmatched bonuses).
+            if (!tier) {
+                const pooled = wantR ? ledger.filter(r => r.r === wantR) : ledger;
+                if (pooled.length) {
+                    const st = this._statsOf(pooled);
+                    if (st) {
+                        st.window = 'all time';
+                        st.band = VARIANT_VALUE_BAND;
+                        st.itemLevel = true;
+                        return { variant: st, recent: [] };
+                    }
+                }
+                return { variant: null, recent: [] };
+            }
 
             const recent = tier.rows.slice().sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 5)
                 .map(r => ({
@@ -631,7 +672,7 @@
         // the item's ledger (first click backfills full history with a
         // progress line), then renders variant/rarity/item medians and the
         // current ask vs the best available median.
-        async _showHistoryPopover(anchor, seed) {
+        async _showHistoryPopover(anchor, seed, force = false) {
             if (!seed?.itemId) return;
             this._closeHistoryPopover();
 
@@ -640,6 +681,7 @@
             pop.innerHTML = `
                 <div class="ska-hist-head">
                     <span class="ska-hist-title">${this._esc(seed.name || 'Item history')}</span>
+                    <button class="ska-hist-refresh" title="Force refresh sale history">↻</button>
                     <button class="ska-hist-close" title="Close">×</button>
                 </div>
                 <div class="ska-hist-body">
@@ -648,15 +690,32 @@
             document.body.appendChild(pop);
             this._histPop = pop;
             pop.querySelector('.ska-hist-close').addEventListener('click', () => this._closeHistoryPopover());
+            pop.querySelector('.ska-hist-refresh').addEventListener('click', async ev => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                const btn = ev.currentTarget;
+                const orig = btn.textContent;
+                btn.textContent = '⟳';
+                await this._showHistoryPopover(anchor, seed, true);
+                btn.textContent = orig;
+            });
             this._histOutside = ev => {
                 if (this._histPop && !this._histPop.contains(ev.target)) this._closeHistoryPopover();
             };
             setTimeout(() => document.addEventListener('mousedown', this._histOutside), 50);
             this._placePopover(pop, anchor);
 
+            // Keep the popover clamped to the button's corner while scrolling
+            this._histAnchor = anchor;
+            this._histScroll = () => {
+                if (!this._histPop) return;
+                requestAnimationFrame(() => this._placePopover(this._histPop, this._histAnchor));
+            };
+            window.addEventListener('scroll', this._histScroll, { passive: true });
+
             const body = pop.querySelector('.ska-hist-body');
-            const ok = await this._ensureItemHistory(seed.itemId, false, (pages, total) => {
-                body.innerHTML = `<div class="ska-hist-loading">Building sale history… ${pages} page${pages !== 1 ? 's' : ''} · ${total} sales</div>`;
+            const ok = await this._ensureItemHistory(seed.itemId, force, (pages, total) => {
+                body.innerHTML = `<div class="ska-hist-loading">${force ? 'Refreshing…' : 'Building sale history…'} ${pages} page${pages !== 1 ? 's' : ''} · ${total} sales</div>`;
             });
             if (this._histPop !== pop) return; // closed while syncing
 
@@ -672,14 +731,6 @@
             const stats = this._variantStats(seed.itemId, seed);
             const variant = stats?.variant || null;
 
-            // No bonus data means the variant match degenerated to rarity-only —
-            // which is meaningless for pricing. Refuse to show a number.
-            const hasBonus = (seed.bonuses || []).length > 0;
-            if (!hasBonus) {
-                body.innerHTML = `<div class="ska-hist-loading">Could not read this item's bonus from the page.<br>Open the item in the Auction House and try again.</div>`;
-                return;
-            }
-
             if (!variant) {
                 body.innerHTML = `<div class="ska-hist-loading">No completed sales of this exact bonus and roll recorded yet.<br>New sales appear here as they happen.</div>`;
                 return;
@@ -690,11 +741,13 @@
             body.innerHTML = this._histRowHtml('This variant', variant, sub, stats?.recent || []);
 
             const conf = variant.n < 5 ? 'indicative — few sales' : variant.n < 10 ? 'fair sample' : 'solid sample';
-            const bandLabel = variant.unknownRoll
-                ? 'all rolls of this bonus'
-                : variant.primaryBonusOnly
-                    ? 'primary bonus only'
-                    : variant.band === 0 ? 'exact roll' : variant.band === 1 ? '±1% roll' : '±3% roll';
+            const bandLabel = variant.itemLevel
+                ? 'all sales of this item'
+                : variant.unknownRoll
+                    ? 'all rolls of this bonus'
+                    : variant.primaryBonusOnly
+                        ? 'primary bonus only'
+                        : variant.band === 0 ? 'exact roll' : variant.band === 1 ? '±1% roll' : '±3% roll';
             const verdictEl = document.createElement('div');
             verdictEl.className = 'ska-hist-verdict';
             const v = seed.price != null ? this._priceVerdict(seed.price, variant.median) : null;
@@ -710,9 +763,11 @@
 
         _histRowHtml(label, st, sub = '', recent = []) {
             const conf = st.n < 5 ? 'indicative' : st.n < 10 ? 'fair' : 'solid';
-            const bandLabel = st.unknownRoll
-                ? 'all rolls of this bonus'
-                : st.band === 0 ? 'exact roll' : st.band === 1 ? '±1% roll' : '±3% roll';
+            const bandLabel = st.itemLevel
+                ? 'all sales of this item'
+                : st.unknownRoll
+                    ? 'all rolls of this bonus'
+                    : st.band === 0 ? 'exact roll' : st.band === 1 ? '±1% roll' : '±3% roll';
             const rows = recent.map(r => `
                     <div class="ska-hist-sale">
                         <span class="ska-hist-sale-price">$${Number(r.p).toLocaleString()}</span>
@@ -748,6 +803,11 @@
         },
 
         _closeHistoryPopover() {
+            if (this._histScroll) {
+                window.removeEventListener('scroll', this._histScroll);
+                this._histScroll = null;
+            }
+            this._histAnchor = null;
             this._histPop?.remove();
             this._histPop = null;
             if (this._histOutside) {
@@ -1318,17 +1378,19 @@ min-height: 120px;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            #ska-hist-pop .ska-hist-close {
+            #ska-hist-pop .ska-hist-close { color: rgba(255,255,255,.45); font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; font-family: inherit; }
+            #ska-hist-pop .ska-hist-close:hover { color: #ef4444; }
+            #ska-hist-pop .ska-hist-refresh {
                 background: none;
                 border: none;
                 color: rgba(255,255,255,.45);
-                font-size: 16px;
+                font-size: 14px;
                 cursor: pointer;
                 line-height: 1;
                 padding: 0 2px;
                 font-family: inherit;
             }
-            #ska-hist-pop .ska-hist-close:hover { color: #ef4444; }
+            #ska-hist-pop .ska-hist-refresh:hover { color: #60a5fa; }
             #ska-hist-pop .ska-hist-loading {
                 color: rgba(255,255,255,.45);
                 font-style: italic;
@@ -1527,10 +1589,10 @@ min-height: 120px;
             const name = l.name || `Listing #${l.id}`;
             const price = l.price ? `$${Number(l.price).toLocaleString()}` : '—';
 
-            // Verdict chip vs THIS exact variant's sale median — only for RW
-            // items (must have bonus data; non-RW items aren't in the feed)
+            // Verdict chip vs THIS exact variant's sale median — RW items get
+            // bonus-matched medians; collectibles get an item-level median.
             let histChip = '';
-            if (l.itemId && (l.bonuses || []).length > 0 && this._sales?.[l.itemId]?.records?.length) {
+            if (l.itemId && this._sales?.[l.itemId]?.records?.length) {
                 const st = this._variantStats(l.itemId, l);
                 const variant = st?.variant;
                 const v = variant ? this._priceVerdict(l.price, variant.median) : null;
@@ -1608,7 +1670,7 @@ min-height: 120px;
                 <div class="ska-l-row1">
                     <span class="ska-l-cat" style="background:${catBg};color:${catClr};border:1px solid ${catClr}33;">${cat.label}</span>
                     <span class="ska-l-name" title="${this._esc(name)}">${this._esc(name)}</span>
-                    ${(l.itemId && (l.bonuses || []).length > 0)
+                    ${l.itemId && !isBookItem(l)
                         ? `<button class="ska-l-hist" data-id="${l.id}" title="Sale history & value">📈</button>`
                         : ''}
                     <button class="ska-l-del" data-id="${l.id}" title="Remove">×</button>
@@ -1822,14 +1884,16 @@ min-height: 120px;
                         await self.addListing(idNow, clickSeed);
                     });
 
-                    // History button: try to render on RW items, but ANY
-                    // failure here must not prevent the Track button
+                    // History button: render for any item with an itemId
+                    // (collectibles get item-level history; RW items get
+                    // bonus/roll-matched history). Any failure here must not
+                    // prevent the Track button.
                     let histBtn = null;
                     try {
                         const liNow = document.getElementById(panelListingId);
                         const seed = liNow ? collectAuctionSeed(liNow) : {};
-                        const isRWItem = !!seed.uid && (seed.bonuses || []).length > 0;
-                        if (isRWItem) {
+                        const canHistory = !!seed.itemId && !isBookItem(seed);
+                        if (canHistory) {
                             histBtn = document.createElement('button');
                             histBtn.className = 'ska-track-btn hist';
                             histBtn.textContent = '📈 History';
@@ -1894,7 +1958,7 @@ min-height: 120px;
 
                     // Build the seed from the panel itself
                     const seed = this._panelSeed(panelUl);
-                    if (!seed.itemId || !seed.bonuses || seed.bonuses.length === 0) return;
+                    if (!seed.itemId || isBookItem(seed)) return;
 
                     // Find an empty property div (React created it — safe)
                     const propDivs = Array.from(panelUl.querySelectorAll('[class*="property___"]'));

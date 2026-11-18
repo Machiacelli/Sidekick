@@ -503,8 +503,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Stock Data Refreshed',
                                 'Stock advisor data updated successfully',
-                                'success',
-                                2000
+                                'success'
                             );
                         }
                     }

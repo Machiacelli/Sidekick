@@ -514,7 +514,7 @@
             if (window.SidekickModules?.Core?.NotificationSystem) {
                 // Clear existing notifications to prevent stacking
                 window.SidekickModules.Core.NotificationSystem.clearAll();
-                window.SidekickModules.Core.NotificationSystem.show(title, message, type, 3000);
+                window.SidekickModules.Core.NotificationSystem.show(title, message, type);
             }
         },
 

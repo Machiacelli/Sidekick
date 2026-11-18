@@ -1376,9 +1376,17 @@
             timerElement.id = `sidekick-timer-${timer.id}`;  // Add the missing ID!
             timerElement.dataset.timerId = timer.id;
 
-            // Route to the page this timer belongs to (falls back to active page
-            // for legacy timers saved before page association existed)
-            const contentArea = window.SidekickModules?.UI?.getPageContentEl?.(timer.pageId) || document.getElementById('sidekick-content');
+            // Route to the page this timer belongs to. Only legacy timers saved
+            // before page association existed (no pageId) fall back to the active
+            // page. Timers with a pageId whose page no longer exists are not
+            // rendered, preventing panels from scrambling onto the wrong page.
+            let contentArea = null;
+            if (timer.pageId != null) {
+                contentArea = window.SidekickModules?.UI?.getPageContentEl?.(timer.pageId);
+            }
+            if (!contentArea && timer.pageId == null) {
+                contentArea = document.getElementById('sidekick-content');
+            }
 
             // Note: undocked timers are styled after the shared HTML is built below.
 
@@ -1394,15 +1402,29 @@
             // console.log(`🔍 Content area children count:`, contentArea.children.length);
             // console.log(`🔍 Content area innerHTML length:`, contentArea.innerHTML.length);
 
-            const contentWidth = contentArea.clientWidth || 480;
-            const contentHeight = contentArea.clientHeight || 500;
+            const contentWidth = contentArea.clientWidth;
+            const contentHeight = contentArea.clientHeight;
+            const isHidden = !contentWidth || !contentHeight;
 
-            // console.log(`🔍 Content dimensions: ${contentWidth}x${contentHeight}`);
+            const defaultWidth = 480;
+            const defaultHeight = 500;
+            const effectiveWidth = isHidden ? defaultWidth : contentWidth;
+            const effectiveHeight = isHidden ? defaultHeight : contentHeight;
 
-            const width = Math.min(Math.max(timer.width || 300, 140), contentWidth - 20);
-            const height = Math.min(Math.max(timer.height || 250, 80), contentHeight - 40);
-            const x = Math.min(Math.max(timer.x || 10, 0), contentWidth - width);
-            const y = Math.min(Math.max(timer.y || 10, 0), contentHeight - height);
+            // When the content area is hidden (inactive sidebar page), we cannot
+            // measure its real dimensions. Use the saved timer size directly
+            // instead of clamping to an unknown container, which would shrink
+            // the timer on every refresh.
+            const width = isHidden
+                ? Math.max(timer.width || 300, 140)
+                : Math.min(Math.max(timer.width || 300, 140), contentWidth - 20);
+            const height = isHidden
+                ? Math.max(timer.height || 250, 80)
+                : Math.min(Math.max(timer.height || 250, 80), contentHeight - 40);
+            const maxX = Math.max(0, effectiveWidth - width);
+            const maxY = Math.max(0, effectiveHeight - height);
+            const x = Math.min(Math.max(timer.x || 10, 0), maxX);
+            const y = Math.min(Math.max(timer.y || 10, 0), maxY);
 
             timerElement.style.cssText = `
                 position: absolute;
@@ -2258,8 +2280,7 @@
                                 window.SidekickModules.Core.NotificationSystem.show(
                                     'Cooldowns Finished',
                                     'All cooldowns have finished!',
-                                    'success',
-                                    5000
+                                    'success'
                                 );
                             }
                             // Auto-rearm: poll API so the timer restarts when user takes a drug
@@ -2279,8 +2300,7 @@
                                 window.SidekickModules.Core.NotificationSystem.show(
                                     'Timer Finished',
                                     `${timer.name} has finished!`,
-                                    'success',
-                                    5000
+                                    'success'
                                 );
                             }
                         }
@@ -3210,8 +3230,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Cooldown Detected',
                                 `${timer.name} restarted automatically!`,
-                                'info',
-                                5000
+                                'info'
                             );
                         }
                     }
@@ -3545,6 +3564,7 @@
         showCustomTimerDialog(timer) {
             // Create overlay
             const overlay = document.createElement('div');
+            overlay.id = 'sidekick-timer-dialog';
             overlay.style.cssText = `
                 position: fixed;
                 top: 0;

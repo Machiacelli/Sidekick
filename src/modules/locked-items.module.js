@@ -1138,14 +1138,12 @@ const LockedItemsManagerModule = {
             this.isStorePage(url)
         );
 
-        if (
-            url.includes(
-                'itemuseparcel.php'
-            ) ||
-            url.includes(
-                'tradelist.php'
-            )
-        ) {
+        if (url.includes('itemuseparcel.php')) {
+            this.processParcelPage();
+            return;
+        }
+
+        if (url.includes('tradelist.php')) {
             return;
         }
 
@@ -1155,20 +1153,10 @@ const LockedItemsManagerModule = {
         }
 
         if (
-            url.includes('bazaar.php')
+            url.includes('bazaar.php') &&
+            window.location.hash.includes('/add')
         ) {
-            const hash =
-                window.location.hash;
-
-            if (
-                hash.includes('/add') ||
-                hash.includes('/manage') ||
-                url.includes(
-                    'bazaar.php#/'
-                )
-            ) {
-                this.processBazaarPage();
-            }
+            this.processBazaarPage();
 
             return;
         }
@@ -1302,6 +1290,98 @@ const LockedItemsManagerModule = {
 
                 element.classList.remove(
                     'sidekick-hide-locked'
+                );
+            }
+        });
+    },
+
+    processParcelPage() {
+        const items = Array.from(document.querySelectorAll(
+            'li[data-id][data-item], li[data-group="child"]'
+        ));
+
+        if (items.length === 0) {
+            const itemImages =
+                document.querySelectorAll(
+                    'img.torn-item, ' +
+                    'img[src*="/items/"]'
+                );
+
+            const parentSet =
+                new Set();
+
+            itemImages.forEach(image => {
+                const dropdown =
+                    image.closest(
+                        '[role="option"], ' +
+                        '.menu-item-link, ' +
+                        '[data-testid^="option-"]'
+                    );
+
+                if (dropdown) return;
+
+                let parent =
+                    image.closest(
+                        '[class*="virtualListing"], li'
+                    );
+
+                if (!parent) {
+                    parent =
+                        image.parentElement
+                            ?.parentElement
+                            ?.parentElement
+                            ?.parentElement
+                            ?.parentElement;
+                }
+
+                if (parent) {
+                    parentSet.add(parent);
+                }
+            });
+
+            items.push(
+                ...Array.from(parentSet)
+            );
+        }
+
+        if (items.length === 0) return;
+
+        items.forEach(item => {
+            const identifiers =
+                this.getItemIdentifiers(
+                    item
+                );
+
+            if (
+                identifiers.uniqueIds.length ===
+                0 &&
+                identifiers.baseIds.length ===
+                0
+            ) {
+                return;
+            }
+
+            if (
+                this.isItemLocked(
+                    identifiers
+                )
+            ) {
+                item.classList.add(
+                    'sidekick-hide-locked'
+                );
+
+                item.style.setProperty(
+                    'display',
+                    'none',
+                    'important'
+                );
+            } else {
+                item.classList.remove(
+                    'sidekick-hide-locked'
+                );
+
+                item.style.removeProperty(
+                    'display'
                 );
             }
         });

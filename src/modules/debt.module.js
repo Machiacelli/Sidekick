@@ -66,6 +66,347 @@
             APR: 'apr'
         },
 
+        // Escape text before it is interpolated into an innerHTML template.
+        // Notes can contain remote text (e.g. the note of a money transfer),
+        // so every entry field rendered as HTML has to go through this.
+        escapeHtml(value) {
+            const amp = String.fromCharCode(38);
+            return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, (char) => {
+                switch (char) {
+                    case '&': return amp + 'amp;';
+                    case '<': return amp + 'lt;';
+                    case '>': return amp + 'gt;';
+                    case '"': return amp + 'quot;';
+                    case "'": return amp + '#39;';
+                    default: return char;
+                }
+            });
+        },
+
+        // --- "/loan" money transfer command handling ---
+        LOAN_COMMAND_PREFIX: '/loan',
+        loanCommandPending: [], // Pending "/loan" prompts: { paymentId, playerId, amount, notes, createdAt }
+        loanCommandDialogOpen: false, // True while the Add New Loan dialog is open for a command
+        loanCommandActivePaymentId: null, // paymentId currently bound to the open dialog
+        loanCommandActiveHandled: false, // True once the active command's close has been handled
+        loanCommandOpenedAt: 0, // Timestamp of the last opened loan dialog
+        loanCommandRetryInterval: null,
+        loanCommandRetryDelay: 4000, // Retry cadence, only active while commands are queued
+
+        // Parse a "/loan" command out of a money transfer note.
+        // Returns { matched: boolean, remainder: string }
+        parseLoanCommand(note) {
+            const text = typeof note === 'string' ? note : '';
+            const prefix = this.LOAN_COMMAND_PREFIX || '/loan';
+            const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`(^|\\s)${escapedPrefix}\\b`, 'gi');
+            const matches = Array.from(text.matchAll(pattern));
+
+            if (matches.length === 0) {
+                return { matched: false, remainder: this.sanitizeLoanNote(text) };
+            }
+
+            // Remove every occurrence (back to front so the indexes stay valid) so no
+            // stray command token is left behind in the note
+            let remainder = text;
+            for (let index = matches.length - 1; index >= 0; index--) {
+                const match = matches[index];
+                remainder = remainder.slice(0, match.index) + ' ' + remainder.slice(match.index + match[0].length);
+            }
+            remainder = this.sanitizeLoanNote(remainder);
+
+            this.debugLog(`💰 Parsed "${prefix}" command - remainder: "${remainder}"`);
+            return { matched: true, remainder };
+        },
+
+        // Transfer notes are written by other players, so they are untrusted input.
+        // Strip anything that could be read as markup before it is stored.
+        sanitizeLoanNote(text) {
+            return String(text || '')
+                .replace(/[<>]/g, '')
+                .replace(/[\u0000-\u001f\u007f]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        },
+
+        // True when any Sidekick prompt is currently open in the DOM.
+        // The "/loan" prompt must never stack on top of another prompt.
+        isDebtModalOpen() {
+            const modalIds = [
+                'sidekick-debt-dialog',         // Add Debt / Add Loan dialog
+                'sidekick-payment-dialog',      // Add payment dialog
+                'sidekick-debt-receipt-prompt', // Receipt import overlay
+                'sidekick-debt-alerts-dialog',  // Entry alerts dialog
+                'sidekick-task-dialog',         // Todo list dialog
+                'sidekick-mug-modal',           // Mug warning modal
+                'sidekick-timer-dialog',        // Custom timer dialog
+                'sk-pf-modal-overlay',          // Price filler settings modal
+                'sidekick-bug-reporter',        // Bug reporter modal
+                'sk-egg-overlay'                // Easter egg overlay
+            ];
+
+            const modalSelectors = [
+                '.sidekick-preview-panel'       // Sidekick settings overlay
+            ];
+
+            if (modalIds.some(id => !!document.getElementById(id))) return true;
+            return modalSelectors.some(selector => !!document.querySelector(selector));
+        },
+
+        // Queue a detected "/loan" command so it can be confirmed later
+        async enqueueLoanCommand(record) {
+            if (!record || !record.paymentId) return false;
+
+            if (this.loanCommandPending.some(r => r.paymentId === record.paymentId)) {
+                this.debugLog(`💰 "/loan" command already queued (${record.paymentId})`);
+                return false;
+            }
+
+            const queued = {
+                paymentId: record.paymentId,
+                playerId: record.playerId,
+                amount: Number(record.amount),
+                notes: record.notes || '',
+                createdAt: record.createdAt || Date.now(),
+                ownerTabId: this.tabId
+            };
+
+            // Another Torn tab may have queued the same transfer already
+            try {
+                const stored = await window.SidekickModules?.Core?.ChromeStorage?.get('sidekick_debt_pending_loan_commands');
+                if (Array.isArray(stored) && stored.some(r => r && r.paymentId === queued.paymentId)) {
+                    this.debugLog(`💰 "/loan" command already queued in another tab (${queued.paymentId})`);
+                    return false;
+                }
+            } catch (error) {
+                console.debug('💰 Could not check stored "/loan" queue:', error);
+            }
+
+            this.loanCommandPending.push(queued);
+
+            console.log(`💰 Queued "/loan" command for player ${queued.playerId} ($${queued.amount}) [${queued.paymentId}]`);
+            this.persistLoanCommands();
+            this.startLoanCommandRetry();
+            this.processPendingLoanCommands();
+            return true;
+        },
+
+        // Persist the pending "/loan" queue so a page reload does not lose prompts
+        async persistLoanCommands() {
+            try {
+                if (window.SidekickModules?.Core?.ChromeStorage?.set) {
+                    await window.SidekickModules.Core.ChromeStorage.set(
+                        'sidekick_debt_pending_loan_commands',
+                        this.loanCommandPending
+                    );
+                    this.debugLog(`💰 Persisted ${this.loanCommandPending.length} pending "/loan" command(s)`);
+                }
+            } catch (error) {
+                console.error('💰 Failed to persist pending "/loan" commands:', error);
+            }
+        },
+
+        // Load the pending "/loan" queue from storage
+        async loadLoanCommands() {
+            try {
+                if (window.SidekickModules?.Core?.ChromeStorage?.get) {
+                    const records = await window.SidekickModules.Core.ChromeStorage.get('sidekick_debt_pending_loan_commands');
+                    if (Array.isArray(records)) {
+                        const seen = new Set();
+                        this.loanCommandPending = records.filter(r => {
+                            if (!r || !r.paymentId || seen.has(r.paymentId)) return false;
+                            seen.add(r.paymentId);
+                            return true;
+                        });
+                        console.log(`💰 Loaded ${this.loanCommandPending.length} pending "/loan" command(s) from storage`);
+                    }
+                }
+            } catch (error) {
+                console.error('💰 Failed to load pending "/loan" commands:', error);
+                this.loanCommandPending = [];
+            }
+        },
+
+        // Remove a queued "/loan" command once it has been handled
+        removeLoanCommand(paymentId) {
+            const before = this.loanCommandPending.length;
+            this.loanCommandPending = this.loanCommandPending.filter(r => r.paymentId !== paymentId);
+
+            if (this.loanCommandPending.length !== before) {
+                this.debugLog(`💰 Removed "/loan" command ${paymentId} from the queue`);
+                this.persistLoanCommands();
+            }
+
+            if (this.loanCommandPending.length === 0) {
+                this.stopLoanCommandRetry();
+            }
+        },
+
+        // Retry loop - only runs while there are queued commands
+        startLoanCommandRetry() {
+            if (this.loanCommandRetryInterval || this.loanCommandPending.length === 0) return;
+
+            this.loanCommandRetryInterval = setInterval(() => {
+                if (this.loanCommandPending.length === 0) {
+                    this.stopLoanCommandRetry();
+                    return;
+                }
+                this.checkLoanDialogClosed();
+                this.processPendingLoanCommands();
+            }, this.loanCommandRetryDelay);
+
+            this.debugLog(`💰 Started "/loan" command retry loop (${this.loanCommandRetryDelay}ms)`);
+        },
+
+        stopLoanCommandRetry() {
+            if (this.loanCommandRetryInterval) {
+                clearInterval(this.loanCommandRetryInterval);
+                this.loanCommandRetryInterval = null;
+                this.debugLog('💰 Stopped "/loan" command retry loop');
+            }
+        },
+
+        // Safety net: if the dialog disappeared without the close callback firing,
+        // treat the command as cancelled so the queue can never stall forever.
+        checkLoanDialogClosed() {
+            if (!this.loanCommandDialogOpen || this.loanCommandActiveHandled) return;
+            if (!this.loanCommandActivePaymentId) return;
+            if (Date.now() - this.loanCommandOpenedAt < 3000) return;
+            if (document.getElementById('sidekick-debt-dialog')) return;
+
+            console.warn('💰 "/loan" dialog closed without a callback - treating it as cancelled');
+            this.handleLoanCommandClosed(this.loanCommandActivePaymentId, { saved: false, entry: null });
+        },
+
+        // Handle the close of the loan dialog that belongs to a queued command
+        handleLoanCommandClosed(paymentId, result) {
+            if (this.loanCommandActivePaymentId !== paymentId) {
+                this.debugLog(`💰 Ignoring stale "/loan" close callback for ${paymentId}`);
+                return;
+            }
+
+            this.loanCommandActiveHandled = true;
+            this.loanCommandActivePaymentId = null;
+            this.loanCommandDialogOpen = false;
+
+            // The dialog was replaced by another action (e.g. the user opened the Add
+            // Loan dialog from the tracker menu) - keep the command queued so it is
+            // not silently lost
+            if (result && result.reason === 'replaced') {
+                const queued = this.loanCommandPending.find(r => r.paymentId === paymentId);
+                if (queued) {
+                    this.debugLog(`💰 "/loan" dialog was replaced - keeping the command queued [${paymentId}]`);
+                    this.startLoanCommandRetry();
+                    this.processPendingLoanCommands();
+                    return;
+                }
+            }
+
+            this.removeLoanCommand(paymentId);
+
+            if (result && result.saved) {
+                console.log(`💰 "/loan" command confirmed - loan added [${paymentId}]`);
+                this.showToast('💰 Loan added from your /loan transfer.');
+            } else {
+                console.log(`💰 "/loan" command cancelled - no loan added [${paymentId}]`);
+            }
+
+            // Drain the queue
+            this.processPendingLoanCommands();
+        },
+
+        // Guard against recording the same transfer twice - one "/loan" transfer can
+        // be confirmed in two Torn tabs within a few seconds of each other.
+        // Keyed on the transfer id, so two genuine loans of the same size still work.
+        async canCreateLoanFromCommand(values, paymentId) {
+            if (!values || !paymentId) return true;
+
+            let duplicate = this.debtsAndLoans.find(entry => entry && entry.sourcePaymentId === paymentId);
+
+            if (!duplicate) {
+                // Another tab may have recorded the same transfer already
+                try {
+                    const stored = await window.SidekickModules?.Core?.ChromeStorage?.get('sidekick_debt_data');
+                    const storedEntries = stored?.debtsAndLoans;
+                    if (Array.isArray(storedEntries)) {
+                        duplicate = storedEntries.find(entry => entry && entry.sourcePaymentId === paymentId);
+                    }
+                } catch (error) {
+                    console.debug('💰 Could not check stored debt data for a duplicate transfer:', error);
+                }
+            }
+
+            if (duplicate) {
+                console.log(`💰 Skipping duplicate "/loan" entry for transfer ${paymentId}`);
+                this.showToast('💰 That transfer was already added to your Debt Tracker.');
+                return false;
+            }
+
+            return true;
+        },
+
+        // Open the Add New Loan dialog for the next queued "/loan" command (one at a time)
+        processPendingLoanCommands() {
+            if (this.moduleDisabled) {
+                this.debugLog('💰 Debt module is disabled - not opening the "/loan" dialog');
+                return;
+            }
+
+            if (this.loanCommandPending.length === 0) {
+                this.stopLoanCommandRetry();
+                return;
+            }
+
+            if (this.loanCommandDialogOpen) {
+                this.debugLog('💰 A "/loan" dialog is already open - deferring');
+                return;
+            }
+
+            // Never interfere with any other Sidekick prompt
+            if (this.isDebtModalOpen()) {
+                this.debugLog('💰 Another Sidekick dialog is open - deferring the "/loan" prompt');
+                return;
+            }
+
+            const record = this.loanCommandPending[0];
+            this.loanCommandDialogOpen = true;
+            this.loanCommandActivePaymentId = record.paymentId;
+            this.loanCommandActiveHandled = false;
+            this.loanCommandOpenedAt = Date.now();
+
+            console.log(`💰 Opening Add New Loan dialog for "/loan" command [${record.paymentId}]`);
+
+            try {
+                const opened = this.showAddEntryDialog(false, {
+                    playerId: record.playerId,
+                    amount: Number(record.amount),
+                    notes: record.notes,
+                    interestType: 'none',
+                    sourcePaymentId: record.paymentId,
+                    loanCommand: true,
+                    banner: 'Detected from your /loan money transfer — confirm to add it as a loan, or cancel to skip. Repayment only auto-matches if the other player includes "loan" in their repayment note.',
+                    beforeCreate: (values) => this.canCreateLoanFromCommand(values, record.paymentId),
+                    onClose: (result) => {
+                        this.handleLoanCommandClosed(record.paymentId, result);
+                    }
+                });
+
+                if (opened === false) {
+                    // The dialog could not be opened (another prompt is showing).
+                    // Keep the command queued so the retry loop can show it later.
+                    this.loanCommandDialogOpen = false;
+                    this.loanCommandActivePaymentId = null;
+                    this.loanCommandActiveHandled = true;
+                    this.debugLog('💰 "/loan" dialog could not be opened yet - keeping the command queued');
+                }
+            } catch (error) {
+                console.error('💰 Failed to open the "/loan" dialog:', error);
+                this.loanCommandDialogOpen = false;
+                this.loanCommandActivePaymentId = null;
+                this.loanCommandActiveHandled = true;
+            }
+        },
+
         // Initialize the debt module
         async init() {
             if (this.isInitialized) {
@@ -79,6 +420,7 @@
                 console.log("💰 Debt Module: Starting initialization...");
 
                 await this.loadDebtsAndLoans();
+                await this.loadLoanCommands();
                 await this.loadApiKey(); // This will start API monitoring if key is available
                 this.startInterestUpdates();
                 this.startAlertMonitoring(); // Start checking for due date and inactivity alerts
@@ -92,6 +434,13 @@
 
                 // Restore window state if it was open before
                 this.restoreWindowState();
+
+                // Try to re-open any "/loan" prompts that were queued before a reload
+                if (this.loanCommandPending.length > 0) {
+                    console.log(`💰 Restoring ${this.loanCommandPending.length} pending "/loan" prompt(s)`);
+                    this.startLoanCommandRetry();
+                    setTimeout(() => this.processPendingLoanCommands(), 1500);
+                }
 
                 this.isInitialized = true;
                 console.log("💰 Debt Module initialized successfully");
@@ -259,6 +608,7 @@
                     clearInterval(this.interestUpdateInterval);
                     this.interestUpdateInterval = null;
                 }
+                this.stopLoanCommandRetry();
                 if (!this.contextInvalidatedLogged) {
                     console.debug('💰 Extension context invalidated - Debt module paused until page refresh');
                     this.contextInvalidatedLogged = true;
@@ -739,6 +1089,7 @@
                         clearInterval(this.interestUpdateInterval);
                         this.interestUpdateInterval = null;
                     }
+                    this.stopLoanCommandRetry();
 
                     // Only log once
                     if (!this.contextInvalidatedLogged) {
@@ -903,6 +1254,27 @@
                     }
 
                     this.debugLog(`💰 Detected SENT payment: $${amount} to receiver ID ${receiverId} with message: "${message}" (ID: ${paymentId})`);
+
+                    // Detect an explicit "/loan" command in the transfer note.
+                    // Money YOU send means the receiver owes YOU -> "Loans Given" (isDebt === false).
+                    const loanCommand = this.parseLoanCommand(message);
+                    if (loanCommand.matched) {
+                        this.debugLog(`💰 Sent payment contains a "/loan" command - queueing Add New Loan prompt (ID: ${paymentId})`);
+
+                        this.enqueueLoanCommand({
+                            paymentId: paymentId,
+                            playerId: receiverId,
+                            amount: amount,
+                            notes: loanCommand.remainder,
+                            createdAt: Date.now()
+                        });
+
+                        this.processedPayments.add(paymentId);
+                        this.saveDebtsAndLoans(); // Save the processed payments set
+
+                        this.processPendingLoanCommands();
+                        return; // Never fall through to the auto-repayment branch
+                    }
 
                     // Check if message contains "loan" (case insensitive)
                     if (message.toLowerCase().includes('loan')) {
@@ -1079,7 +1451,7 @@
                     border-bottom: 1px solid #444;
                 ">
                     <span style="color: #fff; font-weight: bold; font-size: 14px;">
-                        ${isDebt ? 'Debt' : 'Loan'}: ${entry.playerName}
+                        ${isDebt ? 'Debt' : 'Loan'}: ${this.escapeHtml(entry.playerName)}
                     </span>
                     <div style="display: flex; gap: 5px;">
                         <button class="debt-settings-btn" data-entry-id="${entry.id}" style="
@@ -1171,7 +1543,7 @@
                     
                     ${entry.notes ? `
                         <div style="margin-bottom: 8px; font-style: italic; color: #ccc;">
-                            "${entry.notes}"
+                            "${this.escapeHtml(entry.notes)}"
                         </div>
                     ` : ''}
                 </div>
@@ -1268,8 +1640,21 @@
 
         // Show settings dialog
         showSettingsDialog(entryId) {
-            // TODO: Implement comprehensive settings dialog
-            console.log("💰 Settings dialog for entry:", entryId);
+            const entry = this.debtsAndLoans.find(e => e.id === entryId);
+            if (!entry) return;
+
+            const opened = this.showAddEntryDialog(entry.isDebt, {
+                editEntryId: entry.id,
+                title: entry.isDebt ? 'Edit Debt' : 'Edit Loan',
+                submitLabel: 'Save Changes',
+                onClose: (result) => {
+                    console.log(`💰 Settings dialog closed for entry ${entryId}`, result);
+                }
+            });
+
+            if (opened === false) {
+                this.showToast('💰 Close the other Sidekick window first.');
+            }
         },
 
         // Mark debt/loan as completed
@@ -1773,7 +2158,7 @@
                     <div>
                         <div style="font-weight: bold; font-size: 14px; color: ${isDebt ? '#ff5252' : '#4caf50'};">
                             <a href="https://www.torn.com/profiles.php?XID=${entry.playerId}" target="_blank" style="color: inherit; text-decoration: none; cursor: pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                ${entry.playerName}
+                                ${this.escapeHtml(entry.playerName)}
                             </a>
                         </div>
                         ${entry.playerId ? `<div style="font-size: 11px; color: #999;">ID: ${entry.playerId}</div>` : ''}
@@ -1798,7 +2183,7 @@
                 })() : ''}
                 </div>
 
-                ${entry.notes ? `<div style="font-size: 11px; color: #bbb; font-style: italic; margin-bottom: 6px;">"${entry.notes}"</div>` : ''}
+                ${entry.notes ? `<div style="font-size: 11px; color: #bbb; font-style: italic; margin-bottom: 6px;">"${this.escapeHtml(entry.notes)}"</div>` : ''}
                 
                 <div style="display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px;">
                     <button class="entry-pay-btn" data-entry-id="${entry.id}" style="
@@ -1834,6 +2219,17 @@
                         white-space: nowrap;
                         flex-shrink: 0;
                     ">📋 Receipt</button>
+                    <button class="entry-settings-btn" data-entry-id="${entry.id}" style="
+                        background: #607d8b;
+                        border: 1px solid #78909c;
+                        color: #fff;
+                        padding: 3px 6px;
+                        border-radius: 3px;
+                        cursor: pointer;
+                        font-size: 9px;
+                        white-space: nowrap;
+                        flex-shrink: 0;
+                    ">⚙️ Edit</button>
                     <button class="entry-delete-btn" data-entry-id="${entry.id}" style="
                         background: #d32f2f;
                         border: 1px solid #f44336;
@@ -1851,6 +2247,7 @@
             // Add event listeners for buttons
             const payBtn = entryDiv.querySelector('.entry-pay-btn');
             const editBtn = entryDiv.querySelector('.entry-edit-btn');
+            const settingsBtn = entryDiv.querySelector('.entry-settings-btn');
             const deleteBtn = entryDiv.querySelector('.entry-delete-btn');
             const increaseBtn = entryDiv.querySelector('.entry-increase-btn');
             const alertElement = entryDiv.querySelector('.entry-alert-badge');
@@ -1861,6 +2258,10 @@
 
             editBtn?.addEventListener('click', () => {
                 this.generateReceipt(entry.id);
+            });
+
+            settingsBtn?.addEventListener('click', () => {
+                this.showSettingsDialog(entry.id);
             });
 
             increaseBtn?.addEventListener('click', () => {
@@ -1901,7 +2302,7 @@
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                     <span style="font-size: 20px;">✅</span>
                     <div>
-                        <div style="font-weight: bold; font-size: 13px; color: #69f0ae;">${typeLabel} with ${entry.playerName} is fully paid off!</div>
+                        <div style="font-weight: bold; font-size: 13px; color: #69f0ae;">${typeLabel} with ${this.escapeHtml(entry.playerName)} is fully paid off!</div>
                         <div style="font-size: 11px; color: #aaa; margin-top: 2px;">Total paid: $${totalPaid.toLocaleString()} over ${entry.repayments.length} payment${entry.repayments.length !== 1 ? 's' : ''}</div>
                     </div>
                 </div>
@@ -2095,13 +2496,69 @@
         },
 
         // Show Add Entry Dialog (generic for both debt and loan)
-        showAddEntryDialog(isDebt) {
-            // Remove existing dialog if present
+        // options: { playerId, amount, interestType, interestRate, notes, dueDate,
+        //             title, submitLabel, banner, editEntryId, onClose }
+        showAddEntryDialog(isDebt, options = {}) {
+            const opts = (options && typeof options === 'object') ? options : {};
+            const hasOptions = Object.keys(opts).length > 0;
+            const onClose = typeof opts.onClose === 'function' ? opts.onClose : null;
+
+            const escapeHtml = (value) => this.escapeHtml(value);
+
+            // Existing dialog: a programmatic open (e.g. the "/loan" transfer prompt) must never clobber it
             const existingDialog = document.getElementById('sidekick-debt-dialog');
             if (existingDialog) {
+                if (hasOptions) {
+                    // Leave the open dialog untouched. The caller owns the request
+                    // (e.g. the queued "/loan" prompt) and retries later, so onClose
+                    // must NOT fire here - otherwise the queued command is dropped.
+                    console.debug('💰 Add entry dialog is already open - ignoring the programmatic open request');
+                    return false;
+                }
+
+                // Toggle behaviour: clicking "Add Debt"/"Add Loan" again closes the dialog
+                if (existingDialog.__sidekickLoanCommand) {
+                    // The open dialog is a "/loan" prompt - it already is an Add Loan
+                    // window, so keep it instead of closing it behind the user
+                    console.debug('💰 A "/loan" prompt is already open - keeping it open');
+                    return false;
+                }
+
+                if (typeof existingDialog.__sidekickNotifyClose === 'function') {
+                    existingDialog.__sidekickNotifyClose({ saved: false, entry: null, reason: 'replaced' });
+                }
                 existingDialog.remove();
-                return;
+                return false;
             }
+
+            // Edit mode: update an existing entry instead of creating a new one
+            const editEntry = opts.editEntryId
+                ? this.debtsAndLoans.find(e => e.id === opts.editEntryId)
+                : null;
+            const editMode = Boolean(opts.editEntryId && editEntry);
+
+            if (opts.editEntryId && !editEntry) {
+                console.warn('💰 Entry not found for edit:', opts.editEntryId);
+                if (onClose) {
+                    try {
+                        onClose({ saved: false, entry: null });
+                    } catch (error) {
+                        console.error('💰 onClose callback failed:', error);
+                    }
+                }
+                return false;
+            }
+
+            const entryIsDebt = editMode ? Boolean(editEntry.isDebt) : Boolean(isDebt);
+            const dialogTitle = opts.title || (editMode
+                ? (entryIsDebt ? 'Edit Debt' : 'Edit Loan')
+                : (isDebt ? 'Add New Debt' : 'Add New Loan'));
+            const submitLabel = opts.submitLabel || (editMode
+                ? 'Save Changes'
+                : (isDebt ? 'Add Debt' : 'Add Loan'));
+            const bannerHtml = opts.banner
+                ? `<div style="margin-top: 4px; font-size: 11px; color: #999; font-weight: normal; line-height: 1.4;">${escapeHtml(opts.banner)}</div>`
+                : '';
 
             const dialog = document.createElement('div');
             dialog.id = 'sidekick-debt-dialog';
@@ -2132,9 +2589,12 @@
                     justify-content: space-between;
                     align-items: center;
                 ">
-                    <h3 style="margin: 0; color: #FFC107; font-size: 16px;">
-                        ${isDebt ? 'Add New Debt' : 'Add New Loan'}
-                    </h3>
+                    <div style="flex: 1; min-width: 0;">
+                        <h3 style="margin: 0; color: #FFC107; font-size: 16px;">
+                            ${escapeHtml(dialogTitle)}
+                        </h3>
+                        ${bannerHtml}
+                    </div>
                     <button id="debt-dialog-close" style="
                         background: #d32f2f;
                         border: none;
@@ -2151,7 +2611,7 @@
                     <form id="debt-entry-form">
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Player ID:</label>
-                            <input type="number" id="player-id" required style="
+                            <input type="number" id="player-id" required ${editMode ? 'disabled' : ''} style="
                                 width: 100%;
                                 padding: 8px;
                                 border: 1px solid #666;
@@ -2159,12 +2619,13 @@
                                 background: rgba(255,255,255,0.1);
                                 color: #fff;
                                 font-size: 14px;
+                                ${editMode ? 'opacity: 0.7; cursor: not-allowed;' : ''}
                             " placeholder="Enter player ID">
                         </div>
                         
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: bold;">Amount ($):</label>
-                            <input type="text" id="amount" required style="
+                            <input type="text" id="amount" required ${editMode ? 'disabled' : ''} style="
                                 width: 100%;
                                 padding: 8px;
                                 border: 1px solid #666;
@@ -2172,6 +2633,7 @@
                                 background: rgba(255,255,255,0.1);
                                 color: #fff;
                                 font-size: 14px;
+                                ${editMode ? 'opacity: 0.7; cursor: not-allowed;' : ''}
                             " placeholder="e.g. 2m, 500k, 250000">
                         </div>
                         
@@ -2255,14 +2717,14 @@
                                 font-size: 14px;
                             ">Cancel</button>
                             <button type="submit" style="
-                                background: ${isDebt ? '#d32f2f' : '#388e3c'};
-                                border: 1px solid ${isDebt ? '#ff5252' : '#4caf50'};
+                                background: ${entryIsDebt ? '#d32f2f' : '#388e3c'};
+                                border: 1px solid ${entryIsDebt ? '#ff5252' : '#4caf50'};
                                 color: #fff;
                                 padding: 8px 16px;
                                 border-radius: 4px;
                                 cursor: pointer;
                                 font-size: 14px;
-                            ">${isDebt ? 'Add Debt' : 'Add Loan'}</button>
+                            ">${escapeHtml(submitLabel)}</button>
                         </div>
                     </form>
                 </div>
@@ -2275,42 +2737,107 @@
             const cancelBtn = dialog.querySelector('#debt-dialog-cancel');
             const form = dialog.querySelector('#debt-entry-form');
 
-            const closeDialog = () => {
+            const closeDialog = (result) => {
+                if (dialog.__sidekickCloseNotified) return;
+                dialog.__sidekickCloseNotified = true;
                 dialog.remove();
+
+                if (onClose) {
+                    try {
+                        onClose(result || { saved: false, entry: null });
+                    } catch (error) {
+                        console.error('💰 onClose callback failed:', error);
+                    }
+                }
             };
 
-            closeBtn?.addEventListener('click', closeDialog);
-            cancelBtn?.addEventListener('click', closeDialog);
+            // Lets a later call notify this dialog's owner that it was closed
+            dialog.__sidekickNotifyClose = closeDialog;
+            if (opts.loanCommand) dialog.__sidekickLoanCommand = true;
+
+            closeBtn?.addEventListener('click', () => closeDialog({ saved: false, entry: null, reason: 'dismiss' }));
+            cancelBtn?.addEventListener('click', () => closeDialog({ saved: false, entry: null, reason: 'cancel' }));
 
             // Handle form submission
-            form?.addEventListener('submit', (e) => {
+            form?.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const playerId = dialog.querySelector('#player-id').value.trim();
-                const amount = this.parseShorthand(dialog.querySelector('#amount').value);
-                const interestRate = parseFloat(dialog.querySelector('#interest-rate').value) || 0;
-                const interestType = dialog.querySelector('#interest-type').value;
-                const notes = dialog.querySelector('#notes').value.trim();
-                const dueDateInput = dialog.querySelector('#due-date').value;
-                const noDueDate = dialog.querySelector('#no-due-date').checked;
-                const dueDate = noDueDate ? null : (dueDateInput ? new Date(dueDateInput).toISOString() : null);
+                const playerIdField = dialog.querySelector('#player-id');
+                const amountField = dialog.querySelector('#amount');
+                const playerId = playerIdField ? playerIdField.value.trim() : '';
+                const amount = this.parseShorthand(amountField ? amountField.value : '');
+                const interestRate = parseFloat(dialog.querySelector('#interest-rate')?.value) || 0;
+                const interestType = dialog.querySelector('#interest-type')?.value || 'none';
+                const notes = (dialog.querySelector('#notes')?.value || '').trim();
+                const dueDateValue = dialog.querySelector('#due-date')?.value || '';
+                let dueDate = null;
+                if (dueDateValue) {
+                    const parsedDueDate = new Date(dueDateValue);
+                    if (!isNaN(parsedDueDate.getTime())) dueDate = parsedDueDate.toISOString();
+                }
+
+                if (editMode && editEntry) {
+                    // Update the existing entry in place - never touch amount/principal/repayments/completed
+                    editEntry.interestType = interestType;
+                    editEntry.interestRate = interestRate;
+                    editEntry.dueDate = dueDate;
+                    editEntry.notes = notes;
+
+                    this.saveDebtsAndLoans();
+                    this.populateDebtTrackerWindow();
+                    this.showToast(`✅ ${editEntry.isDebt ? 'Debt' : 'Loan'} updated for ${editEntry.playerName}`);
+
+                    closeDialog({ saved: true, entry: editEntry, reason: 'submit' });
+
+                    console.log(`💰 Updated ${editEntry.isDebt ? 'debt' : 'loan'} ${editEntry.id}`);
+                    return;
+                }
 
                 if (!playerId || isNaN(amount) || amount <= 0) {
                     alert('Please enter a valid player ID and amount.');
                     return;
                 }
 
+                // Optional guard: lets a caller veto the creation (e.g. the "/loan"
+                // command blocks a duplicate entry created moments ago in another tab)
+                if (typeof opts.beforeCreate === 'function') {
+                    let allowed = true;
+                    try {
+                        allowed = await opts.beforeCreate({
+                            playerId: playerId,
+                            amount: amount,
+                            interestType: interestType,
+                            interestRate: interestRate,
+                            notes: notes,
+                            dueDate: dueDate
+                        });
+                    } catch (error) {
+                        console.error('💰 beforeCreate check failed:', error);
+                    }
+                    if (allowed === false) {
+                        closeDialog({ saved: false, entry: null, reason: 'blocked' });
+                        return;
+                    }
+                }
+
                 const playerName = `Player [${playerId}]`; // Temporary name, will be fetched from API
 
                 // Use the proper create methods
+                let createdEntry = null;
                 if (isDebt) {
-                    this.createDebt(playerId, playerName, amount, interestType, interestRate, notes, dueDate);
+                    createdEntry = this.createDebt(playerId, playerName, amount, interestType, interestRate, notes, dueDate);
                 } else {
-                    this.createLoan(playerId, playerName, amount, interestType, interestRate, notes, dueDate);
+                    createdEntry = this.createLoan(playerId, playerName, amount, interestType, interestRate, notes, dueDate);
+                }
+
+                // Remember which transfer this entry came from (e.g. a "/loan" command)
+                if (createdEntry && opts.sourcePaymentId) {
+                    createdEntry.sourcePaymentId = opts.sourcePaymentId;
+                    this.saveDebtsAndLoans();
                 }
 
                 // Close dialog
-                closeDialog();
+                closeDialog({ saved: true, entry: createdEntry || null, reason: 'submit' });
 
                 console.log(`💰 ${isDebt ? 'Debt' : 'Loan'} added for player ${playerName}`);
             });
@@ -2387,11 +2914,108 @@
                 toggleInterest();
             }
 
+            // Prefill values - applied after the default initialisation above
+            const playerIdInput = dialog.querySelector('#player-id');
+            const notesInput = dialog.querySelector('#notes');
+            const prefilled = editMode
+                ? {
+                    playerId: editEntry.playerId,
+                    amount: (editEntry.originalAmount !== undefined && editEntry.originalAmount !== null)
+                        ? editEntry.originalAmount
+                        : editEntry.currentAmount,
+                    interestRate: editEntry.interestRate,
+                    interestType: editEntry.interestType,
+                    notes: editEntry.notes,
+                    dueDate: editEntry.dueDate || null
+                }
+                : {
+                    playerId: opts.playerId,
+                    amount: opts.amount,
+                    interestRate: opts.interestRate,
+                    interestType: opts.interestType,
+                    notes: opts.notes,
+                    dueDate: opts.dueDate || null
+                };
+
+            if (playerIdInput && prefilled.playerId !== undefined && prefilled.playerId !== null && prefilled.playerId !== '') {
+                playerIdInput.value = String(prefilled.playerId);
+            }
+
+            if (amountInput && prefilled.amount !== undefined && prefilled.amount !== null && prefilled.amount !== '') {
+                const parsedAmount = this.parseShorthand(String(prefilled.amount));
+                amountInput.value = (!isNaN(parsedAmount) && parsedAmount > 0)
+                    ? String(Math.round(parsedAmount))
+                    : String(prefilled.amount);
+            }
+
+            if (notesInput && prefilled.notes !== undefined && prefilled.notes !== null) {
+                notesInput.value = String(prefilled.notes);
+            }
+
+            // Interest type - only touched when a type was supplied so the default stays untouched
+            if (interestTypeSelect && prefilled.interestType) {
+                const typeValue = String(prefilled.interestType);
+                const typeExists = Array.from(interestTypeSelect.options).some(option => option.value === typeValue);
+                if (!typeExists) {
+                    const extraOption = document.createElement('option');
+                    extraOption.value = typeValue;
+                    extraOption.textContent = typeValue === 'none' ? 'No Interest' : typeValue;
+                    interestTypeSelect.appendChild(extraOption);
+                }
+                interestTypeSelect.value = typeValue;
+            }
+
+            // Interest rate - a rate above 0 shows the interest fields and fills them in
+            const prefilledRate = parseFloat(prefilled.interestRate);
+            const hasPrefilledInterest = !isNaN(prefilledRate) && prefilledRate > 0;
+            if (noInterestChk) {
+                noInterestChk.checked = !hasPrefilledInterest;
+                if (interestFields) interestFields.style.display = hasPrefilledInterest ? '' : 'none';
+                if (interestTypeField) interestTypeField.style.display = hasPrefilledInterest ? '' : 'none';
+                if (interestRateInput) {
+                    interestRateInput.disabled = !hasPrefilledInterest;
+                    interestRateInput.value = hasPrefilledInterest ? String(prefilledRate) : '0';
+                }
+                if (interestTypeSelect) interestTypeSelect.disabled = !hasPrefilledInterest;
+            }
+
+            // Due date - uses the date part of the stored ISO value
+            if (dueDateInput && noDueDateCheckbox) {
+                if (prefilled.dueDate) {
+                    const dueDateValue = new Date(prefilled.dueDate);
+                    if (!isNaN(dueDateValue.getTime())) {
+                        // Due dates are stored as UTC-anchored ISO strings. Using the
+                        // ISO date part keeps the calendar day stable in every timezone
+                        // (local date parts would shift it a day in negative offsets).
+                        const isoDate = String(prefilled.dueDate).slice(0, 10);
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+                            dueDateInput.value = isoDate;
+                        } else {
+                            const year = dueDateValue.getFullYear();
+                            const month = String(dueDateValue.getMonth() + 1).padStart(2, '0');
+                            const day = String(dueDateValue.getDate()).padStart(2, '0');
+                            dueDateInput.value = `${year}-${month}-${day}`;
+                        }
+                        noDueDateCheckbox.checked = false;
+                        dueDateInput.disabled = false;
+                        dueDateInput.style.opacity = '1';
+                    }
+                } else {
+                    // No due date - the box stays ticked while the field itself remains usable
+                    noDueDateCheckbox.checked = true;
+                    dueDateInput.value = '';
+                    dueDateInput.disabled = true;
+                    dueDateInput.style.opacity = '0.5';
+                }
+            }
+
             // Focus on player name field
             const playerNameField = dialog.querySelector('#player-name');
             if (playerNameField) {
                 setTimeout(() => playerNameField.focus(), 100);
             }
+
+            return true;
         },
 
         // Show add payment dialog
@@ -2431,7 +3055,7 @@
                 </div>
                 <div style="padding: 16px;">
                     <div style="margin-bottom: 6px; font-size: 13px;">
-                        <strong>${entry.playerName}</strong> — Current balance: <strong>$${entry.currentAmount.toLocaleString()}</strong>
+                        <strong>${this.escapeHtml(entry.playerName)}</strong> — Current balance: <strong>$${entry.currentAmount.toLocaleString()}</strong>
                     </div>
                     <label style="display: block; margin: 12px 0 5px; font-weight: bold; font-size: 12px;">Payment Amount ($):</label>
                     <input type="text" id="payment-amount" placeholder="e.g. 500k, 2.5m, 1b or 250000" style="
@@ -2785,6 +3409,8 @@ ${entry.frozen ? '\nStatus: FROZEN' : ''}`;
                 this.interestUpdateInterval = null;
             }
 
+            this.stopLoanCommandRetry();
+
             // Remove all panels
             const panels = document.querySelectorAll('.sidekick-debt-panel');
             panels.forEach(panel => panel.remove());
@@ -2928,6 +3554,7 @@ ${entry.frozen ? '\nStatus: FROZEN' : ''}`;
         const alerts = this.getEntryAlerts(entry);
 
         const dialog = document.createElement('div');
+        dialog.id = 'sidekick-debt-alerts-dialog';
         dialog.style.cssText = `
             position: fixed;
             top: 50%;
@@ -2946,7 +3573,7 @@ ${entry.frozen ? '\nStatus: FROZEN' : ''}`;
 
         dialog.innerHTML = `
             <div style="padding: 15px; border-bottom: 1px solid #666;">
-                <h3 style="margin: 0; color: #fff; font-size: 16px;">🚨 Alerts for ${entry.playerName}</h3>
+                <h3 style="margin: 0; color: #fff; font-size: 16px;">🚨 Alerts for ${this.escapeHtml(entry.playerName)}</h3>
                 <button id="alert-dialog-close" style="
                     position: absolute;
                     top: 10px;

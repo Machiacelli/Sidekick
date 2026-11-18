@@ -480,8 +480,7 @@
                                 window.SidekickModules.Core.NotificationSystem.show(
                                     'Stats Refreshed',
                                     'Battle stats updated successfully',
-                                    'success',
-                                    2000
+                                    'success'
                                 );
                             }
                         } else if (action === 'duration') {
@@ -701,8 +700,7 @@
                                 window.SidekickModules.Core.NotificationSystem.show(
                                     'Stats Updated',
                                     'Training completed - stats refreshed!',
-                                    'success',
-                                    2000
+                                    'success'
                                 );
                             }
 

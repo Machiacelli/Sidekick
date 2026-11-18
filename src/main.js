@@ -505,6 +505,15 @@
                 console.warn("⚠️ Book Notifier module not available");
             }
 
+            // Initialize Book Planner Module
+            console.log("📖 Sidekick: Initializing Book Planner...");
+            if (window.SidekickModules.BookPlanner?.init) {
+                await window.SidekickModules.BookPlanner.init();
+                console.log("✅ Sidekick: Book Planner initialized");
+            } else {
+                console.warn("⚠️ Book Planner module not available");
+            }
+
             // Initialize Disposal Module
             console.log('🗑️ Sidekick: Initializing Disposal...');
             if (window.SidekickModules.Disposal?.init) {

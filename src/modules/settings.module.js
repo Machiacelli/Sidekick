@@ -30,6 +30,20 @@
         isInitialized: false,
         settingsPanel: null,
         currentTab: 'general',
+        NOTIF_DURATION_MIN_SECONDS: 1,
+        NOTIF_DURATION_MAX_SECONDS: 10,
+        NOTIF_DURATION_DEFAULT_SECONDS: 5,
+
+        // Clamp a notification duration (seconds) to the supported 1-10 second range.
+        // Missing, zero, negative or non-numeric values fall back to the default.
+        clampNotificationSeconds(value) {
+            const secs = Number(value);
+            if (!Number.isFinite(secs) || secs <= 0) return this.NOTIF_DURATION_DEFAULT_SECONDS;
+            return Math.min(
+                this.NOTIF_DURATION_MAX_SECONDS,
+                Math.max(this.NOTIF_DURATION_MIN_SECONDS, Math.round(secs))
+            );
+        },
 
         // Initialize the settings module
         async init() {
@@ -209,10 +223,10 @@
 .sk-btn-ghost:hover{color:var(--text);}
 .sk-btn-danger{background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.25);color:#ff6b6b;}
 .sk-info{padding:10px 12px;background:rgba(33,150,243,.08);border-left:3px solid #2196F3;border-radius:0 8px 8px 0;font-size:11px;color:rgba(255,255,255,.65);line-height:1.5;margin-bottom:12px;}
-.sk-api-tos-wrap{overflow-x:auto;margin-bottom:8px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);}
-.sk-api-tos-table{border-collapse:collapse;width:100%;min-width:640px;font-size:10.5px;line-height:1.45;}
+.sk-api-tos-wrap{margin-bottom:8px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);overflow:hidden;}
+.sk-api-tos-table{border-collapse:separate;width:100%;border-spacing:0;border:1px solid var(--border2);font-size:10.5px;line-height:1.45;}
 .sk-api-tos-table th{background:var(--surface3);color:var(--text);font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
-.sk-api-tos-table th,.sk-api-tos-table td{border:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top;}
+.sk-api-tos-table th,.sk-api-tos-table td{border:1px solid var(--border2);padding:7px 9px;text-align:left;vertical-align:top;}
 .sk-api-tos-table td{color:var(--muted);}
 .sk-ph{padding:36px 16px;text-align:center;background:var(--surface2);border:1px dashed var(--border2);border-radius:12px;margin-bottom:10px;}
 .sk-ph-icon{font-size:34px;margin-bottom:8px;display:block;}
@@ -371,44 +385,47 @@
       </div>
       <div class="sk-scroll">
         <div class="sk-subtab-panel active" id="skp-tab-api">
-          <div class="sk-sh">Torn API Key</div>
-          <label class="sk-field-label">API Key</label>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-            <div id="skp-clear-api-key" style="cursor:pointer;color:#000;background:#ccc;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:bold;font-size:12px;" title="Clear API Key">✕</div>
-            <input type="password" class="sk-input" id="sidekick-api-key" placeholder="Enter your Torn API key..." style="flex:1;">
+          <div class="sk-shelf">
+            <div class="sk-sh">Torn API Key</div>
+            <label class="sk-field-label">API Key</label>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+              <div id="skp-clear-api-key" style="cursor:pointer;color:#000;background:#ccc;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:bold;font-size:12px;" title="Clear API Key">✕</div>
+              <input type="password" class="sk-input" id="sidekick-api-key" placeholder="Enter your Torn API key..." style="flex:1;">
+            </div>
+            <div class="sk-hint" style="margin-bottom:0;">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a> &middot; Documentation: <a href="https://machiacelli.github.io/Sidekick/#overview" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">Sidekick Docs</a></div>
+            <div class="sk-info" style="margin-top:8px;margin-bottom:12px;"><strong style="color:var(--text);">Tip:</strong> Sidekick works best with a higher access level key &mdash; more features become available as your key's access increases. Grant only the access you are comfortable with; Torn supports custom keys with only the selections you choose.</div>
+            <div class="sk-btn-row">
+              <button class="sk-btn sk-btn-primary" id="sidekick-test-api">Test Connection</button>
+              <button class="sk-btn sk-btn-ghost" id="sidekick-show-key">Show Key</button>
+            </div>
           </div>
-          
-          <div class="sk-hint" style="margin-bottom:8px;">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/preferences.php#tab=api</a> &middot; Documentation: <a href="https://www.torn.com/api.html" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">torn.com/api.html</a></div>
-          <div class="sk-info" style="margin-bottom:12px;"><strong style="color:var(--text);">Tip:</strong> Sidekick works best with a higher access level key &mdash; more features become available as your key's access increases. Grant only the access you are comfortable with; Torn supports custom keys with only the selections you choose.</div>
-          
-          <div class="sk-btn-row">
-            <button class="sk-btn sk-btn-primary" id="sidekick-test-api">Test Connection</button>
-            <button class="sk-btn sk-btn-ghost" id="sidekick-show-key">Show Key</button>
+
+          <div class="sk-shelf">
+            <div class="sk-sh">API Usage Disclosure</div>
+            <div class="sk-api-tos-wrap">
+              <table class="sk-api-tos-table">
+                <thead>
+                  <tr>
+                    <th>Data Storage</th>
+                    <th>Data Sharing</th>
+                    <th>Purpose of Use</th>
+                    <th>Key Storage &amp; Sharing</th>
+                    <th>Key Access Level</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Persistent storage in the user's browser using Chrome extension storage. Some API responses may be cached temporarily in memory or locally.</td>
+                    <td>API requests are sent to Torn. Certain features may communicate with third-party services, such as YATA, TornProbability, Weav3r, TornWar, GitLab, or Sidekick's bug-reporting service.</td>
+                    <td>Provides gameplay tools, statistics, calculations, reminders, notifications, and other Sidekick features requested by the user.</td>
+                    <td>The Torn API key is stored locally in the user's browser and sent to Torn when required for API requests. It is not intentionally sent to Sidekick's bug-reporting service.</td>
+                    <td>Depends on the features used and the permissions granted to the API key. Users should grant only the minimum access required by their chosen features.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="sk-hint" style="margin-top:0;">Disclosure required by Torn's <a href="https://www.torn.com/api.html" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">API Terms of Service guidelines</a>. Full details in the <a href="https://machiacelli.github.io/Sidekick/#privacy" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">Sidekick Privacy Policy</a>.</div>
           </div>
-          <div class="sk-sh">API Usage Disclosure</div>
-          <div class="sk-api-tos-wrap">
-            <table class="sk-api-tos-table">
-              <thead>
-                <tr>
-                  <th>Data Storage</th>
-                  <th>Data Sharing</th>
-                  <th>Purpose of Use</th>
-                  <th>Key Storage &amp; Sharing</th>
-                  <th>Key Access Level</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Persistent storage in the user's browser using Chrome extension storage. Some API responses may be cached temporarily in memory or locally.</td>
-                  <td>API requests are sent to Torn. Certain features may communicate with third-party services, such as YATA, TornProbability, Weav3r, TornWar, GitLab, or Sidekick's bug-reporting service.</td>
-                  <td>Provides gameplay tools, statistics, calculations, reminders, notifications, and other Sidekick features requested by the user.</td>
-                  <td>The Torn API key is stored locally in the user's browser and sent to Torn when required for API requests. It is not intentionally sent to Sidekick's bug-reporting service.</td>
-                  <td>Depends on the features used and the permissions granted to the API key. Users should grant only the minimum access required by their chosen features.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="sk-hint" style="margin-top:0;">Disclosure required by Torn's <a href="https://www.torn.com/api.html" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">API Terms of Service guidelines</a>. Full details in the <a href="https://machiacelli.github.io/Sidekick/#privacy" target="_blank" style="color:#5fcc6a;text-decoration:none;font-weight:600;">Sidekick Privacy Policy</a>.</div>
         </div>
         <div class="sk-subtab-panel" id="skp-tab-backup">
           <div class="sk-sh">Data Export &amp; Import</div>
@@ -422,7 +439,7 @@
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Notification Sounds</div><div class="sk-row-desc">Play a sound when in-page notifications appear</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-notif-sound"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Auto-dismiss</div><div class="sk-row-desc">Automatically hide notifications after the duration below. Turn off to require clicking each notification to dismiss it</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-notif-autodismiss" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
           <div class="sk-sh" style="margin-top:14px;">Notification Duration</div>
-          <div class="sk-slider-row"><input type="range" min="2" max="10" value="5" class="skp-slider" id="skp-notif-duration" data-out="skp-notif-val" data-suffix="s"><span class="sk-slider-val" id="skp-notif-val">5s</span></div>
+          <div class="sk-slider-row"><input type="range" min="1" max="10" value="5" class="skp-slider" id="skp-notif-duration" data-out="skp-notif-val" data-suffix="s"><span class="sk-slider-val" id="skp-notif-val">5s</span></div>
           <div class="sk-hint">How long notifications stay visible before auto-dismissing (only used when Auto-dismiss is on)</div>
           <div class="sk-status" id="skp-notif-status" style="display:none;"></div>
           <div class="sk-sh" style="margin-top:14px;">System Notifications</div>
@@ -1166,7 +1183,10 @@
             }
 
             if (window.SidekickModules?.HalloweenHelper?.refreshUI) {
-                window.SidekickModules.HalloweenHelper.refreshUI();
+                // refreshUI() is async (it refreshes attack timestamps) but this
+                // function is synchronous - never await it here or the whole
+                // settings module fails to parse.
+                window.SidekickModules.HalloweenHelper.refreshUI().catch(e => console.error(e));
             }
 
 
@@ -2408,9 +2428,9 @@
                     if (notifSoundInp) notifSoundInp.checked = d.soundEnabled === true;
                     if (notifAutoDismissInp) notifAutoDismissInp.checked = d.autoDismiss !== false; // default ON
                     if (notifDurationSlider) {
-                        const secs = Math.round((d.duration || 5000) / 1000);
-                        notifDurationSlider.value = Math.min(10, Math.max(2, secs));
-                        if (notifDurationOut) notifDurationOut.textContent = notifDurationSlider.value + 's';
+                        const secs = this.clampNotificationSeconds(Number(d.duration) / 1000);
+                        notifDurationSlider.value = secs;
+                        if (notifDurationOut) notifDurationOut.textContent = secs + 's';
                     }
                 })();
                 const saveNotifPrefs = async () => {
@@ -2418,7 +2438,9 @@
                     const d = await CS().get('sidekick_notification_prefs') || {};
                     if (notifSoundInp) d.soundEnabled = notifSoundInp.checked;
                     if (notifAutoDismissInp) d.autoDismiss = notifAutoDismissInp.checked;
-                    if (notifDurationSlider) d.duration = parseInt(notifDurationSlider.value, 10) * 1000;
+                    if (notifDurationSlider) {
+                        d.duration = this.clampNotificationSeconds(notifDurationSlider.value) * 1000;
+                    }
                     await CS().set('sidekick_notification_prefs', d);
                 };
                 if (notifSoundInp) notifSoundInp.addEventListener('change', saveNotifPrefs);
@@ -2914,13 +2936,13 @@
 
                 if (!key) {
                     if (window.SidekickModules.Core.NotificationSystem) {
-                        window.SidekickModules.Core.NotificationSystem.show('API Test', 'Please enter an API key first', 'error', 3000);
+                        window.SidekickModules.Core.NotificationSystem.show('API Test', 'Please enter an API key first', 'error');
                     }
                     return;
                 }
 
                 if (window.SidekickModules.Core.NotificationSystem) {
-                    window.SidekickModules.Core.NotificationSystem.show('API Test', 'Testing API connection...', 'info', 2000);
+                    window.SidekickModules.Core.NotificationSystem.show('API Test', 'Testing API connection...', 'info');
                 }
 
                 try {
@@ -2934,11 +2956,11 @@
                         : `API Working (${data.name})`;
 
                     if (window.SidekickModules.Core.NotificationSystem) {
-                        window.SidekickModules.Core.NotificationSystem.show('API Test', finalMsg, isError ? 'error' : 'success', 5000);
+                        window.SidekickModules.Core.NotificationSystem.show('API Test', finalMsg, isError ? 'error' : 'success');
                     }
                 } catch (error) {
                     if (window.SidekickModules.Core.NotificationSystem) {
-                        window.SidekickModules.Core.NotificationSystem.show('API Test', 'API test failed - check your connection', 'error', 3000);
+                        window.SidekickModules.Core.NotificationSystem.show('API Test', 'API test failed - check your connection', 'error');
                     }
                 }
             });
@@ -3019,8 +3041,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Backup Created',
                                 `Downloaded sidekick-backup-${date}.json`,
-                                'success',
-                                3000
+                                'success'
                             );
                         }
                     } catch (error) {
@@ -3031,8 +3052,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Export Failed',
                                 error.message,
-                                'error',
-                                5000
+                                'error'
                             );
                         }
                     } finally {
@@ -3150,8 +3170,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Backup Restored',
                                 'Data imported successfully. Reloading...',
-                                'success',
-                                2000
+                                'success'
                             );
                         }
 
@@ -3174,8 +3193,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Import Failed',
                                 error.message,
-                                'error',
-                                5000
+                                'error'
                             );
                         }
                     } finally {
@@ -3318,8 +3336,7 @@
                         window.SidekickModules.Core.NotificationSystem.show(
                             'Modules Updated',
                             'Reloading page to apply changes...',
-                            'info',
-                            2000
+                            'info'
                         );
                     }
 
@@ -3359,8 +3376,7 @@
                         window.SidekickModules.Core.NotificationSystem.show(
                             'Xanax Viewer',
                             'Settings saved automatically',
-                            'success',
-                            2000
+                            'success'
                         );
                     }
                 } catch (error) {
@@ -3392,8 +3408,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Cache Cleared',
                                 'Xanax Viewer cache has been cleared',
-                                'info',
-                                3000
+                                'info'
                             );
                         }
                     } catch (error) {
@@ -3447,8 +3462,7 @@
                         window.SidekickModules.Core.NotificationSystem.show(
                             'Chain Timer',
                             'Settings saved automatically',
-                            'success',
-                            2000
+                            'success'
                         );
                     }
 
@@ -3507,10 +3521,15 @@
             // Auto-save helper function
             const autoSaveNotifSettings = async () => {
                 const settings = {
+                    ...notifSettings,
                     soundEnabled: notifSoundToggle?.dataset.active === 'true',
-                    autoDismiss: notifAutoDismissCheckbox.checked,
+                    autoDismiss: notifAutoDismissCheckbox ? notifAutoDismissCheckbox.checked : (notifSettings.autoDismiss !== false),
                     windowsNotifications: notifWindowsCheckbox?.checked || false,
-                    duration: parseInt(notifDurationSlider.value) * 1000
+                    duration: this.clampNotificationSeconds(
+                        notifDurationSlider
+                            ? notifDurationSlider.value
+                            : (Number(notifSettings.duration) || 0) / 1000
+                    ) * 1000
                 };
 
                 try {
@@ -3522,8 +3541,7 @@
                         window.SidekickModules.Core.NotificationSystem.show(
                             'Notifications',
                             'Settings saved automatically',
-                            'success',
-                            2000
+                            'success'
                         );
                     }
                 } catch (error) {
@@ -3567,9 +3585,9 @@
                 notifWindowsCheckbox.addEventListener('change', autoSaveNotifSettings);
             }
             if (notifDurationSlider) {
-                const duration = (notifSettings.duration || 5000) / 1000;
+                const duration = this.clampNotificationSeconds(Number(notifSettings.duration) / 1000);
                 notifDurationSlider.value = duration;
-                notifDurationDisplay.textContent = `${duration}s`;
+                if (notifDurationDisplay) notifDurationDisplay.textContent = `${duration}s`;
             }
 
             // Auto-save on slider change
@@ -3790,8 +3808,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Quick Deposit',
                                 `Deposit target: ${target}`,
-                                'success',
-                                2000
+                                'success'
                             );
                         }
                     } catch (error) {
@@ -3824,8 +3841,7 @@
                             window.SidekickModules.Core.NotificationSystem.show(
                                 'Quick Deposit',
                                 'Ghost ID cleared',
-                                'success',
-                                2000
+                                'success'
                             );
                         }
                     } catch (error) {

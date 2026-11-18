@@ -652,7 +652,7 @@ friendlyStatus(status, fallback) {
     showBanner(title, message, type = 'warning') {
         const ns = window.SidekickModules?.Core?.NotificationSystem;
         if (ns?.show) {
-            ns.show(title, message, type, 6000);
+            ns.show(title, message, type);
         }
         console.warn('🎯 FactionOps Target Caller:', title, '—', message);
     },

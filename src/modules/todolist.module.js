@@ -87,7 +87,7 @@
                 visible: true
             },
             dailyBoughtItems: {
-                name: 'Daily Bought Items',
+                name: 'Bought Items',
                 icon: '🛒',
                 color: '#FF9800',
                 description: 'Buy 100 items from NPC shops',
@@ -118,11 +118,6 @@
         // { day: 'YYYY-MM-DD', xanax: <attempts>, cityItems: <attempts>,
         //   xanaxLastAt: <epoch ms>, cityItemsLastAt: <epoch ms> }
         dayStartAttempts: null,
-
-        // Runtime-only: day-start snapshot REJECTIONS are warned once per UTC
-        // day per stat (console.debug afterwards) so a persistently shifted/
-        // stale snapshot doesn't spam the console warnings for every retry.
-        snapshotRejectionWarned: null,
 
         // Initialize the todo list module
         async init() {
@@ -739,20 +734,13 @@
             }
         },
 
-        // Log a day-start snapshot rejection as console.warn only ONCE per
-        // UTC day per stat; later rejections the same day log at debug level
-        // (hidden by Chrome's default filter) so the retry budget of up to
-        // 5 attempts/day can never spam the console with repeated warnings.
+        // Log a day-start snapshot rejection at debug level only. Chrome's
+        // extension error page surfaces console.warn lines as "Errors", so
+        // warning here spammed that page with expected rejections (stale or
+        // shifted v2 snapshots) and buried real errors. The rejection logic
+        // itself is unchanged and self-heals on the next API check.
         warnSnapshotRejectionOnce(statKey, todayUtcDay, message) {
-            if (!this.snapshotRejectionWarned || this.snapshotRejectionWarned.day !== todayUtcDay) {
-                this.snapshotRejectionWarned = { day: todayUtcDay, xanax: false, cityItems: false };
-            }
-            if (!this.snapshotRejectionWarned[statKey]) {
-                this.snapshotRejectionWarned[statKey] = true;
-                console.warn(message);
-            } else {
-                console.debug(`(repeat, already warned today) ${message}`);
-            }
+            console.debug(message);
         },
 
         // Shape-agnostic personalstat extractor (mirrors background.js's
@@ -1430,7 +1418,7 @@
                     shopTask.currentCount = boughtClamped;
                     shopTask.completed = isComplete;
                     hasUpdates = true;
-                    console.log(`🛒 Updated Daily Bought Items: ${boughtClamped}/${shopTask.maxCount}`);
+                    console.log(`🛒 Updated Bought Items: ${boughtClamped}/${shopTask.maxCount}`);
                 }
 
                 if (baselineChanged) {

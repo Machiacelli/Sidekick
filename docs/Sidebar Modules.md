@@ -50,6 +50,8 @@ Where to find it: no settings toggle · Lives in the sidebar · Open sidebar **+
 
 Tracks debts and loans you owe or are owed. Displays per-player panels with interest rules (none, daily, weekly, flat, APR), monitors payment logs via API to auto-detect partial payments, and can send payment-reminder messages. Pairs with Debt Receipt Sharing (see Economy & Market page).
 
+Add `/loan` to the note of a money transfer and Sidekick opens the usual Add Loan window pre-filled with the amount and player, so you can confirm it (or cancel) and set a deadline, interest and notes before saving. Every tracked entry also gets an **Edit** button for changing its deadline, interest and notes.
+
 ## 💰 Travel Stocks
 
 Where to find it: no settings toggle · Lives in the sidebar · Open sidebar **+ sidebar → Travel Stocks**

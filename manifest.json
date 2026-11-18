@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sidekick",
-    "version": "1.2.28",
+    "version": "1.2.29",
     "description": "Enhanced sidebar and tools for Torn.com",
     "permissions": [
         "storage",
@@ -92,6 +92,7 @@
                 "src/modules/legible-names.module.js",
                 "src/modules/mission-tracker.module.js",
                 "src/modules/book-notifier.module.js",
+                "src/modules/book-planner.module.js",
                 "src/modules/hide-crime-outcome.module.js",
                 "src/modules/egg-helper.module.js",
                 "src/modules/special-gym-ratios.module.js",
