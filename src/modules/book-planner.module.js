@@ -23,7 +23,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
 
     const BOOKS = {
-        'brawn over brains': {
+'brawn over brains': {
             name: 'Brawn Over Brains',
             effect: 'Permanently increases Strength by 5% (up to 10,000,000 maximum gain) after 31 days.',
             statKey: 'strength',
@@ -37,8 +37,9 @@
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            hideVerdict: true,
         },
-        'time is in the mind': {
+'time is in the mind': {
             name: 'Time Is In The Mind',
             effect: 'Permanently increases Speed by 5% (up to 10,000,000 maximum gain) after 31 days.',
             statKey: 'speed',
@@ -52,8 +53,9 @@
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            hideVerdict: true,
         },
-        'keeping your face handsome': {
+'keeping your face handsome': {
             name: 'Keeping Your Face Handsome',
             effect: 'Permanently increases Defense by 5% (up to 10,000,000 maximum gain) after 31 days.',
             statKey: 'defense',
@@ -67,8 +69,9 @@
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            hideVerdict: true,
         },
-        'a job for your hands': {
+'a job for your hands': {
             name: 'A Job For Your Hands',
             effect: 'Permanently increases Dexterity by 5% (up to 10,000,000 maximum gain) after 31 days.',
             statKey: 'dexterity',
@@ -82,6 +85,7 @@
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            hideVerdict: true,
         },
         'working 9 til 5': {
             name: 'Working 9 Til 5',
@@ -93,12 +97,12 @@
             thresholdLabel: null,
             cap: 2500,
             capLabel: '2,500',
-            reason: '',
             helperItems: [],
             helperNote: '',
-            durationDays: 0,
+            durationDays: 31,
+            needsWorkstats: true,
         },
-        'making friends enemies and cakes': {
+'making friends enemies and cakes': {
             name: 'Making Friends, Enemies, And Cakes',
             effect: 'Increases friends list, enemies list & targets list capacity by +100 upon completion.',
             statKey: null,
@@ -110,10 +114,10 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
-            durationDays: 0,
+            helperNote: 'No plan needed',
+            durationDays: 31,
         },
-        'high school for adults': {
+'high school for adults': {
             name: 'High School For Adults',
             effect: 'Provides a free merit reset upon completion.',
             statKey: null,
@@ -125,8 +129,8 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
-            durationDays: 0,
+            helperNote: 'No plan needed',
+            durationDays: 31,
         },
         'milk yourself sober': {
             name: 'Milk Yourself Sober',
@@ -140,10 +144,11 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
             ],
             helperNote: '',
-            durationDays: 0,
+            durationDays: 31,
+            needsDrugInventory: true,
         },
         'fight like an asshole': {
             name: 'Fight Like An Asshole',
@@ -162,7 +167,7 @@
         },
         'mind over matter': {
             name: 'Mind Over Matter',
-            effect: 'Provides a passive 100% bonus to Strength for 31 days.',
+effect: 'Provides a passive 100% bonus to Strength for 31 days.',
             statKey: 'strength',
             statLabel: 'Strength',
             statIcon: '💪',
@@ -172,7 +177,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'no shame no pain': {
@@ -187,7 +192,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'run like the wind': {
@@ -200,14 +205,14 @@
             thresholdLabel: null,
             cap: null,
             capLabel: null,
-            reason: '',
+reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'weaseling out of trouble': {
             name: 'Weaseling Out Of Trouble',
-            effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
+effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
             statKey: 'dexterity',
             statLabel: 'Dexterity',
             statIcon: '✌️',
@@ -217,7 +222,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'get hard or go home': {
@@ -232,11 +237,12 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
                 { name: 'Feathery Hotel Coupon', count: 120 },
             ],
             helperNote: '',
             durationDays: 31,
+            needsDrugInventory: true,
         },
         'gym grunting shouting to success': {
             name: 'Gym Grunting - Shouting To Success',
@@ -250,11 +256,12 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
                 { name: 'Feathery Hotel Coupon', count: 120 },
             ],
             helperNote: '',
             durationDays: 31,
+            needsDrugInventory: true,
         },
         'self defense in the workplace': {
             name: 'Self Defense In The Workplace',
@@ -268,11 +275,13 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
                 { name: 'Feathery Hotel Coupon', count: 120 },
             ],
             helperNote: '',
             durationDays: 31,
+            needsCompanyCheck: true,
+            needsBoosterCooldown: true,
         },
         'speed 3 the rejected script': {
             name: 'Speed 3 - The Rejected Script',
@@ -286,11 +295,12 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
                 { name: 'Feathery Hotel Coupon', count: 120 },
             ],
             helperNote: '',
             durationDays: 31,
+            needsDrugInventory: true,
         },
         'limbo lovers 101': {
             name: 'Limbo Lovers 101',
@@ -304,11 +314,12 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
                 { name: 'Feathery Hotel Coupon', count: 120 },
             ],
             helperNote: '',
             durationDays: 31,
+            needsDrugInventory: true,
         },
         'the hamburglar\'s guide to crime': {
             name: 'The Hamburglar\'s Guide To Crime',
@@ -325,7 +336,7 @@
             helperNote: '',
             durationDays: 31,
         },
-        'what are old folk good for anyway': {
+'what are old folk good for anyway': {
             name: 'What Are Old Folk Good For Anyway?',
             effect: 'Increases leveling EXP gains by 25% for 31 days.',
             statKey: null,
@@ -337,7 +348,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'medical degree schmedical degree': {
@@ -352,7 +363,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'no more soap on a rope': {
@@ -367,12 +378,27 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'mailing yourself abroad': {
             name: 'Mailing Yourself Abroad',
             effect: 'Reduces all travel times by 25% for 31 days.',
+            statKey: null,
+            statLabel: null,
+            statIcon: null,
+            threshold: null,
+            thresholdLabel: null,
+            cap: null,
+            capLabel: null,
+            reason: '',
+            helperItems: [],
+            helperNote: 'No plan needed',
+            durationDays: 31,
+        },
+        'smuggling for beginners': {
+            name: 'Smuggling For Beginners',
+            effect: 'Increases travel capacity by +10 for 31 days.',
             statKey: null,
             statLabel: null,
             statIcon: null,
@@ -399,6 +425,9 @@
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            needsCompanyCheck: true,
+            companyBonusTypes: ['travel_items'],
+            companyTypeIds: [32, 15],
         },
         'stealthy stealing of underwear': {
             name: 'Stealthy Stealing of Underwear',
@@ -438,14 +467,15 @@
             statIcon: null,
             threshold: null,
             thresholdLabel: null,
-            cap: null,
-            capLabel: null,
+            cap: 50000000,
+            capLabel: '50,000,000',
             reason: '',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            needsCapCheck: true,
         },
-        'winking to win': {
+'winking to win': {
             name: 'Winking To Win',
             effect: 'Doubles contract credit and money rewards for 31 days.',
             statKey: null,
@@ -457,10 +487,10 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
-        'finders keepers': {
+'finders keepers': {
             name: 'Finders Keepers',
             effect: 'Increases awareness by 2500% for 31 days.',
             statKey: null,
@@ -472,24 +502,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
-            durationDays: 31,
-        },
-        'hot turkey': {
-            name: 'Hot Turkey',
-            effect: 'Gain no drug addiction for 31 days.',
-            statKey: null,
-            statLabel: null,
-            statIcon: null,
-            threshold: null,
-            thresholdLabel: null,
-            cap: null,
-            capLabel: null,
-            reason: '',
-            helperItems: [
-                { name: 'Xanax', count: 85 },
-            ],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'higher daddy higher': {
@@ -504,10 +517,10 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+helperNote: 'No plan needed',
             durationDays: 31,
         },
-        'the real dutch courage': {
+'the real dutch courage': {
             name: 'The Real Dutch Courage',
             effect: 'Doubles nerve regeneration for 31 days.',
             statKey: null,
@@ -521,6 +534,9 @@
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            needsCompanyCheck: true,
+            companyBonusTypes: ['item_boost'],
+            companyTypeIds: [25],
         },
         'because im happy the pharrell story': {
             name: "Because I'm Happy - The Pharrell Story",
@@ -564,7 +580,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: 'Not found in city shops - must be obtained another way.',
+helperNote: '',
             durationDays: 31,
         },
         'self control is for losers': {
@@ -579,9 +595,9 @@
             capLabel: null,
             reason: '',
             helperItems: [
-                { name: 'Xanax', count: 85 },
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
             ],
-            helperNote: 'Pairs well with energy cans and other consumables with cooldowns.',
+            helperNote: '',
             durationDays: 31,
             tabs: [
                 {
@@ -598,6 +614,24 @@
                 },
             ],
         },
+        'hot turkey': {
+            name: 'Hot Turkey',
+            effect: 'Gain no drug addiction for 31 days.',
+            statKey: null,
+            statLabel: null,
+            statIcon: null,
+            threshold: null,
+            thresholdLabel: null,
+            cap: null,
+            capLabel: null,
+            reason: '',
+            helperItems: [
+                { name: 'Xanax', count: null, calcType: 'drug_pills' },
+            ],
+            helperNote: '',
+            durationDays: 31,
+            needsDrugCooldown: true,
+        },
         'going back for more': {
             name: 'Going Back For More',
             effect: 'Reduces all medical cooldowns by 50% for 31 days.',
@@ -613,7 +647,7 @@
                 { name: 'Painkillers', count: null },
                 { name: 'Neumune', count: null },
             ],
-            helperNote: 'Pairs well with medical items that have cooldowns.',
+helperNote: '',
             durationDays: 31,
         },
         'get drunk and lose dignity': {
@@ -645,8 +679,17 @@
             helperItems: [
                 { name: 'Energy Drink', count: null, calcType: 'booster_cans' },
             ],
-            helperNote: 'Pairs well with energy drinks.',
+            helperNote: '',
             durationDays: 31,
+            needsBoosterCooldown: true,
+            tabs: [
+                {
+                    label: 'Energy',
+                    helperItems: [
+                        { name: 'Energy Can', count: null, calcType: 'booster_cans' },
+                    ],
+                },
+            ],
         },
         'yes please diabetes': {
             name: 'Yes Please Diabetes',
@@ -665,7 +708,7 @@
         },
         'ugly energy': {
             name: 'Ugly Energy',
-            effect: 'Increases maximum energy to 250 for 31 days.',
+            effect: 'Increases maximum energy (including energy refills) to 250 for 31 days.',
             statKey: null,
             statLabel: null,
             statIcon: null,
@@ -679,8 +722,9 @@
             ],
             helperNote: '',
             durationDays: 31,
+            needsBoosterCooldown: true,
         },
-        'memories and mammaries': {
+'memories and mammaries': {
             name: 'Memories And Mammaries',
             effect: 'Takes the same effect from the last used book for 31 days.',
             statKey: null,
@@ -692,12 +736,12 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: 'Use immediately after another book to copy its effect.',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'brown-nosing the boss': {
             name: 'Brown-nosing The Boss',
-            effect: 'Greatly increases personal employee effectiveness for 31 days.',
+effect: 'Greatly increases personal employee effectiveness for 31 days.',
             statKey: null,
             statLabel: null,
             statIcon: null,
@@ -707,7 +751,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'running away from trouble': {
@@ -851,6 +895,13 @@ const ALL_ALCOHOL_NAMES = Object.values(ALCOHOLS_BY_ID).map(d => d.name);
 // ════════════════════════════════════════════════════════════════════════════════
 
 const COMPANY_BONUSES = {
+    15: { // Cruise Line
+        name: 'Cruise Line',
+        stars: {
+            10: [{ type: 'travel_items', count: 3 }],
+            3: [{ type: 'travel_items', count: 2 }],
+        },
+    },
     12: { // Grocery Store
         name: 'Grocery Store',
         stars: {
@@ -876,6 +927,18 @@ const COMPANY_BONUSES = {
             3: [{ type: 'cooldown_reduction', target: 'alcohol', percent: 30 }],
         },
     },
+    36: { // Ladies Strip Club
+        name: 'Ladies Strip Club',
+        stars: {
+            7: [{ type: 'gym_gain_boost', target: 'defense', percent: 10 }],
+        },
+    },
+    32: { // Lingerie Store
+        name: 'Lingerie Store',
+        stars: {
+            3: [{ type: 'travel_items', count: 2 }],
+        },
+    },
 };
 
 const STORAGE_KEY = 'book-planner';
@@ -892,6 +955,11 @@ const STORAGE_KEY = 'book-planner';
 
         _injectedPanels: new Set(),
         _scanInterval: null,
+
+        // Inventory cache (shared across all book opens within TTL)
+        _inventoryCache: null,
+        _drugInventoryCache: null,
+        _cacheTtlMs: 2 * 60 * 1000,
 
         // ═════════════════════════════════════════════════════════════════════════
         // Init
@@ -1051,7 +1119,7 @@ const STORAGE_KEY = 'book-planner';
             }
         },
 
-        async fetchInventory(authHeader) {
+        async fetchInventory(authHeader, category = 'Energy+Drink') {
             const pageSize = 250;
             const maxPages = 20;
             const items = [];
@@ -1060,7 +1128,10 @@ const STORAGE_KEY = 'book-planner';
             let timestamp = null;
 
             for (let page = 0; page < maxPages; page++) {
-                const url = `https://api.torn.com/v2/user/inventory?cat=Energy+Drink&limit=${pageSize}&offset=${offset}`;
+                let url = `https://api.torn.com/v2/user/inventory?limit=${pageSize}&offset=${offset}`;
+                if (category) {
+                    url += `&cat=${category}`;
+                }
                 const response = await this.fetchData(url, { Authorization: authHeader });
                 if (!response || response.error) {
                     const message = response?.error?.error || response?.error?.message || 'Inventory request failed';
@@ -1314,13 +1385,23 @@ const STORAGE_KEY = 'book-planner';
             console.log('📖 Book Planner: getApiKey result:', apiKey ? 'KEY FOUND' : 'EMPTY');
             const hasStatRequirement = book.statKey && book.threshold;
             const hasTabs = book.tabs && book.tabs.length > 0;
-            const needsBoosterCooldown = (book.helperItems || []).some(i => i.calcType === 'booster_cans')
+            const needsBoosterCooldown = book.needsBoosterCooldown === true
+                || (book.helperItems || []).some(i => i.calcType === 'booster_cans')
                 || (book.tabs || []).some(t => (t.helperItems || []).some(i => i.calcType === 'booster_cans'));
+            const needsDrugCooldown = book.needsDrugCooldown === true;
+            const needsWorkstats = book.needsWorkstats === true;
+            const needsDrugInventory = book.needsDrugInventory === true;
+            const needsCapCheck = book.needsCapCheck === true;
+            const needsCompanyCheck = book.needsCompanyCheck === true;
             const needsPerks = needsBoosterCooldown;
             let userStat = null;
             let boosterCooldown = null;
-            let boosterMaxHours = 48;
+            let drugCooldown = null;
+            let workstats = null;
+            let battlestats = null;
+            let boosterMaxHours = 24;
             let inventory = null;
+            let drugInventory = null;
             let statContainer = null;
             let companyProfile = null;
             let perkMultiplier = 1;
@@ -1331,19 +1412,39 @@ const STORAGE_KEY = 'book-planner';
             if (apiKey) {
                 try {
                     const authHeader = `ApiKey ${apiKey}`;
+                    const now = Date.now();
                     const calls = [];
                     if (hasStatRequirement) {
                         calls.push({ key: 'stats', promise: this.fetchData(`https://api.torn.com/v2/user/battlestats`, { Authorization: authHeader }) });
                     }
-                    calls.push({ key: 'inventory', promise: this.fetchInventory(authHeader) });
-                    if (needsBoosterCooldown) {
+                    if (needsCapCheck) {
+                        calls.push({ key: 'capStats', promise: this.fetchData(`https://api.torn.com/v2/user/battlestats`, { Authorization: authHeader }) });
+                    }
+                    const cachedInv = this._inventoryCache && now - this._inventoryCache.timestamp < this._cacheTtlMs ? this._inventoryCache.data : null;
+                    if (cachedInv) {
+                        inventory = cachedInv;
+                    } else {
+                        calls.push({ key: 'inventory', promise: this.fetchInventory(authHeader) });
+                    }
+                    if (needsBoosterCooldown || needsDrugCooldown) {
                         calls.push({ key: 'cooldowns', promise: this.fetchData(`https://api.torn.com/v2/user/cooldowns`, { Authorization: authHeader }) });
+                    }
+                    const cachedDrugInv = this._drugInventoryCache && now - this._drugInventoryCache.timestamp < this._cacheTtlMs ? this._drugInventoryCache.data : null;
+                    if (needsBoosterCooldown || needsDrugCooldown || needsDrugInventory) {
+                        if (cachedDrugInv) {
+                            drugInventory = cachedDrugInv;
+                        } else {
+                            calls.push({ key: 'drugInventory', promise: this.fetchInventory(authHeader, 'Drug') });
+                        }
+                    }
+                    if (needsWorkstats) {
+                        calls.push({ key: 'workstats', promise: this.fetchData(`https://api.torn.com/v2/user/workstats`, { Authorization: authHeader }) });
                     }
                     if (needsPerks) {
                         calls.push({ key: 'perks', promise: this.fetchUserPerks(authHeader) });
                         calls.push({ key: 'calendar', promise: this.fetchCalendar(authHeader) });
                     }
-                    const needsCompanyData = needsBoosterCooldown;
+                    const needsCompanyData = needsBoosterCooldown || needsCompanyCheck;
                     if (needsCompanyData) {
                         calls.push({ key: 'company', promise: this.fetchData(`https://api.torn.com/v2/company/profile`, { Authorization: authHeader }) });
                     }
@@ -1360,16 +1461,26 @@ const STORAGE_KEY = 'book-planner';
                         if (key === 'stats') {
                             userStat = r;
                             statContainer = userStat && userStat.battlestats ? userStat.battlestats : userStat;
+                        } else if (key === 'capStats') {
+                            battlestats = r && r.battlestats ? r.battlestats : r;
                         } else if (key === 'inventory') {
                             inventory = r;
+                            this._inventoryCache = { data: r, timestamp: Date.now() };
                         } else if (key === 'cooldowns') {
                             const cd = r.cooldowns || r;
                             const boosterSeconds = Number(cd.booster);
                             boosterCooldown = Number.isFinite(boosterSeconds) ? Math.max(0, boosterSeconds) : 0;
-                            boosterMaxHours = 48;
+                            const drugSeconds = Number(cd.drug);
+                            drugCooldown = Number.isFinite(drugSeconds) ? Math.max(0, drugSeconds) : 0;
+                        } else if (key === 'drugInventory') {
+                            drugInventory = r;
+                            this._drugInventoryCache = { data: r, timestamp: Date.now() };
+                        } else if (key === 'workstats') {
+                            workstats = r && r.workstats ? r.workstats : r;
                         } else if (key === 'perks') {
                             perkMultiplier = this.calculatePerkMultiplier(r);
                             nervePerkMultiplier = this.calculateNervePerkMultiplier(r);
+                            boosterMaxHours = this.calculateMaxBoosterCooldown(r);
                         } else if (key === 'calendar') {
                             caffeineConActive = this.isCaffeineConActive(r);
                         } else if (key === 'company') {
@@ -1386,6 +1497,12 @@ const STORAGE_KEY = 'book-planner';
             const statDetail = hasStatRequirement ? statContainer?.[book.statKey] : null;
             const statValue = statDetail && statDetail.value !== undefined ? statDetail.value : null;
             const meetsThreshold = hasStatRequirement ? (statValue !== null ? statValue >= book.threshold : null) : null;
+
+            const userCompany = companyProfile && companyProfile.type ? companyProfile.type.name : null;
+            const userCompanyTypeId = companyProfile && companyProfile.type ? companyProfile.type.id : null;
+            const boosterActive = boosterCooldown && boosterCooldown > 0;
+            const boosterRemaining = boosterActive ? Math.max(0, boosterCooldown) : 0;
+            const boosterCurrentH = (boosterRemaining / 3600).toFixed(1);
 
             const tabsContent = book.tabs || [];
             const activeTab = tabsContent[0];
@@ -1494,22 +1611,27 @@ const STORAGE_KEY = 'book-planner';
                 <div class="skbp-tab-panel" id="skbp-tab-${idx}" style="${idx === 0 ? 'display:block' : 'display:none'}">
                     ${isEnergyTab && allCans.length > 0 ? `<div class="skbp-section skbp-can-section" style="margin-top:8px;">
                         <div class="skbp-section-title">SELECT ENERGY CAN</div>
+                        <div class="skbp-item-table">
                         ${cansWithEnergy.map(c => {
                             const isSelected = selectedCanNameFinal === c.name;
                             const totalEnergy = c.energy !== null && boosterCansNeed !== null ? c.energy * boosterCansNeed : 0;
                             return `<div class="skbp-item-row skbp-can-row${isSelected ? ' skbp-can-selected' : ''}" data-can-name="${this.escapeHtml(c.name)}"><input type="radio" class="skbp-can-radio" name="skbp-can-${idx}" ${isSelected ? 'checked' : ''} style="margin:0; cursor:pointer; width:16px; height:16px;"/><span class="skbp-item-name">${this.escapeHtml(c.name)}</span><span class="skbp-item-energy">${totalEnergy.toLocaleString()} energy</span><span class="skbp-item-count">×${c.count.toLocaleString()} have</span></div>`;
                         }).join('')}
+                        </div>
                     </div>` : ''}
                     ${isNerveTab && allAlcohols.length > 0 ? `<div class="skbp-section skbp-alcohol-section" style="margin-top:8px;">
                         <div class="skbp-section-title">SELECT ALCOHOL</div>
+                        <div class="skbp-item-table">
                         ${alcoholsWithNerve.map(c => {
                             const isSelected = selectedAlcoholNameFinal === c.name;
                             const totalNerve = c.nerve !== null && boosterAlcoholsNeed !== null ? c.nerve * boosterAlcoholsNeed : 0;
                             return `<div class="skbp-item-row skbp-alcohol-row${isSelected ? ' skbp-alcohol-selected' : ''}" data-alcohol-name="${this.escapeHtml(c.name)}"><input type="radio" class="skbp-alcohol-radio" name="skbp-alcohol-${idx}" ${isSelected ? 'checked' : ''} style="margin:0; cursor:pointer; width:16px; height:16px;"/><span class="skbp-item-name">${this.escapeHtml(c.name)}</span><span class="skbp-item-nerve">${totalNerve.toLocaleString()} nerve</span><span class="skbp-item-count">×${c.count.toLocaleString()} have</span></div>`;
                         }).join('')}
+                        </div>
                     </div>` : ''}
                     ${hasHelpers ? `<div class="skbp-section">
                         <div class="skbp-section-title">ITEMS NEEDED</div>
+                        <div class="skbp-item-table">
                         ${resolvedHelpers.map(i => {
                             if (i.calcType === 'booster_cans' && this.isAlcohol(i.name)) {
                                 const selectedAlc = allAlcohols.find(c => c.name === selectedAlcoholNameFinal);
@@ -1531,6 +1653,7 @@ const STORAGE_KEY = 'book-planner';
                             const nerveText = i.energyPerCan !== null ? ` · ${i.energyPerCan} nerve/bottle` : '';
                             return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(i.name)}</span><span class="skbp-item-count">×${i.have.toLocaleString()} have</span><span class="skbp-item-needed">${i.need !== null ? (i.have < i.need ? '⚠️ ' : '') + '×' + i.need.toLocaleString() + ' need' : '–'}</span><span class="skbp-item-note">${this.escapeHtml(i.note + energyText + nerveText)}</span></div>`;
                         }).join('')}
+                        </div>
                     </div>` : ''}
                     ${hasPaths ? `<div class="skbp-section">
                         <div class="skbp-section-title">COMPANY PATHS</div>
@@ -1562,7 +1685,7 @@ const STORAGE_KEY = 'book-planner';
                     display:flex; align-items:center; justify-content:space-between;
                 }
                 #${MODAL_ID} .skbp-title {
-                    font-size:18px; font-weight:700; background:linear-gradient(135deg,#5fcc6a,#ffad5a);
+                    font-size:18px; font-weight:700; line-height:1.2; padding-bottom:4px; background:linear-gradient(135deg,#5fcc6a,#ffad5a);
                     -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
                 }
                 #${MODAL_ID} .skbp-close {
@@ -1594,11 +1717,12 @@ const STORAGE_KEY = 'book-planner';
                 #${MODAL_ID} .skbp-tab-panel{display:none;}
                 #${MODAL_ID} .skbp-section{margin-bottom:24px;}
                 #${MODAL_ID} .skbp-section-title{font-size:11px;font-weight:700;color:var(--muted,rgba(255,255,255,0.55));margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;}
-                #${MODAL_ID} .skbp-item-row{display:flex;align-items:center;gap:12px;font-size:12px;color:rgba(255,255,255,0.7);margin-bottom:6px;}
-                #${MODAL_ID} .skbp-item-name{flex:1;}
-                #${MODAL_ID} .skbp-item-count{font-weight:700;color:#f0f0f0;}
-                #${MODAL_ID} .skbp-item-needed{font-weight:700;color:#fbbf24;}
-                #${MODAL_ID} .skbp-item-note{font-size:10px;color:rgba(255,255,255,0.45);font-style:italic;}
+                #${MODAL_ID} .skbp-item-table{display:table;width:100%;border:none;border-collapse:separate;margin-bottom:12px;}
+                #${MODAL_ID} .skbp-item-row{display:table-row;}
+                #${MODAL_ID} .skbp-item-name{display:table-cell;}
+                #${MODAL_ID} .skbp-item-count{display:table-cell;width:160px;white-space:nowrap;font-weight:700;color:#f0f0f0;}
+                #${MODAL_ID} .skbp-item-needed{display:table-cell;width:190px;white-space:nowrap;font-weight:700;color:#fbbf24;}
+                #${MODAL_ID} .skbp-item-note{display:table-cell;font-size:10px;color:rgba(255,255,255,0.45);font-style:italic;}
                 #${MODAL_ID} .skbp-can-row{cursor:pointer;background:rgba(255,255,255,0.03);border-radius:6px;padding:4px 8px;}
                 #${MODAL_ID} .skbp-can-row:hover{background:rgba(255,255,255,0.08);}
                 #${MODAL_ID} .skbp-can-selected{background:rgba(95,204,106,0.15);border-left:3px solid var(--green,#5fcc6a);}
@@ -1614,7 +1738,9 @@ const STORAGE_KEY = 'book-planner';
                 #${MODAL_ID} .skbp-check-active{color:#4ade80;}
                 #${MODAL_ID} .skbp-check-inactive{color:#f87171;}
                 #${MODAL_ID} .skbp-empty{font-size:12px;color:var(--muted,rgba(255,255,255,0.6));padding:16px 0;text-align:center;}
+                #${MODAL_ID} .skbp-footnote-value{font-weight:400; color:var(--muted,rgba(255,255,255,0.45)); font-size:11px; font-style:italic;}
                 #${MODAL_ID} .skbp-footer {padding:16px 24px; border-top:1px solid var(--border2,rgba(255,255,255,0.06)); display:flex; justify-content:flex-end; gap:8px; background:var(--surface,#1e1e1e);}
+
                 #${MODAL_ID} .skbp-btn {
                     border:none; border-radius:8px; padding:10px 20px; font-size:13px; font-weight:700;
                     cursor:pointer; color:#111;
@@ -1631,30 +1757,32 @@ const STORAGE_KEY = 'book-planner';
                 <div class="skbp-body">
                     <div class="skbp-effect">${this.escapeHtml(book.effect)}</div>
 
-                    ${hasStatRequirement ? `
-                    <div class="skbp-row">
-                        <span class="skbp-label">Your ${book.statLabel || 'stat'}</span>
-                        <span class="skbp-value">${loading ? '—' : (statValue !== null ? statValue.toLocaleString() : 'unavailable')}</span>
-                    </div>
-                    <div class="skbp-row">
-                        <span class="skbp-label">Guide threshold</span>
-                        <span class="skbp-value">${book.thresholdLabel || '—'}</span>
-                    </div>
-                    ${book.cap ? `<div class="skbp-row">
-                        <span class="skbp-label">Max gain cap</span>
-                        <span class="skbp-value">${book.capLabel}</span>
-                    </div>` : ''}
-                    ` : ''}
                     <div class="skbp-row">
                         <span class="skbp-label">Duration</span>
                         <span class="skbp-value">${book.durationDays} days</span>
                     </div>
+                    ${hasStatRequirement ? `<div class="skbp-section">
+                        <div class="skbp-section-title">BATTLESTATS</div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">${book.statLabel}</span><span class="skbp-check-percent">${statValue !== null ? statValue.toLocaleString() + ' / ' + book.capLabel : '— / ' + book.capLabel}</span><span class="skbp-check-status ${statValue !== null && statValue < book.cap ? 'skbp-check-active' : 'skbp-check-inactive'}">${statValue !== null && statValue < book.cap ? '✓ below cap' : '✗ at/above cap'}</span></div>
+                    </div>` : ''}
+                    ${book.needsCapCheck && battlestats ? `<div class="skbp-section">
+                        <div class="skbp-section-title">BATTLESTATS</div>
+                        ${Object.entries(battlestats).filter(([key]) => key !== 'total').map(([key, stat]) => {
+                            const val = Number(stat.value ?? stat);
+                            const below = val < 50000000;
+                            return `<div class="skbp-check-row"><span class="skbp-check-name">${key.charAt(0).toUpperCase() + key.slice(1)}</span><span class="skbp-check-percent">${val !== null ? val.toLocaleString() + ' / 50,000,000' : '— / 50,000,000'}</span><span class="skbp-check-status ${below ? 'skbp-check-active' : 'skbp-check-inactive'}">${below ? '✓ below cap' : '✗ at/above cap'}</span></div>`;
+                        }).join('')}
+                    </div>` : ''}
 
-                    ${hasStatRequirement ? `
-                    <div class="skbp-verdict ${meetsThreshold === true ? 'ready' : meetsThreshold === false ? 'notready' : 'unknown'}">
-                        ${meetsThreshold === true
-                            ? '✅ Ready to use — you meet the recommended threshold.'
-                            : `⏳ Not yet — your ${book.statLabel || 'stat'} is below the recommended ${book.thresholdLabel || 'threshold'}. Wait until you reach it before using the book.`}
+                    ${hasStatRequirement && !book.hideVerdict ? `
+                    <div class="skbp-verdict ${book.verdictInverted ? (meetsThreshold === true ? 'notready' : meetsThreshold === false ? 'ready' : 'unknown') : (meetsThreshold === true ? 'ready' : meetsThreshold === false ? 'notready' : 'unknown')}">
+                        ${book.verdictInverted
+                            ? (meetsThreshold === true
+                                ? `⏳ Above cap — your ${book.statLabel || 'stat'} is at or above ${book.thresholdLabel || 'the cap'}. The book still works but with reduced benefit.`
+                                : '✅ Below cap — your battlestats are under 50m, so happiness will boost gym gains.')
+                            : (meetsThreshold === true
+                                ? '✅ Ready to use — you meet the recommended threshold.'
+                                : `⏳ Not yet — your ${book.statLabel || 'stat'} is below the recommended ${book.thresholdLabel || 'threshold'}. Wait until you reach it before using the book.`)}
                     </div>
                     ` : ''}
 
@@ -1667,13 +1795,41 @@ const STORAGE_KEY = 'book-planner';
                     ${!hasTabs && book.helperItems && book.helperItems.length > 0 ? `
                     <div class="skbp-section">
                         <div class="skbp-section-title">ITEMS NEEDED</div>
+                        <div class="skbp-item-table">
                         ${(book.helperItems || []).map(i => {
-                            const resolved = this.resolveHelperItem(inventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive);
+                            const itemInventory = book.needsDrugInventory ? drugInventory : inventory;
+                            const resolved = this.resolveHelperItem(itemInventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, 0, 1, drugCooldown, book.needsBoosterCooldown && !book.needsDrugInventory ? drugInventory : null);
                             const energyText = resolved.energyPerCan !== null ? ` · ~${resolved.energyPerCan} energy/can` : '';
                             return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(resolved.name)}</span><span class="skbp-item-count">×${resolved.have.toLocaleString()} have</span><span class="skbp-item-needed">${resolved.need !== null ? (resolved.have < resolved.need ? '⚠️ ' : '') + '×' + resolved.need.toLocaleString() + ' need' : '–'}</span><span class="skbp-item-note">${this.escapeHtml(resolved.note + energyText)}</span></div>`;
                         }).join('')}
-                    </div>
-                    ` : ''}
+                        </div>
+                    </div>` : ''}
+                    ${book.needsDrugCooldown ? `<div class="skbp-section">
+                        <div class="skbp-section-title">DRUG COOLDOWN</div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">Drug cooldown</span><span class="skbp-check-percent">${drugCooldown !== null ? (drugCooldown / 3600).toFixed(1) : '—'}h</span><span class="skbp-check-status ${drugCooldown && drugCooldown > 0 ? 'skbp-check-inactive' : 'skbp-check-active'}">${drugCooldown && drugCooldown > 0 ? 'ON COOLDOWN' : 'ready'}</span></div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">Best start</span><span class="skbp-check-percent">0h cooldown</span><span class="skbp-check-status skbp-check-active">✓ maximizes doses/day</span></div>
+                    </div>` : ''}
+                    ${book.needsWorkstats ? `<div class="skbp-section">
+                        <div class="skbp-section-title">WORKSTATS CHECK</div>
+                        ${workstats ? `
+                        <div class="skbp-check-row"><span class="skbp-check-name">Manual</span><span class="skbp-check-percent">${workstats.manual_labor?.toLocaleString() ?? '—'}</span><span class="skbp-check-status ${workstats.manual_labor >= 50000 ? 'skbp-check-active' : 'skbp-check-inactive'}">${workstats.manual_labor >= 50000 ? '✓ 50k+' : '✗ below 50k'}</span></div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">Intelligence</span><span class="skbp-check-percent">${workstats.intelligence?.toLocaleString() ?? '—'}</span><span class="skbp-check-status ${workstats.intelligence >= 50000 ? 'skbp-check-active' : 'skbp-check-inactive'}">${workstats.intelligence >= 50000 ? '✓ 50k+' : '✗ below 50k'}</span></div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">Endurance</span><span class="skbp-check-percent">${workstats.endurance?.toLocaleString() ?? '—'}</span><span class="skbp-check-status ${workstats.endurance >= 50000 ? 'skbp-check-active' : 'skbp-check-inactive'}">${workstats.endurance >= 50000 ? '✓ 50k+' : '✗ below 50k'}</span></div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">Best start</span><span class="skbp-check-percent">50k+ in all three</span><span class="skbp-check-status skbp-check-active">✓ maximizes 5% gain</span></div>
+                        ` : `<div class="skbp-empty">Workstats unavailable.</div>`}
+                    </div>` : ''}
+                    ${book.needsCompanyCheck ? `<div class="skbp-section">
+                        <div class="skbp-section-title">COMPANY PATHS</div>
+                        ${companyProfile ? (() => { try { let html = ''; for (const [typeId, info] of Object.entries(COMPANY_BONUSES)) { for (const [star, bonuses] of Object.entries(info.stars)) { if (Number(star) <= companyProfile.rating) { for (const b of bonuses) { if (book.statKey && b.type === 'gym_gain_boost' && b.target === book.statKey) { const isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star); html += '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% ' + book.statLabel + ' gym gains</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>'; } else if (!book.statKey && b.type === 'travel_items' && (book.companyBonusTypes || []).includes('travel_items') && (book.companyTypeIds || []).includes(Number(typeId))) { const isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star); html += '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.count + ' extra travel items</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>'; } else if (!book.statKey && b.type === 'item_boost' && (book.companyBonusTypes || []).includes('item_boost') && (book.companyTypeIds || []).includes(Number(typeId))) { const isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star); html += '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% item boost (' + (b.target || 'all') + ')</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>'; } } } } } return html || '<div class="skbp-empty">No company paths.</div>'; } catch { return '<div class="skbp-empty">No company paths.</div>'; } })() : '<div class="skbp-empty">Company data unavailable.</div>'}
+                    </div>` : ''}
+                    ${!hasTabs && needsBoosterCooldown ? `<div class="skbp-section">
+                        <div class="skbp-section-title">BOOSTER COOLDOWN</div>
+                        <div class="skbp-check-row"><span class="skbp-check-name">Booster cooldown</span><span class="skbp-check-percent">${boosterCurrentH}h / ${boosterMaxHours}h</span><span class="skbp-check-status ${boosterActive ? 'skbp-check-inactive' : 'skbp-check-active'}">${boosterActive ? 'ON COOLDOWN' : 'ready'}</span></div>
+                    </div>` : ''}
+                    ${!hasTabs && book.helperItems && book.helperItems.length === 0 && !book.needsDrugCooldown && !book.needsWorkstats && !book.needsCompanyCheck && !needsBoosterCooldown && !book.needsCapCheck ? '' : ''}
+                    ${book.helperNote ? `<div class="skbp-row skbp-footnote" style="text-align:center; justify-content:center;">
+                        <span class="skbp-value skbp-footnote-value">${this.escapeHtml(book.helperNote)}</span>
+                    </div>` : ''}
                 </div>
                 <div class="skbp-footer">
                     <button class="skbp-btn skbp-btn-ghost" id="skbp-cancel">Close</button>
@@ -1791,8 +1947,11 @@ const STORAGE_KEY = 'book-planner';
             return exactCount || partialCount;
         },
 
-        resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1) {
+        resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1, drugCooldown = 0, drugInventory = null) {
             let have = this.getInventoryItemCount(inventory, item.name);
+            if (drugInventory && item.calcType !== 'booster_cans' && inventory !== drugInventory) {
+                have += this.getInventoryItemCount(drugInventory, item.name);
+            }
             let need = item.count !== null ? item.count : null;
             let note = '';
             let energyPerCan = null;
@@ -1808,6 +1967,12 @@ const STORAGE_KEY = 'book-planner';
                     note = ' (est. by booster cooldown)';
                     energyPerCan = this.getCanEnergy(item.name, perkMultiplier, caffeineConActive);
                 }
+            } else if (item.calcType === 'drug_pills') {
+                have = this.getInventoryItemCount(inventory, item.name);
+                const minPerDay = 3; // 8h cooldown
+                const maxPerDay = 4; // 6h cooldown
+                need = Math.ceil(minPerDay * durationDays);
+                note = ` (est. ${Math.ceil(minPerDay * durationDays)}–${Math.ceil(maxPerDay * durationDays)} needed, 3–4 per day)`;
             }
             return { name: item.name, have, need, note, calcType: item.calcType, energyPerCan };
         },
@@ -1970,6 +2135,23 @@ const STORAGE_KEY = 'book-planner';
                 .reduce((total, m) => total * m, 1);
         },
 
+        calculateMaxBoosterCooldown(perkData) {
+            if (!perkData) return 24;
+            const perks = perkData.perks || perkData;
+            let total = 24;
+            for (const category of Object.values(perks)) {
+                if (!Array.isArray(category)) continue;
+                for (const s of category) {
+                    const str = String(s);
+                    if (/maximum booster cooldown/i.test(str)) {
+                        const num = str.replaceAll(/\D+/g, '');
+                        if (num) total += parseInt(num);
+                    }
+                }
+            }
+            return total;
+        },
+
         // ═══════════════════════════════════════════════════════════════════════════
         // Smart Company Bonus System
         // ═══════════════════════════════════════════════════════════════════════════
@@ -2009,6 +2191,16 @@ const STORAGE_KEY = 'book-planner';
             if (boostBonuses.length === 0) return 1;
             let multiplier = 1;
             for (const b of boostBonuses) {
+                multiplier *= (1 + b.percent / 100);
+            }
+            return multiplier;
+        },
+
+        calculateCompanyGymGainMultiplier(bonuses, statKey) {
+            const gymBonuses = bonuses.filter(b => b.type === 'gym_gain_boost' && b.target === statKey);
+            if (gymBonuses.length === 0) return 1;
+            let multiplier = 1;
+            for (const b of gymBonuses) {
                 multiplier *= (1 + b.percent / 100);
             }
             return multiplier;
