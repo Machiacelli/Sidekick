@@ -1073,9 +1073,9 @@
           </div>
 
           <div class="sk-trade-default-row">
-            <label class="sk-field-label" for="skp-trade-default-rate">Default percentage paid</label>
-            <input class="sk-input sk-trade-rate-input" id="skp-trade-default-rate" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Default percentage paid">
-            <span style="font-size:12px;color:var(--muted);">%</span>
+            <label class="sk-field-label" for="skp-trade-default-rate">Default % below market value</label>
+            <input class="sk-input sk-trade-rate-input" id="skp-trade-default-rate" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Default percentage below market value">
+            <span style="font-size:12px;color:var(--muted);">% below</span>
           </div>
 
           <div class="sk-trade-editor">
@@ -1095,9 +1095,9 @@
               </div>
               <div class="sk-trade-rate-row">
                 <div>
-                  <label class="sk-field-label" for="skp-trade-category-rate">Percentage paid for this category</label>
-                  <input class="sk-input" id="skp-trade-category-rate" type="number" min="0" step="0.01" inputmode="decimal">
-                  <div class="sk-trade-rate-source" id="skp-trade-rate-source">Using the profile default</div>
+                  <label class="sk-field-label" for="skp-trade-category-rate">% below market value for this category</label>
+                  <input class="sk-input" id="skp-trade-category-rate" type="number" min="0" max="100" step="0.01" inputmode="decimal">
+                  <div class="sk-trade-rate-source" id="skp-trade-rate-source">Using the profile default (% below market)</div>
                 </div>
                 <button class="sk-btn sk-btn-ghost sk-trade-compact-btn" type="button" id="skp-trade-reset-category">Use default percentage</button>
               </div>
@@ -1605,7 +1605,7 @@
                         ruleSelect.className = 'sk-select';
                         ruleSelect.setAttribute('aria-label', 'Price rule');
                         ruleSelect.append(
-                            new Option('% of market value', 'percentage'),
+                            new Option('% below market value', 'percentage'),
                             new Option('Fixed price per item', 'fixed'),
                             new Option('Not for trade', 'not_for_trade')
                         );
@@ -1614,7 +1614,7 @@
                         const valueInput = document.createElement('input');
                         valueInput.className = 'sk-input';
                         valueInput.type = 'text';
-                        valueInput.value = exception.value;
+                        valueInput.value = textValue(exception.value) ? String(100 - Number(exception.value)) : '';
                         valueInput.setAttribute('aria-label', 'Exception value');
 
                         const syncRuleInput = () => {
@@ -1623,7 +1623,7 @@
                             valueInput.inputMode = exception.rule === 'fixed' ? 'numeric' : 'decimal';
                             valueInput.placeholder = isNotForTrade
                                 ? 'Not required'
-                                : (exception.rule === 'fixed' ? '$ value' : '% value');
+                                : (exception.rule === 'fixed' ? '$ value' : '% below market');
                             valueInput.setAttribute('aria-label', isNotForTrade ? 'No value required for not-for-trade items' : 'Exception value');
                         };
                         syncRuleInput();
@@ -1770,7 +1770,8 @@
                             updateExportPreview();
                         });
                         valueInput.addEventListener('input', () => {
-                            exception.value = valueInput.value;
+                            const value = textValue(valueInput.value);
+                            exception.value = value ? String(100 - Number(value)) : '';
                             schedulePersist();
                         });
                         removeButton.addEventListener('click', () => {
@@ -1793,14 +1794,17 @@
                     const categoryEnabled = record?.enabled !== false;
                     if (elements.categoryTitle) elements.categoryTitle.textContent = selectedCategory;
                     if (elements.categoryEnabled) elements.categoryEnabled.checked = categoryEnabled;
-                    if (elements.categoryRate) elements.categoryRate.value = effectiveRate(profile, selectedCategory);
+                    if (elements.categoryRate) {
+                        const rate = effectiveRate(profile, selectedCategory);
+                        elements.categoryRate.value = textValue(rate) ? String(100 - Number(rate)) : '';
+                    }
                     if (elements.categoryRate) elements.categoryRate.disabled = !categoryEnabled;
                     if (elements.rateSource) {
                         elements.rateSource.textContent = !categoryEnabled
                             ? `${selectedCategory} is NOT FOR TRADE`
                             : hasCustomRate
-                            ? `Custom rate for ${selectedCategory}`
-                            : `Using the ${selectedProfile === 'public' ? 'Public' : 'Friendly'} default rate`;
+                            ? `Custom % below market for ${selectedCategory}`
+                            : `Using the ${selectedProfile === 'public' ? 'Public' : 'Friendly'} default (% below market)`;
                     }
                     if (elements.resetCategory) elements.resetCategory.disabled = !categoryEnabled || !hasCustomRate;
                     if (elements.addException) elements.addException.disabled = !categoryEnabled;
@@ -1818,7 +1822,10 @@
                     if (elements.openExport) {
                         elements.openExport.textContent = `Export ${selectedProfile === 'public' ? 'Public' : 'Friendly'} Price List`;
                     }
-                    if (elements.defaultRate) elements.defaultRate.value = profile.defaultRate;
+                    if (elements.defaultRate) {
+                        const rate = profile.defaultRate;
+                        elements.defaultRate.value = textValue(rate) ? String(100 - Number(rate)) : '';
+                    }
                     renderCategoryList();
                     renderCategoryDetail();
                     updateExportPreview();
@@ -1830,7 +1837,7 @@
                     const lines = [
                         'SIDEKICK TRADE PRICE LIST',
                         `Price list: ${label}`,
-                        `Default percentage paid: ${profile.defaultRate}%`,
+                        `Default % below market value: ${textValue(profile.defaultRate) ? 100 - Number(profile.defaultRate) : 100}%`,
                         '',
                         'CATEGORY RATES'
                     ];
@@ -1840,7 +1847,7 @@
                         categories.forEach(category => {
                             lines.push(categoryRecord(profile, category)?.enabled === false
                                 ? `${category}: NOT FOR TRADE`
-                                : `${category}: ${effectiveRate(profile, category)}%`);
+                                : `${category}: ${textValue(effectiveRate(profile, category)) ? 100 - Number(effectiveRate(profile, category)) : 100}% below market`);
                         });
                     });
 
@@ -1850,7 +1857,7 @@
                         extraCategories.forEach(category => lines.push(
                             categoryRecord(profile, category)?.enabled === false
                                 ? `${category}: NOT FOR TRADE`
-                                : `${category}: ${effectiveRate(profile, category)}%`
+                                : `${category}: ${textValue(effectiveRate(profile, category)) ? 100 - Number(effectiveRate(profile, category)) : 100}% below market`
                         ));
                     }
 
@@ -1864,7 +1871,7 @@
                                 ? 'NOT FOR TRADE'
                                 : exception.rule === 'fixed'
                                 ? `${exception.value}`
-                                : `${exception.value}% of market value`;
+                                : `${textValue(exception.value) ? 100 - Number(exception.value) : 100}% below market value`;
                             exceptionLines.push(`${category} — ${exception.label || exception.item}: ${value}`);
                         });
                     });
@@ -1968,14 +1975,20 @@
                 elements.defaultRate?.addEventListener('input', () => {
                     const value = textValue(elements.defaultRate.value);
                     if (!value) return;
-                    currentProfile().defaultRate = value;
+                    currentProfile().defaultRate = String(100 - Number(value));
                     renderCategoryList();
                     const selectedRecord = categoryRecord(currentProfile(), selectedCategory);
-                    if (!textValue(selectedRecord?.rate) && elements.categoryRate) elements.categoryRate.value = value;
+                    if (!textValue(selectedRecord?.rate) && elements.categoryRate) {
+                        const defaultRate = currentProfile().defaultRate;
+                        elements.categoryRate.value = textValue(defaultRate) ? String(100 - Number(defaultRate)) : '';
+                    }
                     schedulePersist();
                 });
                 elements.defaultRate?.addEventListener('blur', () => {
-                    if (!textValue(elements.defaultRate.value)) elements.defaultRate.value = currentProfile().defaultRate;
+                    if (!textValue(elements.defaultRate.value)) {
+                        const defaultRate = currentProfile().defaultRate;
+                        elements.defaultRate.value = textValue(defaultRate) ? String(100 - Number(defaultRate)) : '';
+                    }
                 });
                 elements.categorySearch?.addEventListener('input', renderCategoryList);
                 elements.categoryEnabled?.addEventListener('change', () => {
@@ -1991,13 +2004,13 @@
                     const profile = currentProfile();
                     const value = textValue(elements.categoryRate.value);
                     const record = categoryRecord(profile, selectedCategory, Boolean(value));
-                    if (value) record.rate = value;
+                    if (value) record.rate = String(100 - Number(value));
                     else if (record) record.rate = '';
                     pruneCategoryRecord(profile, selectedCategory);
                     if (elements.rateSource) {
                         elements.rateSource.textContent = value
-                            ? `Custom rate for ${selectedCategory}`
-                            : `Using the ${selectedProfile === 'public' ? 'Public' : 'Friendly'} default rate`;
+                            ? `Custom % below market for ${selectedCategory}`
+                            : `Using the ${selectedProfile === 'public' ? 'Public' : 'Friendly'} default (% below market)`;
                     }
                     if (elements.resetCategory) elements.resetCategory.disabled = !value;
                     renderCategoryList();

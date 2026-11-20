@@ -418,11 +418,13 @@
         const rate = exceptionMatch?.exception?.rule === 'percentage'
             ? normalizeText(exceptionMatch.exception.value)
             : effectiveCategoryRate(profile, category);
+        const rateNum = Number(rate);
+        const belowPct = normalizeText(rate) && Number.isFinite(rateNum) ? 100 - rateNum : 100;
         return {
             marketTotal,
             buyTotal: toWholeDollars(multiplyMarketValue(item.catalogItem.marketValue, item.quantity, rate)),
             buyPerItem: item.quantity > 1 ? toWholeDollars(multiplyMarketValue(item.catalogItem.marketValue, 1, rate)) : null,
-            ruleLabel: `${rate}%`,
+            ruleLabel: `${belowPct}% below market`,
             exceptionMatch
         };
     }

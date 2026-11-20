@@ -55,3 +55,11 @@ Replaces Torn's tiny sprite-based honor-rank names (the near-unreadable calligra
 Where to find it: Settings → Utility → Auction Weapon Bonus (toggleable from the toolbar popup) · Off by default · Runs on the auction house (plus item market, bazaar, and inventory icon markers)
 
 Special weapons carry bonuses — Plunder, Vorpal, Explosive Rounds — but Torn only shows them as tiny icons. In the auction house this module writes the bonuses out as pills under the weapon's name ("Plunder 21%"), color-tinted to the item's glow, hoverable for the full description. On the item market and bazaar it enlarges the bonus icons (~3×, with hover highlight) so you can spot them while scrolling. In your inventory your own bonus weapons get a red square outline marker.
+
+---
+
+📖 **Book Planner**
+
+Where to find it: injected on Torn's book item pages (click **"Plan Book"** on any book you own) · On by default · Runs on item pages and inventory flyouts
+
+Opens a planning modal that tells you whether you're ready to use a book and what you need to maximize it. It checks your current stats against the book's threshold or cap, shows company path requirements (which company type and star rating gives the best gym gains), lists required helper items (Xanax, Feathery Hotel Coupons, booster cans), and flags books that need no plan at all.
