@@ -23,64 +23,64 @@
     // ═══════════════════════════════════════════════════════════════════════════
 
     const BOOKS = {
-'brawn over brains': {
+        'brawn over brains': {
             name: 'Brawn Over Brains',
-            effect: 'Permanently increases Strength by 5% (up to 10,000,000 maximum gain) after 31 days.',
+            effect: 'Permanently increases Strength by 5% (up to 200,000,000 maximum gain) after 31 days.',
             statKey: 'strength',
             statLabel: 'Strength',
             statIcon: '💪',
             threshold: 200000000,
             thresholdLabel: '200,000,000',
-            cap: 10000000,
-            capLabel: '10,000,000',
+            cap: 200000000,
+            capLabel: '200,000,000',
             reason: '',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
             hideVerdict: true,
         },
-'time is in the mind': {
+        'time is in the mind': {
             name: 'Time Is In The Mind',
-            effect: 'Permanently increases Speed by 5% (up to 10,000,000 maximum gain) after 31 days.',
+            effect: 'Permanently increases Speed by 5% (up to 200,000,000 maximum gain) after 31 days.',
             statKey: 'speed',
             statLabel: 'Speed',
             statIcon: '🏃',
             threshold: 200000000,
             thresholdLabel: '200,000,000',
-            cap: 10000000,
-            capLabel: '10,000,000',
+            cap: 200000000,
+            capLabel: '200,000,000',
             reason: '',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
             hideVerdict: true,
         },
-'keeping your face handsome': {
+        'keeping your face handsome': {
             name: 'Keeping Your Face Handsome',
-            effect: 'Permanently increases Defense by 5% (up to 10,000,000 maximum gain) after 31 days.',
+            effect: 'Permanently increases Defense by 5% (up to 200,000,000 maximum gain) after 31 days.',
             statKey: 'defense',
             statLabel: 'Defense',
             statIcon: '🛡️',
             threshold: 200000000,
             thresholdLabel: '200,000,000',
-            cap: 10000000,
-            capLabel: '10,000,000',
+            cap: 200000000,
+            capLabel: '200,000,000',
             reason: '',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
             hideVerdict: true,
         },
-'a job for your hands': {
+        'a job for your hands': {
             name: 'A Job For Your Hands',
-            effect: 'Permanently increases Dexterity by 5% (up to 10,000,000 maximum gain) after 31 days.',
+            effect: 'Permanently increases Dexterity by 5% (up to 200,000,000 maximum gain) after 31 days.',
             statKey: 'dexterity',
             statLabel: 'Dexterity',
             statIcon: '✌️',
             threshold: 200000000,
             thresholdLabel: '200,000,000',
-            cap: 10000000,
-            capLabel: '10,000,000',
+            cap: 200000000,
+            capLabel: '200,000,000',
             reason: '',
             helperItems: [],
             helperNote: '',
@@ -146,7 +146,7 @@
             helperItems: [
                 { name: 'Xanax', count: null, calcType: 'drug_pills' },
             ],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
             needsDrugInventory: true,
         },
@@ -162,7 +162,7 @@
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'mind over matter': {
@@ -243,6 +243,7 @@ effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
             helperNote: '',
             durationDays: 31,
             needsDrugInventory: true,
+            needsCompanyCheck: true,
         },
         'gym grunting shouting to success': {
             name: 'Gym Grunting - Shouting To Success',
@@ -262,6 +263,8 @@ effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
             helperNote: '',
             durationDays: 31,
             needsDrugInventory: true,
+            needsCompanyCheck: true,
+            needsBoosterCooldown: true,
         },
         'self defense in the workplace': {
             name: 'Self Defense In The Workplace',
@@ -301,6 +304,7 @@ effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
             helperNote: '',
             durationDays: 31,
             needsDrugInventory: true,
+            needsCompanyCheck: true,
         },
         'limbo lovers 101': {
             name: 'Limbo Lovers 101',
@@ -320,6 +324,7 @@ effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
             helperNote: '',
             durationDays: 31,
             needsDrugInventory: true,
+            needsCompanyCheck: true,
         },
         'the hamburglar\'s guide to crime': {
             name: 'The Hamburglar\'s Guide To Crime',
@@ -456,7 +461,7 @@ effect: 'Provides a passive 100% bonus to Dexterity for 31 days.',
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'ignorance is bliss': {
@@ -552,6 +557,7 @@ helperNote: 'No plan needed',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            needsCapCheck: true,
         },
         'no more sick days': {
             name: 'No More Sick Days',
@@ -565,7 +571,7 @@ helperNote: 'No plan needed',
             capLabel: null,
             reason: '',
             helperItems: [],
-            helperNote: '',
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'duke my story': {
@@ -580,7 +586,7 @@ helperNote: 'No plan needed',
             capLabel: null,
             reason: '',
             helperItems: [],
-helperNote: '',
+ helperNote: '',
             durationDays: 31,
         },
         'self control is for losers': {
@@ -643,11 +649,8 @@ helperNote: '',
             cap: null,
             capLabel: null,
             reason: '',
-            helperItems: [
-                { name: 'Painkillers', count: null },
-                { name: 'Neumune', count: null },
-            ],
-helperNote: '',
+            helperItems: [],
+            helperNote: 'No plan needed',
             durationDays: 31,
         },
         'get drunk and lose dignity': {
@@ -664,6 +667,18 @@ helperNote: '',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            needsBoosterCooldown: true,
+            needsCompanyCheck: true,
+            companyBonusTypes: ['item_boost'],
+            companyTypeIds: [25],
+            tabs: [
+                {
+                    label: 'Nerve',
+                    helperItems: [
+                        { name: 'Bottle of Beer', count: null, calcType: 'booster_cans' },
+                    ],
+                },
+            ],
         },
         'fuelling your way to failure': {
             name: 'Fuelling Your Way To Failure',
@@ -705,6 +720,7 @@ helperNote: '',
             helperItems: [],
             helperNote: '',
             durationDays: 31,
+            needsCapCheck: true,
         },
         'ugly energy': {
             name: 'Ugly Energy',
@@ -931,6 +947,18 @@ const COMPANY_BONUSES = {
         name: 'Ladies Strip Club',
         stars: {
             7: [{ type: 'gym_gain_boost', target: 'defense', percent: 10 }],
+        },
+    },
+    26: { // Gents Strip Club
+        name: 'Gents Strip Club',
+        stars: {
+            7: [{ type: 'gym_gain_boost', target: 'dexterity', percent: 10 }],
+        },
+    },
+    29: { // Fitness Center
+        name: 'Fitness Center',
+        stars: {
+            10: [{ type: 'gym_gain_boost', target: 'speed', percent: 3 }, { type: 'gym_gain_boost', target: 'strength', percent: 3 }],
         },
     },
     32: { // Lingerie Store
@@ -1818,9 +1846,9 @@ const STORAGE_KEY = 'book-planner';
                         <div class="skbp-check-row"><span class="skbp-check-name">Best start</span><span class="skbp-check-percent">50k+ in all three</span><span class="skbp-check-status skbp-check-active">✓ maximizes 5% gain</span></div>
                         ` : `<div class="skbp-empty">Workstats unavailable.</div>`}
                     </div>` : ''}
-                    ${book.needsCompanyCheck ? `<div class="skbp-section">
+${book.needsCompanyCheck ? `<div class="skbp-section">
                         <div class="skbp-section-title">COMPANY PATHS</div>
-                        ${companyProfile ? (() => { try { let html = ''; for (const [typeId, info] of Object.entries(COMPANY_BONUSES)) { for (const [star, bonuses] of Object.entries(info.stars)) { if (Number(star) <= companyProfile.rating) { for (const b of bonuses) { if (book.statKey && b.type === 'gym_gain_boost' && b.target === book.statKey) { const isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star); html += '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% ' + book.statLabel + ' gym gains</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>'; } else if (!book.statKey && b.type === 'travel_items' && (book.companyBonusTypes || []).includes('travel_items') && (book.companyTypeIds || []).includes(Number(typeId))) { const isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star); html += '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.count + ' extra travel items</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>'; } else if (!book.statKey && b.type === 'item_boost' && (book.companyBonusTypes || []).includes('item_boost') && (book.companyTypeIds || []).includes(Number(typeId))) { const isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star); html += '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% item boost (' + (b.target || 'all') + ')</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>'; } } } } } return html || '<div class="skbp-empty">No company paths.</div>'; } catch { return '<div class="skbp-empty">No company paths.</div>'; } })() : '<div class="skbp-empty">Company data unavailable.</div>'}
+                        ${companyProfile ? this.renderCompanyPaths(book, companyProfile, userCompanyTypeId) : '<div class="skbp-empty">Company data unavailable.</div>'}
                     </div>` : ''}
                     ${!hasTabs && needsBoosterCooldown ? `<div class="skbp-section">
                         <div class="skbp-section-title">BOOSTER COOLDOWN</div>
@@ -1910,6 +1938,36 @@ const STORAGE_KEY = 'book-planner';
                 .replaceAll('>', '&gt;')
                 .replaceAll('"', '&quot;')
                 .replaceAll("'", '&#039;');
+        },
+
+        renderCompanyPaths(book, companyProfile, userCompanyTypeId) {
+            let html = '';
+            for (const [typeId, info] of Object.entries(COMPANY_BONUSES)) {
+                for (const [star, bonuses] of Object.entries(info.stars).sort(([a], [b]) => Number(b) - Number(a))) {
+                    if (Number(star) <= companyProfile.rating) {
+                        for (const b of bonuses) {
+                            let isActive = false;
+                            let rowHtml = '';
+                            if (book.statKey && b.type === 'gym_gain_boost' && b.target === book.statKey) {
+                                isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star);
+                                rowHtml = '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% ' + book.statLabel + ' gym gains</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>';
+                            } else if (!book.statKey && b.type === 'gym_gain_boost') {
+                                isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star);
+                                const targetLabel = b.target ? b.target.charAt(0).toUpperCase() + b.target.slice(1) : 'all';
+                                rowHtml = '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% ' + targetLabel + ' gym gains</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>';
+                            } else if (!book.statKey && b.type === 'travel_items' && (book.companyBonusTypes || []).includes('travel_items') && (book.companyTypeIds || []).includes(Number(typeId))) {
+                                isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star);
+                                rowHtml = '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.count + ' extra travel items</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>';
+                            } else if (!book.statKey && b.type === 'item_boost' && (book.companyBonusTypes || []).includes('item_boost') && (book.companyTypeIds || []).includes(Number(typeId))) {
+                                isActive = userCompanyTypeId === Number(typeId) && companyProfile.rating >= Number(star);
+                                rowHtml = '<div class="skbp-check-row"><span class="skbp-check-name">' + star + '* ' + this.escapeHtml(info.name) + '</span><span class="skbp-check-percent">' + b.percent + '% item boost (' + (b.target || 'all') + ')</span><span class="skbp-check-status ' + (isActive ? 'skbp-check-active' : 'skbp-check-inactive') + '">' + (isActive ? '✓ active' : '✗ not active') + '</span></div>';
+                            }
+                            if (rowHtml) html += rowHtml;
+                        }
+                    }
+                }
+            }
+            return html || '<div class="skbp-empty">Company data unavailable.</div>';
         },
 
         // ════════════════════════════════════════════════════════════════════════

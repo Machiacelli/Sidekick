@@ -14,6 +14,7 @@
     const SALES_KEY = 'sidekick_auction_sales';
     const REFRESH_MS = 60_000;   // sale-resolution cycle (ended auctions only)
     const RESEED_MS = 2_000;      // live re-harvest throttle while on amarket
+    const API_POLL_MS = 60_000;   // poll v2 market/auctionhouse for live price/time
     const MAX_SALE_ATTEMPTS = 10; // clean-miss budget — extensions can delay the real end by minutes
     const SALE_RETRY_GAP_SEC = 55;
     const LEDGER_CAP = 5000;              // newest records kept per item
@@ -249,6 +250,7 @@
         _listings: {},     // { id: { ...cached data } }
         _refreshTimer: null,
         _tickTimer: null,
+        _apiPollTimer: null,
         _winState: {
             open: false,
             x: 120,
@@ -277,6 +279,14 @@
                 this._injectPageButton();
                 this._setupStorageSync();
 
+                // Start sale-resolution refresh for tracked listings even when
+                // the tracker window is closed — auctions can end at any time
+                // and the user shouldn't need the tracker open to get sale
+                // notifications.
+                if (Object.keys(this._listings || {}).length > 0) {
+                    this._startRefresh();
+                }
+
                 if (this._winState.open) {
                     setTimeout(() => this.open(), 100);
                 }
@@ -304,6 +314,7 @@
             this._buildWindow();
             this._startRefresh();
             this._startCountdown();
+            this._startApiPoll();
             await this._refreshAll();
         },
 
@@ -485,6 +496,151 @@
                 throw new Error(data.error.error || data.error.message || `HTTP ${response.status}`);
             }
             return Array.isArray(data?.auctionhouse) ? data.auctionhouse : [];
+        },
+
+        // ── Live tracking via Torn API v2 market/auctionhouse ─────────────────
+        // New in API v2: returns ongoing auctions across the market (cached and
+        // delayed by 15 minutes per Torn's pathnotes). This lets the tracker
+        // update tracked listings without the user needing to be on
+        // amarket.php — the previous DOM-only approach required an open
+        // auction house tab. Unlike user/auctionhouse (own listings only),
+        // market/auctionhouse covers any listing the user has tracked.
+        // Transport follows the existing proxyFetch + Authorization header
+        // pattern used by _fetchItemSales.
+        async _fetchMarketAuctionhouse(itemId) {
+            const CS = window.SidekickModules?.Core?.ChromeStorage;
+            const apiKey = CS ? await CS.get('sidekick_api_key') : null;
+            if (!apiKey) {
+                console.warn('🏷️ [AuctionTracker] No API key — cannot poll market/auctionhouse');
+                return null;
+            }
+
+            const url = itemId
+                ? `https://api.torn.com/v2/market/auctionhouse?item_id=${itemId}`
+                : 'https://api.torn.com/v2/market/auctionhouse';
+
+            const response = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: 'proxyFetch',
+                    url: url,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': `ApiKey ${apiKey}`
+                    }
+                }, (r) => resolve(r));
+            });
+
+            if (!response?.success) {
+                console.warn('🏷️ [AuctionTracker] Market auctionhouse proxy failed:', response?.error);
+                throw new Error(response?.error || 'Background proxy failed');
+            }
+
+            let data = response.data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch { throw new Error('Market auctionhouse response returned invalid JSON'); }
+            }
+            if (data?.error) {
+                throw new Error(data.error.error || data.error.message || `HTTP ${response.status}`);
+            }
+            const entries = Array.isArray(data?.auctionhouse) ? data.auctionhouse : [];
+            if (itemId && entries.length > 0) {
+                console.log(`🏷️ [AuctionTracker] market/auctionhouse item_id=${itemId}: ${entries.length} entries`);
+            }
+            return entries;
+        },
+
+        // Match a v2 market/auctionhouse entry to a tracked listing.
+        // Primary: instance uid (weapons/armor). Fallback: itemId + sellerId.
+        _matchAuctionhouseEntry(entry, l) {
+            if (!entry) return false;
+            const entryUid = String(entry.item?.uid ?? entry.item_uid ?? entry.uid ?? '').trim();
+            const entryItemId = Number(entry.item?.id ?? entry.itemId ?? entry.item_id ?? 0);
+            const entrySellerId = entry.seller?.id ?? entry.seller_id ?? null;
+
+            if (l.uid && entryUid) {
+                if (entryUid !== String(l.uid)) return false;
+                return entrySellerId == null || l.sellerId == null || entrySellerId === l.sellerId;
+            }
+
+            if (l.itemId && entryItemId && entryItemId === l.itemId) {
+                if (entrySellerId != null && l.sellerId != null && entrySellerId !== l.sellerId) return false;
+                return true;
+            }
+
+            return false;
+        },
+
+        // Apply live market/auctionhouse data to tracked listings: price, bids,
+        // and end time. Re-anchors endsAt and revives sale resolution if the
+        // API shows the auction is still active after a prior settled state.
+        async _applyMarketAuctionhouse(entries) {
+            if (!entries || !entries.length) return;
+            const nowSec = Math.floor(Date.now() / 1000);
+            const trackedCount = Object.keys(this._listings || {}).length;
+            console.log(`🏷️ [AuctionTracker] Applying ${entries.length} market entries to ${trackedCount} tracked listings`);
+            if (trackedCount > 0) {
+                const trackedIds = Object.entries(this._listings).map(([id, l]) => `id=${id} itemId=${l.itemId} uid=${l.uid} sellerId=${l.sellerId}`).join(' | ');
+                console.log(`🏷️ [AuctionTracker] Tracked listings: [${trackedIds}]`);
+            }
+            if (entries.length > 0) {
+                const sampleIds = entries.slice(0, 5).map(e => `entryId=${e.id} itemId=${e.item?.id} uid=${e.item?.uid} sellerId=${e.seller?.id}`).join(' | ');
+                console.log(`🏷️ [AuctionTracker] Sample entries: [${sampleIds}]`);
+            }
+            let dirty = false;
+
+            for (const [id, l] of Object.entries(this._listings)) {
+                if (l.sold || l.saleResolved) continue;
+                const entry = entries.find(e => this._matchAuctionhouseEntry(e, l));
+                if (!entry) {
+                    console.log(`🏷️ [AuctionTracker] Listing ${id} (itemId=${l.itemId}, uid=${l.uid}) NOT found in market entries`);
+                    continue;
+                }
+
+                console.log(`🏷️ [AuctionTracker] Matched listing ${id} to market entry:`, entry);
+
+                const entryPrice = Number(entry.price ?? entry.current_price ?? entry.bid ?? 0);
+                const entryBids = Number(entry.bids ?? entry.bid_count ?? 0);
+                const entryEnds = Number(entry.ends ?? entry.end ?? entry.timestamp ?? entry.endsAt ?? 0);
+
+                if (entryPrice && entryPrice !== l.price) {
+                    console.log(`🏷️ [AuctionTracker] Listing ${id} price: ${l.price} → ${entryPrice}`);
+                    if (l.price) l.prevPrice = l.price;
+                    l.price = entryPrice;
+                    dirty = true;
+                }
+                if (entryBids && entryBids !== l.bids) {
+                    console.log(`🏷️ [AuctionTracker] Listing ${id} bids: ${l.bids} → ${entryBids}`);
+                    l.bids = entryBids;
+                    dirty = true;
+                }
+                if (entryEnds && entryEnds > nowSec) {
+                    const impliedRemaining = entryEnds - nowSec;
+                    if (!l.endsAt || Math.abs(entryEnds - l.endsAt) > 30) {
+                        console.log(`🏷️ [AuctionTracker] Listing ${id} end: ${l.endsAt} → ${entryEnds} (${impliedRemaining}s remaining)`);
+                        l.endsAt = entryEnds;
+                        l.lastRemainingSec = impliedRemaining;
+                        if (l.saleResolved || l.sold) {
+                            l.saleResolved = false;
+                            l.sold = false;
+                            l.saleAttempts = 0;
+                            l.lastSaleTry = 0;
+                            delete l.buyerId;
+                            delete l.buyerName;
+                        }
+                        dirty = true;
+                    }
+                }
+                if (dirty) {
+                    l.refreshedAt = Date.now();
+                    dirty = false;
+                }
+            }
+
+            const changed = Object.values(this._listings).some(l => l.refreshedAt && Date.now() - l.refreshedAt < 1000);
+            if (changed) {
+                await this._saveState();
+                if (this._win && document.contains(this._win)) this._renderList();
+            }
         },
 
         // Does a completed-sales feed entry describe OUR tracked auction?
@@ -846,37 +1002,42 @@
 
         async _refreshOne(listingId) {
             const l = this._listings[listingId];
-            if (!l) return;
+            if (!l) { console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: no listing`); return; }
 
             const nowSec = Math.floor(Date.now() / 1000);
+            console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: endsAt=${l.endsAt} nowSec=${nowSec} ended=${!l.endsAt || l.endsAt <= nowSec} saleResolved=${l.saleResolved} attempts=${l.saleAttempts || 0} itemId=${l.itemId} uid=${l.uid} sellerId=${l.sellerId}`);
 
             // Active auctions live in the amarket DOM (observer re-seed); the
             // API has nothing for them. Nothing to do until they end.
-            if (!l.endsAt || l.endsAt > nowSec) return;
-            if (l.saleResolved || (l.saleAttempts || 0) >= MAX_SALE_ATTEMPTS) return;
+            if (!l.endsAt || l.endsAt > nowSec) { console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: auction not ended yet`); return; }
+            if (l.saleResolved || (l.saleAttempts || 0) >= MAX_SALE_ATTEMPTS) { console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: already resolved or max attempts`); return; }
 
             // Pace retries (the countdown tick can kick us the second the
             // timer hits 0, plus the 60 s cycle — don't double-fire)
-            if (nowSec - (l.lastSaleTry || 0) < SALE_RETRY_GAP_SEC) return;
+            if (nowSec - (l.lastSaleTry || 0) < SALE_RETRY_GAP_SEC) { console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: pacing retry gap`); return; }
             l.lastSaleTry = nowSec;
 
             // Without the item id there is nothing to look the sale up by
             if (!l.itemId) {
+                console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: no itemId, marking resolved`);
                 l.saleResolved = true;
                 await this._saveState();
                 return;
             }
 
             if (!this._resolving) this._resolving = new Set();
-            if (this._resolving.has(listingId)) return;
+            if (this._resolving.has(listingId)) { console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: already resolving`); return; }
             this._resolving.add(listingId);
 
             try {
                 // Window spans well past the scheduled end: bid extensions
                 // push the REAL end forward, and the sale entry's timestamp is
                 // the actual end. Uid matching doesn't depend on the window.
+                console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: fetching sales from=${l.endsAt - 600} to=${l.endsAt + 7200}`);
                 const sales = await this._fetchItemSales(l.itemId, l.endsAt - 600, l.endsAt + 7200);
-                if (sales === null) return; // no API key — silent, retry later
+                if (sales === null) { console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: no API key, silent`); return; }
+
+                console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: fetched ${sales.length} sales`);
 
                 // Free history data: bank the whole response in the ledger
                 // before looking for our own listing's sale
@@ -888,6 +1049,7 @@
                 const match = sales.find(s => this._sameAuction(s, l));
 
                 if (match) {
+                    console.log(`🏷️ [AuctionTracker] Sale match found for listing ${listingId}: price=${match.price}, buyer=${match.buyer?.name}, bids=${match.bids}, buyer.id=${match.buyer?.id}`);
                     if (match.price != null && match.price !== l.price) {
                         l.prevPrice = l.price || l.prevPrice;
                         l.price = match.price;
@@ -897,12 +1059,15 @@
                         l.sold = true;
                         l.buyerId = match.buyer.id;
                         l.buyerName = match.buyer.name;
+                        console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: calling sendSoldNotification`);
+                        await this.sendSoldNotification(listingId, match.price, match.buyer.name);
                     }
                     l.saleResolved = true;
                     console.log(`🏷️ [AuctionTracker] Resolved sale for listing ${listingId}`);
                 } else if (l.saleAttempts >= MAX_SALE_ATTEMPTS) {
                     // Clean misses exhausted: absent from the completed-sales
                     // feed means it expired unsold. Settle without an error.
+                    console.log(`🏷️ [AuctionTracker] _refreshOne ${listingId}: no match, max attempts reached, marking resolved`);
                     l.saleResolved = true;
                 }
             } catch (e) {
@@ -914,6 +1079,54 @@
 
             await this._saveState();
             if (this._win && document.contains(this._win)) this._renderList();
+        },
+
+        // Send an auction-sold signal — routes through background so it lands
+        // in the notification center AND increments the Chrome action badge,
+        // plus shows an in-page banner at the same time.
+        async sendSoldNotification(listingId, price, buyerName) {
+            const l = this._listings[listingId];
+            if (!l) return;
+            console.log(`🏷️ [AuctionTracker] sendSoldNotification firing for ${listingId}: ${l.name} sold for $${price}`);
+
+            // Write directly to sidekick_notifications storage. The background
+            // storage listener (background.js) auto-calls updateBadge() on
+            // changes, so the Chrome action badge updates immediately. No
+            // chrome.runtime.sendMessage round-trip to the service worker —
+            // avoids MV3 service-worker suspension silently dropping the
+            // notification before the badge is set.
+            try {
+                const notification = {
+                    id: `auction-tracker_${Date.now()}`,
+                    moduleId: 'auction-tracker',
+                    type: 'success',
+                    title: '🏷️ Auction Tracker — Sold',
+                    message: `${this._esc(l.name || 'Item')} sold for $${Number(price || l.price || 0).toLocaleString()}${buyerName ? ` to ${this._esc(buyerName)}` : ''}`,
+                    timestamp: Date.now(),
+                    read: false
+                };
+
+                const result = await chrome.storage.local.get('sidekick_notifications');
+                const notifications = result.sidekick_notifications || [];
+                notifications.unshift(notification);
+                const trimmed = notifications.slice(0, 50);
+                await chrome.storage.local.set({ sidekick_notifications: trimmed });
+
+                console.log(`🏷️ [AuctionTracker] Notification stored for ${listingId}, badge should update via storage listener`);
+
+                // In-page banner alongside the badge
+                try {
+                    window.SidekickModules?.UI?.showNotification(
+                        '🏷️ Auction Tracker — Sold',
+                        `${this._esc(l.name || 'Item')} sold for $${Number(price || l.price || 0).toLocaleString()}${buyerName ? ` to ${this._esc(buyerName)}` : ''}`,
+                        'success'
+                    );
+                } catch (e) {
+                    console.warn('🏷️ [AuctionTracker] Failed to show sold banner:', e.message);
+                }
+            } catch (e) {
+                console.warn('🏷️ [AuctionTracker] Failed to store sold notification:', e.message);
+            }
         },
 
         async _refreshAll() {
@@ -1013,6 +1226,57 @@
         },
         _stopRefresh() {
             if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+        },
+
+        // ── API poll for live market/auctionhouse data ────────────────────────
+        // Polls Torn API v2 market/auctionhouse every minute so tracked listings
+        // (any auction the user clicked on) get live price/time updates without
+        // the user needing to be on amarket.php. Runs in every tab; storage sync
+        // propagates changes across tabs.
+        _startApiPoll() {
+            this._stopApiPoll();
+            this._apiPollTimer = setInterval(async () => {
+                if (Object.keys(this._listings || {}).length === 0) return;
+                try {
+                    // Fetch per tracked item so each listing gets targeted
+                    // market data instead of hoping it appears in a random
+                    // 100-entry sample of the whole auction house.
+                    const seenItemIds = new Set();
+                    for (const [id, l] of Object.entries(this._listings)) {
+                        if (l.sold || l.saleResolved) continue;
+                        if (!l.itemId) continue;
+                        if (seenItemIds.has(l.itemId)) continue;
+                        seenItemIds.add(l.itemId);
+                        try {
+                            const entries = await this._fetchMarketAuctionhouse(l.itemId);
+                            if (entries !== null) await this._applyMarketAuctionhouse(entries);
+                        } catch (e) {
+                            console.warn(`🏷️ [AuctionTracker] Market poll failed for item ${l.itemId}:`, e.message);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('🏷️ [AuctionTracker] Market auctionhouse poll failed:', e.message);
+                }
+            }, API_POLL_MS);
+            // Kick off an immediate first poll so data isn't stale for a full minute
+            (async () => {
+                const seenItemIds = new Set();
+                for (const [id, l] of Object.entries(this._listings || {})) {
+                    if (l.sold || l.saleResolved) continue;
+                    if (!l.itemId) continue;
+                    if (seenItemIds.has(l.itemId)) continue;
+                    seenItemIds.add(l.itemId);
+                    try {
+                        const entries = await this._fetchMarketAuctionhouse(l.itemId);
+                        if (entries !== null) await this._applyMarketAuctionhouse(entries);
+                    } catch (e) {
+                        console.warn(`🏷️ [AuctionTracker] Initial market poll failed for item ${l.itemId}:`, e.message);
+                    }
+                }
+            })();
+        },
+        _stopApiPoll() {
+            if (this._apiPollTimer) { clearInterval(this._apiPollTimer); this._apiPollTimer = null; }
         },
 
         // 1s display-only countdown — rewrites the data-ends spans in place.
@@ -1693,9 +1957,11 @@ min-height: 120px;
         // ── Time helpers ──────────────────────────────────────────────────────
         _formatTime(secs) {
             if (!secs || secs <= 0) return 'Ended';
-            const h = Math.floor(secs / 3600);
+            const d = Math.floor(secs / 86400);
+            const h = Math.floor((secs % 86400) / 3600);
             const m = Math.floor((secs % 3600) / 60);
             const s = secs % 60;
+            if (d > 0) return `${d}d ${h}h`;
             if (h > 0) return `${h}h ${m}m`;
             if (m > 0) return `${m}m ${s}s`;
             return `${s}s`;
@@ -1717,8 +1983,11 @@ min-height: 120px;
 
         // ── Close window ──────────────────────────────────────────────────────
         _close() {
-            this._stopRefresh();
             this._stopCountdown();
+            this._stopApiPoll();
+            // Keep sale-resolution refresh running so ended auctions still
+            // trigger notifications with the tracker window closed. The timer
+            // is idempotent: _startRefresh() stops any existing timer first.
 
             this._winState.open = false;
             this._saveState();

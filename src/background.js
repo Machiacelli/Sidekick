@@ -1040,9 +1040,9 @@ async function handleBugReport(bugData) {
 // Handle Crime Notifier alerts - creates browser notification and updates badge
 async function handleCrimeNotifierAlert(alertData) {
     try {
-        const { title, message, type, timestamp } = alertData;
+        const { title, message, type, timestamp, moduleId = 'crime-notifier' } = alertData;
 
-        console.log('🚨 Crime Notifier Alert:', { title, message, type });
+        console.log('🚨 Crime Notifier Alert:', { title, message, type, moduleId });
 
         // Check if Windows notifications are enabled by the user
         const notifPrefs = await chrome.storage.local.get('sidekick_notification_prefs');
@@ -1053,26 +1053,27 @@ async function handleCrimeNotifierAlert(alertData) {
             await chrome.notifications.create({
                 type: 'basic',
                 iconUrl: 'assets/icons/swissknife-48.png',
-                title: title || '🚨 Crime Notifier',
-                message: message || 'Alert from Crime Notifier',
+                title: title || '🚨 Sidekick',
+                message: message || 'Alert from Sidekick',
                 priority: 2,
                 requireInteraction: false
             });
         }
 
-        // 2. Increment badge counter
-        await incrementBadge();
-
-        // 3. Store notification in NotificationCenter storage
+        // 3. Store notification in NotificationCenter storage FIRST so the
+        // badge count reflects the new notification immediately.
         await storeNotification({
-            id: `crime_${timestamp}`,
-            moduleId: 'crime-notifier',
+            id: `${moduleId}_${timestamp}`,
+            moduleId: moduleId,
             type: type || 'warning',
             title: title,
             message: message,
             timestamp: timestamp,
             read: false
         });
+
+        // 2. Update badge from total unread notification count (after storage)
+        await updateBadge();
 
         console.log('✅ Crime Notifier alert handled successfully');
         return { success: true };
@@ -1084,17 +1085,24 @@ async function handleCrimeNotifierAlert(alertData) {
 }
 
 // Badge management functions
-async function incrementBadge() {
+// The badge reflects the total unread count across ALL modules whose
+// notifications land in sidekick_notifications (crime notifier, auction
+// tracker, debt tracker, mission tracker, stock advisor, etc.), so every
+// notification that shows in the notification window is counted.
+async function updateBadge() {
     try {
-        const result = await chrome.storage.local.get('crime_notifier_unread_count');
-        const currentCount = result.crime_notifier_unread_count || 0;
-        const newCount = currentCount + 1;
+        const result = await chrome.storage.local.get('sidekick_notifications');
+        const notifications = result.sidekick_notifications || [];
+        const unreadCount = notifications.filter(n => !n.read).length;
 
-        await chrome.storage.local.set({ crime_notifier_unread_count: newCount });
-        await chrome.action.setBadgeText({ text: String(newCount) });
-        await chrome.action.setBadgeBackgroundColor({ color: '#FF6B6B' }); // Red color
+        if (unreadCount > 0) {
+            await chrome.action.setBadgeText({ text: String(unreadCount) });
+            await chrome.action.setBadgeBackgroundColor({ color: '#FF6B6B' });
+        } else {
+            await chrome.action.setBadgeText({ text: '' });
+        }
 
-        console.log(`📛 Badge updated: ${newCount}`);
+        console.log(`📛 Badge updated: ${unreadCount} unread`);
     } catch (error) {
         console.error('❌ Failed to update badge:', error);
     }
@@ -1102,7 +1110,7 @@ async function incrementBadge() {
 
 async function clearBadge() {
     try {
-        await chrome.storage.local.set({ crime_notifier_unread_count: 0 });
+        await chrome.storage.local.set({ sidekick_notifications: [] });
         await chrome.action.setBadgeText({ text: '' });
         console.log('📛 Badge cleared');
     } catch (error) {
@@ -1129,9 +1137,15 @@ async function storeNotification(notification) {
     }
 }
 
-// Handle storage changes for debugging
+// Handle storage changes for debugging and badge updates
 chrome.storage.onChanged.addListener((changes, areaName) => {
     console.log('💾 Storage changed in', areaName, ':', changes);
+
+    // Whenever the notification store changes (any module emits via
+    // NotificationCenter), recount unread and refresh the action badge.
+    if (areaName === 'local' && changes.sidekick_notifications) {
+        updateBadge();
+    }
 });
 
 // Handle tab updates to potentially refresh extension state
