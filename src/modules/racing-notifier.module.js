@@ -227,16 +227,20 @@ const RacingNotifierModule = {
         document.querySelectorAll(`.${this.CONFIG.trackButtonClass}`).forEach(btn => btn.remove());
     },
 
-    // Find join buttons on the racing page and add track buttons next to them
+    // Find track columns on the racing page and add track buttons to them
     injectTrackButtons() {
         if (!this.isEnabled) return;
 
-        const joinLinks = document.querySelectorAll('.event-info .join a, .join a');
-        joinLinks.forEach(link => {
-            const existingTrack = link.parentElement?.querySelector(`.${this.CONFIG.trackButtonClass}`);
+        const trackCells = document.querySelectorAll('li.track');
+        trackCells.forEach(cell => {
+            const existingTrack = cell.querySelector(`.${this.CONFIG.trackButtonClass}`);
             if (existingTrack) return;
 
-            const raceId = this.extractRaceId(link);
+            const raceRow = cell.closest('.acc-body');
+            const joinLink = raceRow?.querySelector('.join a');
+            if (!joinLink) return;
+
+            const raceId = this.extractRaceId(joinLink);
             if (!raceId) return;
 
             const isTracked = this.trackedRaces.has(raceId);
@@ -254,24 +258,24 @@ const RacingNotifierModule = {
                 this.toggleTrackRace(raceId, trackBtn);
             });
 
-            link.parentElement?.insertBefore(trackBtn, link.nextSibling);
+            cell.appendChild(trackBtn);
         });
     },
 
     // Extract race ID from a join link element
     extractRaceId(link) {
-        // Try href for race URL patterns (e.g. ...id=21683223...)
+        // Try href first (e.g. ...id=21700599...)
         const href = link.getAttribute('href');
         if (href) {
             const match = href.match(/[?&]id=(\d+)/i);
             if (match) return match[1];
         }
 
-        // Try closest race row: look for notification-wrap form with hidden input name="id"
-        const raceRow = link.closest('li');
-        if (raceRow) {
-            const idInput = raceRow.querySelector('.notification-wrap input[name="id"]');
-            if (idInput) return idInput.value;
+        // Traverse up to .acc-body and find notification-wrap input[name="id"]
+        const accBody = link.closest('.acc-body');
+        if (accBody) {
+            const idInput = accBody.querySelector('.notification-wrap input[name="id"]');
+            if (idInput && idInput.value) return idInput.value;
         }
 
         return null;
