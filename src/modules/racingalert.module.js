@@ -130,17 +130,6 @@ const RacingAlertModule = (() => {
             }) || null;
         },
 
-        hasStockRaceIcons() {
-            return Boolean(
-                this.getStockIcon(
-                    RED_ICON_SELECTOR
-                ) ||
-                this.getStockIcon(
-                    GREEN_ICON_SELECTOR
-                )
-            );
-        },
-
         isAbroad() {
             return (
                 document.querySelector(
@@ -176,39 +165,48 @@ const RacingAlertModule = (() => {
                     CUSTOM_ICON_ID
                 );
 
-            const stockRedIcon =
-                this.getStockIcon(
-                    RED_ICON_SELECTOR
-                );
-
-            if (stockRedIcon) {
-                const stockListItem =
-                    stockRedIcon.matches?.('li')
-                        ? stockRedIcon
-                        : stockRedIcon.closest?.('li');
-
-                stockListItem?.classList.toggle(
-                    ANIMATION_CLASS,
-                    animatedIcons
-                );
-            }
+            /*
+             * Torn's own racing icon shown while the player is in a race.
+             * The live DOM uses the icon17_ class for this (e.g.
+             * aria-label "Racing: Currently racing"). Leave it alone so
+             * its hover info keeps working.
+             */
+            const stockInRaceIcon =
+                this.getStockIcon(GREEN_ICON_SELECTOR);
 
             /*
-             * Torn displays its own race icon while the player is
-             * registered for or participating in a race.
-             *
-             * The previous version mistakenly counted the Sidekick
-             * icon as a Torn stock icon. It therefore added its icon,
-             * detected it as stock, removed it, and immediately added
-             * it again through the MutationObserver.
+             * Green dot Torn shows when the player has completed a race
+             * but not checked the results yet. Uses the icon18_ class.
+             * Remove it so it never lingers or blinks.
              */
-            if (
-                this.isAbroad() ||
-                this.hasStockRaceIcons()
-            ) {
+            const stockGreenDot =
+                this.getStockIcon(RED_ICON_SELECTOR);
+
+            if (this.isAbroad()) {
                 existingCustomIcon?.remove();
                 return;
             }
+
+            /*
+             * In a race: Torn shows its own racing icon (icon17_).
+             * Leave it completely alone — no animation, no custom icon —
+             * so its hover info keeps working exactly like native Torn.
+             */
+            if (stockInRaceIcon) {
+                existingCustomIcon?.remove();
+                return;
+            }
+
+            /*
+             * Not in a race. Remove the green dot (icon18_) if present,
+             * then replace it with the original racing icon and make it
+             * blink, matching native Torn behaviour.
+             */
+            const greenListItem =
+                stockGreenDot?.matches?.('li')
+                    ? stockGreenDot
+                    : stockGreenDot?.closest?.('li');
+            greenListItem?.remove();
 
             if (existingCustomIcon) {
                 existingCustomIcon.classList.toggle(

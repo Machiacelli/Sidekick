@@ -757,11 +757,9 @@
           </div>
           <div class="sk-shelf" id="skp-shelf-shoplift" style="display:none;">
             <div class="sk-sh" style="margin-top:0;font-size:10px;">Shoplifting Alert Settings</div>
-            <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Enable Shoplifting Alert</div><div class="sk-row-desc">Notify when security drops low enough</div></div><label class="sk-tog"><input type="checkbox" id="skp-shoplift-notify" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
             <label class="sk-field-label" style="margin-top:8px;">Check Interval (minutes)</label>
             <input type="number" class="sk-input" id="skp-shoplift-interval" min="1" max="60" value="1" step="1">
             <div class="sk-hint">Minimum 1 min &mdash; recommended 1</div>
-            <label class="sk-field-label" style="margin-top:10px;">Alert when disabled per shop</label>
             <div style="display:flex;gap:6px;margin:6px 0 4px;">
               <button id="skp-shoplift-sel-all" style="padding:3px 10px;font-size:10px;background:#5fcc6a;border:none;border-radius:4px;color:#111;font-weight:700;cursor:pointer;">Select All</button>
               <button id="skp-shoplift-desel-all" style="padding:3px 10px;font-size:10px;background:rgba(255,255,255,0.12);border:none;border-radius:4px;color:rgba(255,255,255,0.7);font-weight:600;cursor:pointer;">Deselect All</button>
@@ -2802,7 +2800,6 @@
 
             // === Shoplifting alert sub-settings ===
             const SL_KEY = 'crime-notifier';
-            const slNotify = overlay.querySelector('#skp-shoplift-notify');
             const slInterval = overlay.querySelector('#skp-shoplift-interval');
             const slSelAll = overlay.querySelector('#skp-shoplift-sel-all');
             const slDeselAll = overlay.querySelector('#skp-shoplift-desel-all');
@@ -2811,7 +2808,6 @@
                 if (!CS()) return;
                 const sett = await CS().get('sidekick_settings') || {};
                 if (!sett[SL_KEY]) sett[SL_KEY] = {};
-                sett[SL_KEY].notifySecurityDown = slNotify ? slNotify.checked : true;
                 const mins = parseFloat(slInterval?.value || 1);
                 sett[SL_KEY].checkInterval = Math.max(10000, Math.round(mins * 60 * 1000));
                 const selected = slCBs.filter(cb => cb.checked).map(cb => cb.dataset.shop + '_' + cb.dataset.type);
@@ -2829,12 +2825,10 @@
                 if (!CS()) return;
                 const sett = await CS().get('sidekick_settings') || {};
                 const s = sett[SL_KEY] || {};
-                if (slNotify) slNotify.checked = s.notifySecurityDown !== false;
                 if (slInterval && s.checkInterval) slInterval.value = Math.max(1, Math.round(s.checkInterval / 60000));
                 const selected = s.selectedShopSecurity;
                 if (selected) slCBs.forEach(cb => { cb.checked = selected.includes(cb.dataset.shop + '_' + cb.dataset.type); });
             })();
-            if (slNotify) slNotify.addEventListener('change', saveShoplift);
             if (slInterval) slInterval.addEventListener('change', saveShoplift);
             slCBs.forEach(cb => cb.addEventListener('change', saveShoplift));
             if (slSelAll) slSelAll.addEventListener('click', () => { slCBs.forEach(cb => cb.checked = true); saveShoplift(); });
