@@ -904,7 +904,7 @@
                         font-weight: 500;
                         letter-spacing: 0.3px;
                     ">
-                        <span style="font-size: 13px; filter: grayscale(0.2);">🔥</span> Kill Streak Tracker
+                        Kill Streak Tracker
                     </button>
                 </div>
             `;

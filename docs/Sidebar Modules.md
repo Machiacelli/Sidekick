@@ -72,7 +72,7 @@ Display auction-house listings without bidding on them. Use the "Track" button S
 
 Does not track the listing live in the background, for price updating the user needs to be in the auction house to trigger due to API limitations! 
 
-## 🔥 Kill Streak Tracker
+## Kill Streak Tracker
 
 Where to find it: no settings toggle · Lives in the sidebar · Open sidebar **+ → Kill Streak Tracker**
 

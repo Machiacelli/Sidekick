@@ -207,7 +207,7 @@
             `;
             header.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden;">
-                    <span style="font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔥 Kill Streak Tracker</span>
+                    <span style="font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kill Streak Tracker</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 3px; min-width: 32px; flex-shrink: 0;">
                     <button class="cog-btn" style="
