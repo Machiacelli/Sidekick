@@ -850,7 +850,7 @@
                         font-weight: 500;
                         letter-spacing: 0.3px;
                     ">
-                        <span style="font-size: 13px; filter: grayscale(0.2);">📊</span> Stats Tracker
+                        Stats Tracker
                     </button>
                     <button class="module-option" data-module="travelstocks" style="
                        background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
