@@ -528,7 +528,32 @@
             </div>
           </div>
 
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Racing Alert</div><div class="sk-row-desc">Flashes the extension icon when you are not currently in a race</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-racing-alert"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Racing Alert</div><div class="sk-row-desc">Flashes the race icon when you are not currently in a race</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-racing-alert"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+
+          <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
+            <div class="sk-row-info">
+              <div class="sk-row-title">Racing Notifier</div>
+              <div class="sk-row-desc">Track races and get alerts before they start</div>
+              <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-racing-notifier" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
+            </div>
+            <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-racing-notifier"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
+          </div>
+          <div class="sk-shelf" id="skp-shelf-racing-notifier" style="display:none; margin-bottom:10px;">
+            <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Race Tracker</div><div class="sk-row-desc">Enable race tracking</div></div><label class="sk-tog"><input type="checkbox" id="skp-rn-desktop-notif" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+            <label class="sk-field-label" style="margin-top:10px;">Alert Before Race Start</label>
+            <select class="sk-select" id="skp-rn-alert-minutes">
+              <option value="5">5 minutes</option>
+              <option value="10" selected>10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+            <label class="sk-field-label" style="margin-top:8px;">Conflict Warning</label>
+            <select class="sk-select" id="skp-rn-conflict-minutes">
+              <option value="5">5 minutes</option>
+              <option value="10" selected>10 minutes</option>
+              <option value="15">15 minutes</option>
+            </select>
+          </div>
 
           <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
             <div class="sk-row-info">
@@ -2194,6 +2219,7 @@
                 ['#skp-travelblocker-oc-watcher', 'sidekick_travel_blocker', 'oc_watcher', true],
                 ['#skp-travelblocker-drug-cooldown', 'sidekick_travel_blocker', 'drug_cooldown', true],
                 ['#skp-travelblocker-war-watch', 'sidekick_travel_blocker', 'war_watch', true],                ['#skp-tog-racing-alert', 'sidekick_racing_alert', null, false],
+                ['#skp-tog-racing-notifier', 'sidekick_settings', 'racing-notifier', false],
                 ['#skp-tog-rehab-warning', 'sidekick_rehab_warning', null, false],
                 ['#skp-tog-blood-bag', 'sidekick_settings', 'blood-bag-reminder', false],
                 // Crimes
@@ -2306,6 +2332,15 @@
                                 await window.SidekickModules.CrimeNotifier.enable();
                             } else {
                                 await window.SidekickModules.CrimeNotifier.disable();
+                            }
+                        }
+
+                        // Racing Notifier: start/stop polling on toggle
+                        if (subKey === 'racing-notifier' && window.SidekickModules?.RacingNotifier) {
+                            if (inp.checked) {
+                                await window.SidekickModules.RacingNotifier.enable();
+                            } else {
+                                await window.SidekickModules.RacingNotifier.disable();
                             }
                         }
 
@@ -2672,6 +2707,40 @@
                     if (bbBags && bbSet.bagsToFill !== undefined) bbBags.value = bbSet.bagsToFill;
                     if (bbDest && bbSet.destination !== undefined) bbDest.value = bbSet.destination;
                     if (bbNewTab && bbSet.openInNewTab !== undefined) bbNewTab.checked = bbSet.openInNewTab;
+                }
+            })();
+
+            // === Racing Notifier: special fields ===
+            const rnAlertMins = overlay.querySelector('#skp-rn-alert-minutes');
+            const rnConflictMins = overlay.querySelector('#skp-rn-conflict-minutes');
+            const rnDesktopNotif = overlay.querySelector('#skp-rn-desktop-notif');
+
+            const saveRacingNotifierSettings = async () => {
+                if (!CS()) return;
+                const d = await CS().get('sidekick_settings') || {};
+                const rnSet = d['racing-notifier'] || {};
+                rnSet.alertBeforeMinutes = parseInt(rnAlertMins.value, 10);
+                rnSet.conflictWarningMinutes = parseInt(rnConflictMins.value, 10);
+                rnSet.desktopNotifications = rnDesktopNotif.checked;
+                d['racing-notifier'] = rnSet;
+                await CS().set('sidekick_settings', d);
+                if (window.SidekickModules?.RacingNotifier) {
+                    window.SidekickModules.RacingNotifier.updateSettings(rnSet);
+                }
+            };
+
+            if (rnAlertMins) rnAlertMins.addEventListener('change', saveRacingNotifierSettings);
+            if (rnConflictMins) rnConflictMins.addEventListener('change', saveRacingNotifierSettings);
+            if (rnDesktopNotif) rnDesktopNotif.addEventListener('change', saveRacingNotifierSettings);
+
+            (async () => {
+                if (!CS()) return;
+                const d = await CS().get('sidekick_settings');
+                if (d && d['racing-notifier']) {
+                    const rnSet = d['racing-notifier'];
+                    if (rnAlertMins && rnSet.alertBeforeMinutes !== undefined) rnAlertMins.value = rnSet.alertBeforeMinutes;
+                    if (rnConflictMins && rnSet.conflictWarningMinutes !== undefined) rnConflictMins.value = rnSet.conflictWarningMinutes;
+                    if (rnDesktopNotif && rnSet.desktopNotifications !== undefined) rnDesktopNotif.checked = rnSet.desktopNotifications;
                 }
             })();
 

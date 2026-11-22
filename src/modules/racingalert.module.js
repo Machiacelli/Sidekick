@@ -11,21 +11,12 @@ const RacingAlertModule = (() => {
     let scheduledFrame = null;
     let loadHandler = null;
     let animatedIcons = true;
-
     const CUSTOM_ICON_ID = 'sidekick-race-icon';
     const ANIMATION_CLASS = 'sidekick-racing-highlight';
     const STATUS_ICONS_SELECTOR = '[class^="status-icons"]';
     const RED_ICON_SELECTOR = '[class^="icon18_"]';
     const GREEN_ICON_SELECTOR = '[class^="icon17_"]';
     const ABROAD_ICON_SELECTOR = '[class^="icon71_"]';
-
-    const raceIconRed = `
-        <li id="${CUSTOM_ICON_ID}" class="icon18___wusPZ">
-            <a href="/page.php?sid=racing"
-               tabindex="0"
-               i-data="i_37_86_17_17"></a>
-        </li>
-    `;
 
     return {
         name: 'RacingAlert',
@@ -191,52 +182,32 @@ const RacingAlertModule = (() => {
              * In a race: Torn shows its own racing icon (icon17_).
              * Leave it completely alone — no animation, no custom icon —
              * so its hover info keeps working exactly like native Torn.
+             * Also remove blinking from Torn's green dot (icon18_) if present.
              */
             if (stockInRaceIcon) {
+                stockGreenDot?.classList.remove(ANIMATION_CLASS);
                 existingCustomIcon?.remove();
                 return;
             }
 
             /*
-             * Not in a race. Remove the green dot (icon18_) if present,
-             * then replace it with the original racing icon and make it
-             * blink, matching native Torn behaviour.
+             * Not in a race. Torn shows its green dot (icon18_).
+             * Make the native icon blink instead of replacing it with
+             * a custom icon. Remove any leftover custom icon.
              */
+            existingCustomIcon?.remove();
+
             const greenListItem =
                 stockGreenDot?.matches?.('li')
                     ? stockGreenDot
                     : stockGreenDot?.closest?.('li');
-            greenListItem?.remove();
 
-            if (existingCustomIcon) {
-                existingCustomIcon.classList.toggle(
+            if (greenListItem) {
+                greenListItem.classList.toggle(
                     ANIMATION_CLASS,
                     animatedIcons
                 );
-                return;
             }
-
-            const statusIcons =
-                document.querySelector(
-                    STATUS_ICONS_SELECTOR
-                );
-
-            if (!statusIcons) return;
-
-            statusIcons.insertAdjacentHTML(
-                'beforeend',
-                raceIconRed
-            );
-
-            const newIcon =
-                document.getElementById(
-                    CUSTOM_ICON_ID
-                );
-
-            newIcon?.classList.toggle(
-                ANIMATION_CLASS,
-                animatedIcons
-            );
         },
 
         /*

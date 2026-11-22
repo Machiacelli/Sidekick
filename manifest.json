@@ -57,6 +57,7 @@
                 "src/modules/mugcalculator.module.js",
                 "src/modules/weaponexp.module.js",
                 "src/modules/racingalert.module.js",
+                "src/modules/racing-notifier.module.js",
                 "src/modules/refillblocker.module.js",
                 "src/modules/extendedchainview.module.js",
                 "src/data/travel-times.js",
