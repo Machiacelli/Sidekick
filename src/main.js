@@ -369,6 +369,15 @@
                 console.warn("⚠️ Stats Tracker module not available");
             }
 
+            // Initialize Killstreak Tracker Module
+            console.log("🔥 Sidekick: Initializing Killstreak Tracker...");
+            if (window.SidekickModules.Killstreak?.init) {
+                await window.SidekickModules.Killstreak.init();
+                console.log("✅ Sidekick: Killstreak Tracker initialized");
+            } else {
+                console.warn("⚠️ Killstreak Tracker module not available");
+            }
+
             // Initialize Merit Calculator Module
             console.log('🎯 Sidekick: Initializing Merit Calculator...');
             if (window.SidekickModules.MeritCalculator?.init) {

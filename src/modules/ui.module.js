@@ -597,6 +597,7 @@
             try { mods.Debt?.purgePage?.(pageId); } catch (e) { console.warn('Debt purge failed:', e); }
             try { mods.TravelStocks?.purgePage?.(pageId); } catch (e) { console.warn('TravelStocks purge failed:', e); }
             try { mods.AuctionTracker?.purgePage?.(pageId); } catch (e) { console.warn('AuctionTracker purge failed:', e); }
+            try { mods.Killstreak?.purgePage?.(pageId); } catch (e) { console.warn('Killstreak purge failed:', e); }
         },
 
         // ── Resize handle ─────────────────────────────────────────────────
@@ -887,6 +888,24 @@
                     ">
                         <span style="font-size: 13px; filter: grayscale(0.2);">🏷️</span> Auction Tracker
                     </button>
+                    <button class="module-option" data-module="killstreak" style="
+                        background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+                        border: 1px solid rgba(255,255,255,0.06);
+                        color: rgba(255,255,255,0.92);
+                        padding: 10px 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        text-align: left;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        font-size: 11px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        font-weight: 500;
+                        letter-spacing: 0.3px;
+                    ">
+                        <span style="font-size: 13px; filter: grayscale(0.2);">🔥</span> Kill Streak Tracker
+                    </button>
                 </div>
             `;
 
@@ -968,6 +987,9 @@
                     break;
                 case 'auctiontracker':
                     this.createAuctionTracker();
+                    break;
+                case 'killstreak':
+                    this.createKillstreak();
                     break;
                 default:
                     this.showNotification('Unknown Module', 'Module type not recognized', 'error');
@@ -1183,6 +1205,30 @@
             } catch (error) {
                 console.error('Failed to open auction tracker:', error);
                 this.showNotification('Auction Tracker Error', 'Failed to open tracker window', 'error');
+            }
+        },
+
+        // Create / focus the Killstreak Tracker window
+        async createKillstreak() {
+            try {
+                if (!window.SidekickModules?.Killstreak) {
+                    this.showNotification('Killstreak Error', 'Killstreak module not loaded', 'error');
+                    return;
+                }
+
+                if (!window.SidekickModules.Killstreak.isInitialized) {
+                    await window.SidekickModules.Killstreak.init();
+                }
+
+                if (!window.SidekickModules.Killstreak.isEnabled) {
+                    window.SidekickModules.Killstreak.enable();
+                    this.showNotification('Killstreak Tracker', 'Killstreak tracker window opened', 'info');
+                } else {
+                    this.showNotification('Killstreak Tracker', 'Killstreak tracker already open', 'info');
+                }
+            } catch (error) {
+                console.error('Failed to create killstreak tracker:', error);
+                this.showNotification('Killstreak Error', 'Failed to open killstreak tracker', 'error');
             }
         },
 

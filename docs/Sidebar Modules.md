@@ -71,6 +71,13 @@ Where to find it: no settings toggle · Lives in the sidebar (with a "Track" but
 Display auction-house listings without bidding on them. Use the "Track" button Sidekick adds next to any auction listing to add it to a window showing bidder counts, last price , time left and category color coding. Also displays price history of said item.
 
 Does not track the listing live in the background, for price updating the user needs to be in the auction house to trigger due to API limitations! 
+
+## 🔥 Kill Streak Tracker
+
+Where to find it: no settings toggle · Lives in the sidebar · Open sidebar **+ → Kill Streak Tracker**
+
+Displays your current Torn killstreak (and your best killstreak ever) in a movable, resizable sidebar window. Click the big number to toggle between full view (current, best, last-updated time) and compact number-only view. Change the header colour via the cogwheel menu, refresh on demand, or drag and resize the panel anywhere in the sidebar.
+
 ---
 
 *For modules that live on Torn's own pages, see the other catalogue pages.*

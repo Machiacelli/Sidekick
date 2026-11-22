@@ -65,6 +65,7 @@
                 "src/modules/debt-receipt-sharing.module.js",
                 "src/modules/stockadvisor.module.js",
                 "src/modules/statstracker.module.js",
+                "src/modules/killstreak.module.js",
                 "src/modules/notionBugReporter.js",
                 "src/modules/oc-weights.module.js",
                 "src/modules/bunker-bucks.module.js",
