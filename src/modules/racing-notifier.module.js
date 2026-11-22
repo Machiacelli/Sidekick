@@ -19,12 +19,11 @@ const RacingNotifierModule = {
         pollMs: 30000,
         alertBeforeMinutes: 10,
         conflictWarningMinutes: 5,
+        trackButtonClass: 'sidekick-race-track-btn',
         trackButtonIdPrefix: 'sidekick-race-track-',
-        dropdownId: 'sidekick-racing-notifier-dropdown',
         trackedRacesKey: 'racing-notifier-tracked',
         notifiedRacesKey: 'racing-notifier-notified',
         styleId: 'sidekick-racing-notifier-styles',
-        joinButtonText: 'Join',
     },
 
     // State
@@ -39,7 +38,6 @@ const RacingNotifierModule = {
     notifiedRaces: new Set(),
     pollInterval: null,
     observer: null,
-    scheduledPoll: null,
 
     // Initialize module
     async init() {
@@ -103,16 +101,6 @@ const RacingNotifierModule = {
     updateSettings(newSettings) {
         this.settings = { ...this.settings, ...newSettings };
         this.isEnabled = this.settings.isEnabled === true;
-
-        if (this.settings.alertBeforeMinutes !== undefined) {
-            this.settings.alertBeforeMinutes = this.settings.alertBeforeMinutes;
-        }
-        if (this.settings.conflictWarningMinutes !== undefined) {
-            this.settings.conflictWarningMinutes = this.settings.conflictWarningMinutes;
-        }
-        if (this.settings.desktopNotifications !== undefined) {
-            this.settings.desktopNotifications = this.settings.desktopNotifications;
-        }
 
         if (this.isEnabled) {
             this.enable();
@@ -179,7 +167,6 @@ const RacingNotifierModule = {
 
         if (this.isOnRacingPage()) {
             this.injectTrackButtons();
-            this.renderDropdown();
         }
 
         this.saveSettings();
@@ -188,13 +175,12 @@ const RacingNotifierModule = {
 
     // Disable module
     disable() {
-        console.log('�1 Disabling Racing Notifier');
+        console.log('🏁 Disabling Racing Notifier');
         this.isEnabled = false;
         this.settings.isEnabled = false;
 
         this.stopPolling();
         this.stopObserver();
-        this.removeDropdown();
         this.removeTrackButtons();
 
         this.saveSettings();
@@ -207,14 +193,14 @@ const RacingNotifierModule = {
                window.location.href.includes('/racing');
     },
 
-    // Inject CSS styles
+    // Inject CSS styles for track button
     addStyles() {
         if (document.getElementById(this.CONFIG.styleId)) return;
 
         const style = document.createElement('style');
         style.id = this.CONFIG.styleId;
         style.textContent = `
-            .sidekick-race-track-btn {
+            .${this.CONFIG.trackButtonClass} {
                 background: #2196F3 !important;
                 color: white !important;
                 border: none !important;
@@ -224,109 +210,13 @@ const RacingNotifierModule = {
                 font-weight: 600 !important;
                 cursor: pointer !important;
                 margin-left: 6px !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 4px !important;
                 white-space: nowrap !important;
             }
-            .sidekick-race-track-btn.tracked {
+            .${this.CONFIG.trackButtonClass}.tracked {
                 background: #4CAF50 !important;
             }
-            .sidekick-race-track-btn:hover {
+            .${this.CONFIG.trackButtonClass}:hover {
                 opacity: 0.9 !important;
-            }
-            .sidekick-race-track-btn:active {
-                transform: scale(0.95) !important;
-            }
-            #${this.CONFIG.dropdownId} {
-                position: fixed !important;
-                top: 60px !important;
-                right: 20px !important;
-                z-index: 999999 !important;
-                width: 320px !important;
-                background: #1a1a1a !important;
-                border: 1px solid #444 !important;
-                border-radius: 8px !important;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-                color: #fff !important;
-                display: none !important;
-                flex-direction: column !important;
-            }
-            #${this.CONFIG.dropdownId}.open {
-                display: flex !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-dropdown-header {
-                padding: 12px !important;
-                border-bottom: 1px solid #333 !important;
-                font-weight: 600 !important;
-                font-size: 14px !important;
-                display: flex !important;
-                justify-content: space-between !important;
-                align-items: center !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-dropdown-close {
-                background: none !important;
-                border: none !important;
-                color: #888 !important;
-                cursor: pointer !important;
-                font-size: 18px !important;
-                padding: 0 !important;
-                line-height: 1 !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-dropdown-empty {
-                padding: 20px !important;
-                text-align: center !important;
-                color: #888 !important;
-                font-size: 13px !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item {
-                padding: 10px 12px !important;
-                border-bottom: 1px solid #222 !important;
-                display: flex !important;
-                justify-content: space-between !important;
-                align-items: center !important;
-                cursor: pointer !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item:hover {
-                background: #222 !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item:last-child {
-                border-bottom: none !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item-info {
-                flex: 1 !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item-title {
-                font-weight: 600 !important;
-                font-size: 13px !important;
-                white-space: nowrap !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item-time {
-                font-size: 11px !important;
-                color: #888 !important;
-                margin-top: 2px !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item-untrack {
-                background: none !important;
-                border: none !important;
-                color: #ff6b6b !important;
-                cursor: pointer !important;
-                font-size: 11px !important;
-                padding: 2px 6px !important;
-                border-radius: 3px !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-item-untrack:hover {
-                background: rgba(255,107,107,0.1) !important;
-            }
-            #${this.CONFIG.dropdownId} .sk-race-dropdown-footer {
-                padding: 10px 12px !important;
-                border-top: 1px solid #333 !important;
-                font-size: 11px !important;
-                color: #666 !important;
-                text-align: center !important;
             }
         `;
         document.head.appendChild(style);
@@ -334,34 +224,26 @@ const RacingNotifierModule = {
 
     // Remove track buttons from DOM
     removeTrackButtons() {
-        document.querySelectorAll(`.${this.CONFIG.trackButtonIdPrefix}`).forEach(btn => btn.remove());
+        document.querySelectorAll(`.${this.CONFIG.trackButtonClass}`).forEach(btn => btn.remove());
     },
 
     // Find join buttons on the racing page and add track buttons next to them
     injectTrackButtons() {
         if (!this.isEnabled) return;
 
-        // Find join buttons by text content
-        const joinButtons = Array.from(document.querySelectorAll('button, a, [role="button"]'))
-            .filter(el => {
-                const text = el.textContent || el.innerText || '';
-                return text.trim() === this.CONFIG.joinButtonText ||
-                       text.trim().startsWith(this.CONFIG.joinButtonText);
-            });
-
-        joinButtons.forEach(btn => {
-            // Skip if already has a track button sibling
-            const existingTrack = btn.parentElement?.querySelector(`.${this.CONFIG.trackButtonIdPrefix}`);
+        const joinLinks = document.querySelectorAll('.event-info .join a, .join a');
+        joinLinks.forEach(link => {
+            const existingTrack = link.parentElement?.querySelector(`.${this.CONFIG.trackButtonClass}`);
             if (existingTrack) return;
 
-            const raceId = this.extractRaceId(btn);
+            const raceId = this.extractRaceId(link);
             if (!raceId) return;
 
             const isTracked = this.trackedRaces.has(raceId);
 
             const trackBtn = document.createElement('button');
             trackBtn.type = 'button';
-            trackBtn.className = `sidekick-race-track-btn ${this.CONFIG.trackButtonIdPrefix}${raceId} ${isTracked ? 'tracked' : ''}`;
+            trackBtn.className = `${this.CONFIG.trackButtonClass} ${this.CONFIG.trackButtonIdPrefix}${raceId} ${isTracked ? 'tracked' : ''}`;
             trackBtn.setAttribute('data-race-id', raceId);
             trackBtn.setAttribute('aria-label', isTracked ? 'Untrack race' : 'Track race');
             trackBtn.textContent = isTracked ? 'Untrack' : 'Track';
@@ -372,43 +254,24 @@ const RacingNotifierModule = {
                 this.toggleTrackRace(raceId, trackBtn);
             });
 
-            // Insert after the join button
-            btn.parentElement?.insertBefore(trackBtn, btn.nextSibling);
+            link.parentElement?.insertBefore(trackBtn, link.nextSibling);
         });
     },
 
-    // Extract race ID from a join button element
-    extractRaceId(btn) {
-        // Try data attributes first
-        for (const attr of ['data-race-id', 'data-race', 'data-id', 'data-raceid']) {
-            const val = btn.getAttribute(attr);
-            if (val) return val;
-        }
-
-        // Try closest container with data attributes
-        const container = btn.closest('[data-race-id], [data-race], [data-id]');
-        if (container) {
-            for (const attr of ['data-race-id', 'data-race', 'data-id', 'data-raceid']) {
-                const val = container.getAttribute(attr);
-                if (val) return val;
-            }
-        }
-
-        // Try href attribute for race URL patterns
-        const href = btn.getAttribute('href') || btn.closest('a')?.getAttribute('href');
+    // Extract race ID from a join link element
+    extractRaceId(link) {
+        // Try href for race URL patterns (e.g. ...id=21683223...)
+        const href = link.getAttribute('href');
         if (href) {
-            const match = href.match(/racing\/(\d+)|race=(\d+)|sid=racing&id=(\d+)|race_id=(\d+)/i);
-            if (match) {
-                return match[1] || match[2] || match[3] || match[4];
-            }
+            const match = href.match(/[?&]id=(\d+)/i);
+            if (match) return match[1];
         }
 
-        // Try to find race ID in nearby text or sibling elements
-        const parent = btn.parentElement;
-        if (parent) {
-            const text = parent.textContent || parent.innerText || '';
-            const match = text.match(/race\s*#?(\d+)/i);
-            if (match) return match[1];
+        // Try closest race row: look for notification-wrap form with hidden input name="id"
+        const raceRow = link.closest('li');
+        if (raceRow) {
+            const idInput = raceRow.querySelector('.notification-wrap input[name="id"]');
+            if (idInput) return idInput.value;
         }
 
         return null;
@@ -430,7 +293,6 @@ const RacingNotifierModule = {
         }
 
         await this.saveTrackedRaces();
-        this.renderDropdown();
     },
 
     // Start mutation observer to re-inject track buttons when DOM changes
@@ -465,7 +327,6 @@ const RacingNotifierModule = {
             this.pollRaces();
         }, this.CONFIG.pollMs);
 
-        // Run immediately
         this.pollRaces();
     },
 
@@ -474,10 +335,6 @@ const RacingNotifierModule = {
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
-        }
-        if (this.scheduledPoll !== null) {
-            cancelAnimationFrame(this.scheduledPoll);
-            this.scheduledPoll = null;
         }
     },
 
@@ -539,7 +396,6 @@ const RacingNotifierModule = {
                         if (otherRace && otherRace.schedule?.end) {
                             const otherStart = otherRace.schedule.start;
                             const otherEnd = otherRace.schedule.end;
-                            // Check overlap: race starts before other ends and after other starts
                             if (startTime < otherEnd && startTime > otherStart) {
                                 if (!this.notifiedRaces.has(`conflict_${raceId}_${otherId}`)) {
                                     this.sendConflictAlert(race, otherRace);
@@ -551,7 +407,6 @@ const RacingNotifierModule = {
                 }
             }
 
-            // Clean up old notified entries for races that have started or are no longer tracked
             for (const notifiedId of Array.from(this.notifiedRaces)) {
                 if (notifiedId.startsWith('conflict_')) continue;
                 const race = races.find(r => String(r.id) === notifiedId);
@@ -583,7 +438,6 @@ const RacingNotifierModule = {
             });
         }
 
-        // Emit to notification center
         if (window.SidekickModules?.Core?.NotificationCenter) {
             window.SidekickModules.Core.NotificationCenter.emit({
                 moduleId: 'racing-notifier',
@@ -618,74 +472,6 @@ const RacingNotifierModule = {
                 message,
             }).catch(() => {});
         }
-    },
-
-    // Render the tracked races dropdown
-    renderDropdown() {
-        this.removeDropdown();
-
-        if (!this.isEnabled) return;
-
-        const dropdown = document.createElement('div');
-        dropdown.id = this.CONFIG.dropdownId;
-        dropdown.className = 'open';
-
-        const header = document.createElement('div');
-        header.className = 'sk-race-dropdown-header';
-        header.innerHTML = `
-            <div>Tracked Races (${this.trackedRaces.size})</div>
-            <button class="sk-race-dropdown-close">✕</button>
-        `;
-        header.querySelector('.sk-race-dropdown-close').addEventListener('click', () => {
-            dropdown.classList.remove('open');
-        });
-        dropdown.appendChild(header);
-
-        if (this.trackedRaces.size === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'sk-race-dropdown-empty';
-            empty.textContent = 'No races tracked. Click "Track" on the racing page.';
-            dropdown.appendChild(empty);
-        } else {
-            for (const raceId of this.trackedRaces) {
-                const item = document.createElement('div');
-                item.className = 'sk-race-item';
-
-                const untrackBtn = document.createElement('button');
-                untrackBtn.className = 'sk-race-item-untrack';
-                untrackBtn.textContent = 'Untrack';
-                untrackBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const btn = document.querySelector(`.${this.CONFIG.trackButtonIdPrefix}${raceId}`);
-                    if (btn) this.toggleTrackRace(raceId, btn);
-                });
-
-                const info = document.createElement('div');
-                info.className = 'sk-race-item-info';
-                info.innerHTML = `
-                    <div class="sk-race-item-title">Race #${raceId}</div>
-                    <div class="sk-race-item-time">Tracked</div>
-                `;
-
-                item.appendChild(info);
-                item.appendChild(untrackBtn);
-                dropdown.appendChild(item);
-            }
-        }
-
-        const footer = document.createElement('div');
-        footer.className = 'sk-race-dropdown-footer';
-        footer.textContent = 'Alerts before race start • Conflict warnings';
-        dropdown.appendChild(footer);
-
-        document.body.appendChild(dropdown);
-    },
-
-    // Remove dropdown from DOM
-    removeDropdown() {
-        const existing = document.getElementById(this.CONFIG.dropdownId);
-        if (existing) existing.remove();
     },
 
     // Public API for settings panel
