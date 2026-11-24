@@ -600,9 +600,7 @@ helperNote: 'No plan needed',
             cap: null,
             capLabel: null,
             reason: '',
-            helperItems: [
-                { name: 'Xanax', count: null, calcType: 'drug_pills' },
-            ],
+            helperItems: [],
             helperNote: '',
             durationDays: 31,
             tabs: [
@@ -1744,6 +1742,9 @@ const STORAGE_KEY = 'book-planner';
             await this.loadSelections();
             const hasStatRequirement = book.statKey && book.threshold;
             const hasTabs = book.tabs && book.tabs.length > 0;
+            const needsBoosterCooldown = book.needsBoosterCooldown === true
+                || (book.helperItems || []).some(i => i.calcType === 'booster_cans')
+                || (book.tabs || []).some(t => (t.helperItems || []).some(i => i.calcType === 'booster_cans'));
 
             // All remote data now comes from the shared gatherBookData pipeline
             // (also used by the Book Item Tracker window).
