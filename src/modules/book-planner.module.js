@@ -970,6 +970,7 @@ const COMPANY_BONUSES = {
 };
 
 const STORAGE_KEY = 'book-planner';
+    const SELECTIONS_KEY = 'book-planner-selections';
     const ICON_ID = 'sk-book-planner-btn';
     const MODAL_ID = 'sk-book-planner-modal';
     const STYLES_ID = 'sk-book-planner-styles';
@@ -987,7 +988,13 @@ const STORAGE_KEY = 'book-planner';
         // Inventory cache (shared across all book opens within TTL)
         _inventoryCache: null,
         _drugInventoryCache: null,
+        _displayCaseCache: null,
+        _displayCaseLogged: false,
         _cacheTtlMs: 2 * 60 * 1000,
+
+        // User's can/alcohol choice per book: { [bookKey]: { can, alcohol } }
+        _selections: {},
+        _selectionsLoaded: false,
 
         // ═════════════════════════════════════════════════════════════════════════
         // Init
@@ -1066,6 +1073,31 @@ const STORAGE_KEY = 'book-planner';
         },
 
         // ════════════════════════════════════════════════════════════════════════
+        // ── Per-book user selections (can / alcohol / tab) ──────────────────────
+        // Persisted so the Plan Book modal reopens with the same choices and
+        // the Book Item Tracker window reflects the path the user picked.
+
+        async loadSelections() {
+            if (this._selectionsLoaded) return;
+            try {
+                const data = await window.SidekickModules.Core.ChromeStorage.get('book-planner-selections');
+                if (data && typeof data === 'object') this._selections = data;
+            } catch (e) {
+                console.warn('📖 Book Planner: failed to load selections:', e);
+            }
+            this._selectionsLoaded = true;
+        },
+
+        async saveSelection(bookKey, type, value) {
+            if (!bookKey || !value) return;
+            this._selections[bookKey] = { ...(this._selections[bookKey] || {}), [type]: value };
+            try {
+                await window.SidekickModules.Core.ChromeStorage.set('book-planner-selections', this._selections);
+            } catch (e) {
+                console.warn('📖 Book Planner: failed to save selection:', e);
+            }
+        },
+
         // API helpers
         // ════════════════════════════════════════════════════════════════════════
 
@@ -1185,10 +1217,87 @@ const STORAGE_KEY = 'book-planner';
                 offset += pageItems.length;
             }
 
+            const displayCase = await this.getDisplayCaseCounts(authHeader);
+            if (displayCase) {
+                for (const [name, count] of Object.entries(displayCase.byName)) {
+                    items.push({ name, amount: count, skDisplayCase: true });
+                }
+                for (const [id, count] of Object.entries(displayCase.byId)) {
+                    if (displayCase.byIdHasName && displayCase.byIdHasName[id]) continue;
+                    items.push({ name: `Item #${id}`, ID: Number(id), amount: count, skDisplayCase: true });
+                }
+                console.log('📖 Book Planner: display case merged into inventory:', displayCase.byName, displayCase.byId);
+            }
+
             return {
                 inventory: { items, timestamp },
                 _metadata: { total: items.length }
             };
+        },
+
+        // ── Display case (legacy v1-shaped selection: /user?selections=display) ──
+        // Returns { byName: {lowercaseName: count}, byId: {itemId: count}, byIdHasName: {} }
+        // or null when unavailable. The spec marks this selection as an unstable
+        // v1 fallback, so the parser is deliberately defensive about the shape.
+        async getDisplayCaseCounts(authHeader) {
+            const now = Date.now();
+            if (this._displayCaseCache && now - this._displayCaseCache.timestamp < this._cacheTtlMs) {
+                return this._displayCaseCache.data;
+            }
+
+            const raw = await this.fetchData(`https://api.torn.com/v2/user?selections=display`, { Authorization: authHeader });
+            if (!raw || raw.error) {
+                this._displayCaseCache = { data: null, timestamp: now };
+                return null;
+            }
+            if (!this._displayCaseLogged) {
+                this._displayCaseLogged = true;
+                console.log('📖 Book Planner: display case raw response (logged once):', raw);
+            }
+
+            const byName = {};
+            const byId = {};
+            const byIdHasName = {};
+            const addEntry = (entry) => {
+                if (!entry || typeof entry !== 'object') return;
+                const idRaw = entry.ID ?? entry.id ?? entry.itemID ?? entry.item_id ?? entry.itemId;
+                const qty = Number(entry.quantity ?? entry.amount ?? entry.count ?? entry.qty ?? 0);
+                if (!Number.isFinite(qty) || qty <= 0) return;
+                const name = typeof entry.name === 'string' ? entry.name : null;
+                if (idRaw !== undefined && idRaw !== null && String(idRaw) !== '') {
+                    byId[String(idRaw)] = (byId[String(idRaw)] || 0) + qty;
+                    if (name) byIdHasName[String(idRaw)] = true;
+                }
+                if (name) {
+                    byName[name.toLowerCase()] = (byName[name.toLowerCase()] || 0) + qty;
+                }
+            };
+
+            // Walk the response for a collection of item entries: an array of
+            // entries, or an object of entries (possibly nested one level under
+            // a "display" key). _metadata / timestamp wrappers are skipped.
+            const walk = (value, depth) => {
+                if (!value || typeof value !== 'object' || depth > 2) return;
+                if (Array.isArray(value)) {
+                    value.forEach(entry => addEntry(entry));
+                    return;
+                }
+                const keys = Object.keys(value);
+                const looksLikeEntry = keys.some(k => ['quantity', 'amount', 'count', 'qty'].includes(k));
+                if (looksLikeEntry) {
+                    addEntry(value);
+                    return;
+                }
+                for (const k of keys) {
+                    if (k === '_metadata' || k === 'timestamp' || k === 'error') continue;
+                    walk(value[k], depth + 1);
+                }
+            };
+            walk(raw, 0);
+
+            const result = { byName, byId, byIdHasName };
+            this._displayCaseCache = { data: result, timestamp: now };
+            return result;
         },
 
         getInventoryItems(inventory) {
@@ -1405,122 +1514,255 @@ const STORAGE_KEY = 'book-planner';
         // Modal
         // ════════════════════════════════════════════════════════════════════════
 
-        async openModal(book) {
-            console.log('📖 Book Planner: openModal called for', book?.name);
-            this.removeModal();
+        // Gathers every piece of remote data the planner (and the Book Item
+        // Tracker window) needs for one book. Extracted from openModal so both
+        // consumers share the exact same fetch pipeline.
+        async gatherBookData(book) {
+            const data = {
+                userStat: null,
+                statContainer: null,
+                battlestats: null,
+                inventory: null,
+                drugInventory: null,
+                boosterCooldown: null,
+                drugCooldown: null,
+                workstats: null,
+                boosterMaxHours: 24,
+                companyProfile: null,
+                perkMultiplier: 1,
+                nervePerkMultiplier: 1,
+                caffeineConActive: false,
+            };
+            if (!book) return data;
 
             const apiKey = await this.getApiKey();
-            console.log('📖 Book Planner: getApiKey result:', apiKey ? 'KEY FOUND' : 'EMPTY');
+            if (!apiKey) return data;
+
             const hasStatRequirement = book.statKey && book.threshold;
-            const hasTabs = book.tabs && book.tabs.length > 0;
             const needsBoosterCooldown = book.needsBoosterCooldown === true
                 || (book.helperItems || []).some(i => i.calcType === 'booster_cans')
                 || (book.tabs || []).some(t => (t.helperItems || []).some(i => i.calcType === 'booster_cans'));
             const needsDrugCooldown = book.needsDrugCooldown === true;
             const needsWorkstats = book.needsWorkstats === true;
             const needsDrugInventory = book.needsDrugInventory === true;
+            const needsDrugItems = (book.helperItems || []).some(i => i.calcType === 'drug_pills')
+                || (book.tabs || []).some(t => (t.helperItems || []).some(i => i.calcType === 'drug_pills'));
             const needsCapCheck = book.needsCapCheck === true;
             const needsCompanyCheck = book.needsCompanyCheck === true;
             const needsPerks = needsBoosterCooldown;
-            let userStat = null;
-            let boosterCooldown = null;
-            let drugCooldown = null;
-            let workstats = null;
-            let battlestats = null;
-            let boosterMaxHours = 24;
-            let inventory = null;
-            let drugInventory = null;
-            let statContainer = null;
-            let companyProfile = null;
-            let perkMultiplier = 1;
-            let nervePerkMultiplier = 1;
-            let caffeineConActive = false;
-            let loading = true;
 
-            if (apiKey) {
-                try {
-                    const authHeader = `ApiKey ${apiKey}`;
-                    const now = Date.now();
-                    const calls = [];
-                    if (hasStatRequirement) {
-                        calls.push({ key: 'stats', promise: this.fetchData(`https://api.torn.com/v2/user/battlestats`, { Authorization: authHeader }) });
-                    }
-                    if (needsCapCheck) {
-                        calls.push({ key: 'capStats', promise: this.fetchData(`https://api.torn.com/v2/user/battlestats`, { Authorization: authHeader }) });
-                    }
-                    const cachedInv = this._inventoryCache && now - this._inventoryCache.timestamp < this._cacheTtlMs ? this._inventoryCache.data : null;
-                    if (cachedInv) {
-                        inventory = cachedInv;
+            try {
+                const authHeader = `ApiKey ${apiKey}`;
+                const now = Date.now();
+                const calls = [];
+                if (hasStatRequirement) {
+                    calls.push({ key: 'stats', promise: this.fetchData(`https://api.torn.com/v2/user/battlestats`, { Authorization: authHeader }) });
+                }
+                if (needsCapCheck) {
+                    calls.push({ key: 'capStats', promise: this.fetchData(`https://api.torn.com/v2/user/battlestats`, { Authorization: authHeader }) });
+                }
+                const cachedInv = this._inventoryCache && now - this._inventoryCache.timestamp < this._cacheTtlMs ? this._inventoryCache.data : null;
+                if (cachedInv) {
+                    data.inventory = cachedInv;
+                } else {
+                    calls.push({ key: 'inventory', promise: this.fetchInventory(authHeader) });
+                }
+                if (needsBoosterCooldown || needsDrugCooldown) {
+                    calls.push({ key: 'cooldowns', promise: this.fetchData(`https://api.torn.com/v2/user/cooldowns`, { Authorization: authHeader }) });
+                }
+                const cachedDrugInv = this._drugInventoryCache && now - this._drugInventoryCache.timestamp < this._cacheTtlMs ? this._drugInventoryCache.data : null;
+                if (needsBoosterCooldown || needsDrugCooldown || needsDrugInventory || needsDrugItems) {
+                    if (cachedDrugInv) {
+                        data.drugInventory = cachedDrugInv;
                     } else {
-                        calls.push({ key: 'inventory', promise: this.fetchInventory(authHeader) });
+                        calls.push({ key: 'drugInventory', promise: this.fetchInventory(authHeader, 'Drug') });
                     }
-                    if (needsBoosterCooldown || needsDrugCooldown) {
-                        calls.push({ key: 'cooldowns', promise: this.fetchData(`https://api.torn.com/v2/user/cooldowns`, { Authorization: authHeader }) });
+                }
+                if (needsWorkstats) {
+                    calls.push({ key: 'workstats', promise: this.fetchData(`https://api.torn.com/v2/user/workstats`, { Authorization: authHeader }) });
+                }
+                if (needsPerks) {
+                    calls.push({ key: 'perks', promise: this.fetchUserPerks(authHeader) });
+                    calls.push({ key: 'calendar', promise: this.fetchCalendar(authHeader) });
+                }
+                const needsCompanyData = needsBoosterCooldown || needsCompanyCheck;
+                if (needsCompanyData) {
+                    calls.push({ key: 'company', promise: this.fetchData(`https://api.torn.com/v2/company/profile`, { Authorization: authHeader }) });
+                }
+                const results = await Promise.allSettled(calls.map(c => c.promise));
+                results.forEach((result, i) => {
+                    if (result.status !== 'fulfilled') {
+                        console.warn('📖 Book Planner:', calls[i].key, 'request failed:', result.reason);
+                        return;
                     }
-                    const cachedDrugInv = this._drugInventoryCache && now - this._drugInventoryCache.timestamp < this._cacheTtlMs ? this._drugInventoryCache.data : null;
-                    if (needsBoosterCooldown || needsDrugCooldown || needsDrugInventory) {
-                        if (cachedDrugInv) {
-                            drugInventory = cachedDrugInv;
-                        } else {
-                            calls.push({ key: 'drugInventory', promise: this.fetchInventory(authHeader, 'Drug') });
-                        }
-                    }
-                    if (needsWorkstats) {
-                        calls.push({ key: 'workstats', promise: this.fetchData(`https://api.torn.com/v2/user/workstats`, { Authorization: authHeader }) });
-                    }
-                    if (needsPerks) {
-                        calls.push({ key: 'perks', promise: this.fetchUserPerks(authHeader) });
-                        calls.push({ key: 'calendar', promise: this.fetchCalendar(authHeader) });
-                    }
-                    const needsCompanyData = needsBoosterCooldown || needsCompanyCheck;
-                    if (needsCompanyData) {
-                        calls.push({ key: 'company', promise: this.fetchData(`https://api.torn.com/v2/company/profile`, { Authorization: authHeader }) });
-                    }
-                    const results = await Promise.allSettled(calls.map(c => c.promise));
-                    results.forEach((result, i) => {
-                        if (result.status !== 'fulfilled') {
-                            console.warn('📖 Book Planner:', calls[i].key, 'request failed:', result.reason);
-                            return;
-                        }
 
-                        const r = result.value;
-                        if (r && r.error) return;
-                        const key = calls[i].key;
-                        if (key === 'stats') {
-                            userStat = r;
-                            statContainer = userStat && userStat.battlestats ? userStat.battlestats : userStat;
-                        } else if (key === 'capStats') {
-                            battlestats = r && r.battlestats ? r.battlestats : r;
-                        } else if (key === 'inventory') {
-                            inventory = r;
-                            this._inventoryCache = { data: r, timestamp: Date.now() };
-                        } else if (key === 'cooldowns') {
-                            const cd = r.cooldowns || r;
-                            const boosterSeconds = Number(cd.booster);
-                            boosterCooldown = Number.isFinite(boosterSeconds) ? Math.max(0, boosterSeconds) : 0;
-                            const drugSeconds = Number(cd.drug);
-                            drugCooldown = Number.isFinite(drugSeconds) ? Math.max(0, drugSeconds) : 0;
-                        } else if (key === 'drugInventory') {
-                            drugInventory = r;
-                            this._drugInventoryCache = { data: r, timestamp: Date.now() };
-                        } else if (key === 'workstats') {
-                            workstats = r && r.workstats ? r.workstats : r;
-                        } else if (key === 'perks') {
-                            perkMultiplier = this.calculatePerkMultiplier(r);
-                            nervePerkMultiplier = this.calculateNervePerkMultiplier(r);
-                            boosterMaxHours = this.calculateMaxBoosterCooldown(r);
-                        } else if (key === 'calendar') {
-                            caffeineConActive = this.isCaffeineConActive(r);
-                        } else if (key === 'company') {
-                            companyProfile = r && r.profile ? r.profile : r;
-                        }
-                    });
-                } catch (e) {
-                    console.warn('📖 Book Planner: fetch failed', e);
+                    const r = result.value;
+                    if (r && r.error) return;
+                    const key = calls[i].key;
+                    if (key === 'stats') {
+                        data.userStat = r;
+                        data.statContainer = data.userStat && data.userStat.battlestats ? data.userStat.battlestats : data.userStat;
+                    } else if (key === 'capStats') {
+                        data.battlestats = r && r.battlestats ? r.battlestats : r;
+                    } else if (key === 'inventory') {
+                        data.inventory = r;
+                        this._inventoryCache = { data: r, timestamp: Date.now() };
+                    } else if (key === 'cooldowns') {
+                        const cd = r.cooldowns || r;
+                        const boosterSeconds = Number(cd.booster);
+                        data.boosterCooldown = Number.isFinite(boosterSeconds) ? Math.max(0, boosterSeconds) : 0;
+                        const drugSeconds = Number(cd.drug);
+                        data.drugCooldown = Number.isFinite(drugSeconds) ? Math.max(0, drugSeconds) : 0;
+                    } else if (key === 'drugInventory') {
+                        data.drugInventory = r;
+                        this._drugInventoryCache = { data: r, timestamp: Date.now() };
+                    } else if (key === 'workstats') {
+                        data.workstats = r && r.workstats ? r.workstats : r;
+                    } else if (key === 'perks') {
+                        data.perkMultiplier = this.calculatePerkMultiplier(r);
+                        data.nervePerkMultiplier = this.calculateNervePerkMultiplier(r);
+                        data.boosterMaxHours = this.calculateMaxBoosterCooldown(r);
+                    } else if (key === 'calendar') {
+                        data.caffeineConActive = this.isCaffeineConActive(r);
+                    } else if (key === 'company') {
+                        data.companyProfile = r && r.profile ? r.profile : r;
+                    }
+                });
+            } catch (e) {
+                console.warn('📖 Book Planner: fetch failed', e);
+            }
+
+            return data;
+        },
+
+        // Resolves the full item plan for a book into flat rows the Book Item
+        // Tracker window can render. Returns { book, items }.
+        async resolveBookPlan(bookKey) {
+            const book = BOOKS[bookKey] || null;
+            if (!book) return { book: null, tabs: [], activeTab: null, items: [] };
+
+            const data = await this.gatherBookData(book);
+            await this.loadSelections();
+            const selections = this._selections[bookKey] || {};
+            const items = [];
+
+            const push = (label, item, resolved) => {
+                items.push({
+                    label: label || null,
+                    name: resolved.name,
+                    have: resolved.have,
+                    haveInventory: resolved.haveInventory || 0,
+                    haveCase: resolved.haveCase || 0,
+                    need: resolved.need,
+                    note: resolved.note || '',
+                    calcType: resolved.calcType || null,
+                });
+            };
+
+            // Tab books (e.g. Self Control): only resolve the tab the user
+            // picked. Book-level helper items (Xanax) always apply.
+            const tabs = (book.tabs || []).map(t => ({ label: t.label }));
+            let activeTab = null;
+
+            if (tabs.length > 0) {
+                const saved = tabs.find(t => t.label === selections.tab);
+                activeTab = (saved || tabs[0]).label;
+                const tab = (book.tabs || []).find(t => t.label === activeTab) || book.tabs[0];
+
+                const tabItems = tab.helperItems || [];
+                const isEnergyTab = tabItems.some(i => i.calcType === 'booster_cans' && !this.isAlcohol(i.name));
+                const isNerveTab = tabItems.some(i => i.calcType === 'booster_cans' && this.isAlcohol(i.name));
+                const tabType = isEnergyTab ? 'energy' : (isNerveTab ? 'alcohol' : null);
+                let companyReduction = 0;
+                let companyNerveMultiplier = 1;
+                if (data.companyProfile && data.companyProfile.type && tabType) {
+                    const bonuses = this.getApplicableCompanyBonuses(data.companyProfile, tabType);
+                    companyReduction = this.calculateCompanyCooldownReduction(bonuses);
+                    companyNerveMultiplier = this.calculateCompanyItemBoost(bonuses);
+                }
+
+                // Mirror the modal's SELECT CAN / SELECT ALCOHOL choice.
+                let selected = null;
+                if (isEnergyTab) {
+                    const allCans = this.getAllCans(data.inventory);
+                    const savedCan = selections.can ? allCans.find(c => c.name === selections.can) : null;
+                    if (savedCan) {
+                        selected = savedCan;
+                    } else if (allCans.length > 0) {
+                        selected = allCans.reduce((a, b) => this.getCanEnergy(b.name, data.perkMultiplier, data.caffeineConActive) > this.getCanEnergy(a.name, data.perkMultiplier, data.caffeineConActive) ? b : a);
+                    }
+                } else if (isNerveTab) {
+                    const allAlcohols = this.getAllAlcohols(data.inventory);
+                    const savedAlc = selections.alcohol ? allAlcohols.find(c => c.name === selections.alcohol) : null;
+                    if (savedAlc) {
+                        selected = savedAlc;
+                    } else if (allAlcohols.length > 0) {
+                        selected = allAlcohols.reduce((a, b) => this.getAlcoholNerve(b.name, data.perkMultiplier * data.nervePerkMultiplier * companyNerveMultiplier) > this.getAlcoholNerve(a.name, data.perkMultiplier * data.nervePerkMultiplier * companyNerveMultiplier) ? b : a);
+                    }
+                }
+
+                for (const i of tabItems) {
+                    const resolved = this.resolveHelperItem(
+                        data.inventory, i, data.boosterCooldown, book.durationDays,
+                        data.perkMultiplier, data.nervePerkMultiplier, data.caffeineConActive,
+                        companyReduction, companyNerveMultiplier
+                    );
+                    if (selected && i.calcType === 'booster_cans') {
+                        resolved.name = selected.name;
+                        resolved.have = selected.count;
+                        resolved.haveInventory = selected.inventoryCount;
+                        resolved.haveCase = selected.caseCount;
+                    }
+                    push(tab.label, i, resolved);
                 }
             }
 
-            loading = false;
+            for (const i of (book.helperItems || [])) {
+                const itemInventory = book.needsDrugInventory ? (data.drugInventory || data.inventory) : data.inventory;
+                const resolved = this.resolveHelperItem(
+                    itemInventory, i, data.boosterCooldown, book.durationDays,
+                    data.perkMultiplier, data.nervePerkMultiplier, data.caffeineConActive,
+                    0, 1, data.drugCooldown,
+                    data.drugInventory
+                );
+                push(null, i, resolved);
+            }
+
+            return {
+                book: { key: bookKey, name: book.name, effect: book.effect, durationDays: book.durationDays },
+                tabs,
+                activeTab,
+                items,
+            };
+        },
+
+        async openModal(book) {
+            console.log('📖 Book Planner: openModal called for', book?.name);
+            this.removeModal();
+
+            const bookKey = Object.keys(BOOKS).find(k => BOOKS[k] === book) || null;
+            await this.loadSelections();
+            const hasStatRequirement = book.statKey && book.threshold;
+            const hasTabs = book.tabs && book.tabs.length > 0;
+
+            // All remote data now comes from the shared gatherBookData pipeline
+            // (also used by the Book Item Tracker window).
+            const bookData = await this.gatherBookData(book);
+            const userStat = bookData.userStat;
+            const boosterCooldown = bookData.boosterCooldown;
+            const drugCooldown = bookData.drugCooldown;
+            const workstats = bookData.workstats;
+            const battlestats = bookData.battlestats;
+            const boosterMaxHours = bookData.boosterMaxHours;
+            const inventory = bookData.inventory;
+            const drugInventory = bookData.drugInventory;
+            const statContainer = bookData.statContainer;
+            const companyProfile = bookData.companyProfile;
+            const perkMultiplier = bookData.perkMultiplier;
+            const nervePerkMultiplier = bookData.nervePerkMultiplier;
+            const caffeineConActive = bookData.caffeineConActive;
+
+            
 
             const statDetail = hasStatRequirement ? statContainer?.[book.statKey] : null;
             const statValue = statDetail && statDetail.value !== undefined ? statDetail.value : null;
@@ -1535,8 +1777,8 @@ const STORAGE_KEY = 'book-planner';
             const tabsContent = book.tabs || [];
             const activeTab = tabsContent[0];
 
-            let selectedCanName = null;
-            let selectedAlcoholName = null;
+            let selectedCanName = (bookKey && this._selections[bookKey]?.can) || null;
+            let selectedAlcoholName = (bookKey && this._selections[bookKey]?.alcohol) || null;
 
             const modal = document.createElement('div');
             modal.id = MODAL_ID;
@@ -1667,7 +1909,7 @@ const STORAGE_KEY = 'book-planner';
                                 const selHave = selectedAlc ? selectedAlc.count : i.have;
                                 const selNeed = i.need !== null ? i.need : null;
                                 const shortfall = selNeed !== null ? Math.max(0, selNeed - selHave) : 0;
-                                return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
+                                return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have${selectedAlc ? this.breakdownText(selectedAlc.inventoryCount, selectedAlc.caseCount) : this.breakdownText(i.haveInventory, i.haveCase)}</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
                             }
                             if (i.calcType === 'booster_cans') {
                                 const selectedCan = allCans.find(c => c.name === selectedCanNameFinal);
@@ -1675,7 +1917,7 @@ const STORAGE_KEY = 'book-planner';
                                 const selHave = selectedCan ? selectedCan.count : i.have;
                                 const selNeed = i.need !== null ? i.need : null;
                                 const shortfall = selNeed !== null ? Math.max(0, selNeed - selHave) : 0;
-                                return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
+                                return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have${selectedCan ? this.breakdownText(selectedCan.inventoryCount, selectedCan.caseCount) : this.breakdownText(i.haveInventory, i.haveCase)}</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
                             }
                             const energyText = i.energyPerCan !== null ? ` · ${i.energyPerCan} energy/can` : '';
                             const nerveText = i.energyPerCan !== null ? ` · ${i.energyPerCan} nerve/bottle` : '';
@@ -1825,10 +2067,10 @@ const STORAGE_KEY = 'book-planner';
                         <div class="skbp-section-title">ITEMS NEEDED</div>
                         <div class="skbp-item-table">
                         ${(book.helperItems || []).map(i => {
-                            const itemInventory = book.needsDrugInventory ? drugInventory : inventory;
-                            const resolved = this.resolveHelperItem(itemInventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, 0, 1, drugCooldown, book.needsBoosterCooldown && !book.needsDrugInventory ? drugInventory : null);
+                            const itemInventory = book.needsDrugInventory ? (drugInventory || inventory) : inventory;
+                            const resolved = this.resolveHelperItem(itemInventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, 0, 1, drugCooldown, drugInventory);
                             const energyText = resolved.energyPerCan !== null ? ` · ~${resolved.energyPerCan} energy/can` : '';
-                            return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(resolved.name)}</span><span class="skbp-item-count">×${resolved.have.toLocaleString()} have</span><span class="skbp-item-needed">${resolved.need !== null ? (resolved.have < resolved.need ? '⚠️ ' : '') + '×' + resolved.need.toLocaleString() + ' need' : '–'}</span><span class="skbp-item-note">${this.escapeHtml(resolved.note + energyText)}</span></div>`;
+                            return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(resolved.name)}</span><span class="skbp-item-count">×${resolved.have.toLocaleString()} have${this.breakdownText(resolved.haveInventory, resolved.haveCase)}</span><span class="skbp-item-needed">${resolved.need !== null ? (resolved.have < resolved.need ? '⚠️ ' : '') + '×' + resolved.need.toLocaleString() + ' need' : '–'}</span><span class="skbp-item-note">${this.escapeHtml(resolved.note + energyText)}</span></div>`;
                         }).join('')}
                         </div>
                     </div>` : ''}
@@ -1860,6 +2102,7 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
                     </div>` : ''}
                 </div>
                 <div class="skbp-footer">
+                    <button class="skbp-btn skbp-btn-ghost" id="skbp-tracker">Item Tracker</button>
                     <button class="skbp-btn skbp-btn-ghost" id="skbp-cancel">Close</button>
                 </div>
             </div>
@@ -1870,11 +2113,20 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             const close = () => this.removeModal();
             modal.querySelector('#skbp-close')?.addEventListener('click', close);
             modal.querySelector('#skbp-cancel')?.addEventListener('click', close);
+            modal.querySelector('#skbp-tracker')?.addEventListener('click', () => {
+                if (!window.SidekickModules?.BookItemTracker) {
+                    console.warn('📖 Book Planner: Book Item Tracker module not loaded');
+                    return;
+                }
+                this.removeModal();
+                window.SidekickModules.BookItemTracker.open(bookKey);
+            });
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 
             modal.querySelectorAll('.skbp-tab-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const idx = parseInt(e.currentTarget.dataset.tab, 10);
+                    this.saveSelection(bookKey, 'tab', tabsContent[idx]?.label);
                     modal.querySelectorAll('.skbp-tab-btn').forEach(b => b.classList.remove('skbp-tab-active'));
                     modal.querySelectorAll('.skbp-tab-panel').forEach(p => p.style.display = 'none');
                     e.currentTarget.classList.add('skbp-tab-active');
@@ -1889,6 +2141,7 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
                         const panel = row.closest('.skbp-tab-panel');
                         const idx = parseInt(panel.id.replace('skbp-tab-', ''), 10);
                         selectedCanName = row.dataset.canName;
+                        this.saveSelection(bookKey, 'can', selectedCanName);
                         const t = tabsContent[idx];
                         panel.innerHTML = renderTabPanel(t, idx);
                         setupCanListeners();
@@ -1904,6 +2157,7 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
                         const panel = row.closest('.skbp-tab-panel');
                         const idx = parseInt(panel.id.replace('skbp-tab-', ''), 10);
                         selectedAlcoholName = row.dataset.alcoholName;
+                        this.saveSelection(bookKey, 'alcohol', selectedAlcoholName);
                         const t = tabsContent[idx];
                         panel.innerHTML = renderTabPanel(t, idx);
                         setupAlcoholListeners();
@@ -1929,6 +2183,12 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
                 .sk-book-planner-btn:hover{background:#2e2e2e;}
             `;
             document.head.appendChild(style);
+        },
+
+        // " (40 inv + 10 case)" once the display case contributes to a count.
+        breakdownText(inventoryCount, caseCount) {
+            if (!caseCount || caseCount <= 0) return '';
+            return ` (${(inventoryCount || 0).toLocaleString()} inv + ${caseCount.toLocaleString()} case)`;
         },
 
         escapeHtml(value) {
@@ -1984,31 +2244,46 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             return Math.ceil(cansPerDay * durationDays);
         },
 
-        getInventoryItemCount(inventory, itemName) {
+        // Counts an item, split by source so callers can show the
+        // "×A inventory + ×B display case" breakdown.
+        collectItemCounts(inventory, itemName) {
             const target = String(itemName || '').toLowerCase();
-            if (!target) return 0;
+            if (!target) return { inventory: 0, displayCase: 0, total: 0 };
 
-            let exactCount = 0;
-            let partialCount = 0;
+            let exact = 0, partial = 0;
+            let caseExact = 0, casePartial = 0;
 
             for (const item of this.getInventoryItems(inventory)) {
                 const name = String(item.name || '').toLowerCase();
                 const amount = Number(item.amount ?? item.count ?? item.quantity ?? 0);
                 if (!Number.isFinite(amount)) continue;
+                const isCase = item.skDisplayCase === true;
                 if (name === target) {
-                    exactCount += amount;
+                    if (isCase) caseExact += amount; else exact += amount;
                 } else if (name.includes(target)) {
-                    partialCount += amount;
+                    if (isCase) casePartial += amount; else partial += amount;
                 }
             }
 
-            return exactCount || partialCount;
+            const inventoryCount = exact || partial;
+            const caseCount = caseExact || casePartial;
+            return { inventory: inventoryCount, displayCase: caseCount, total: inventoryCount + caseCount };
+        },
+
+        getInventoryItemCount(inventory, itemName) {
+            return this.collectItemCounts(inventory, itemName).total;
         },
 
         resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1, drugCooldown = 0, drugInventory = null) {
-            let have = this.getInventoryItemCount(inventory, item.name);
+            let counts = this.collectItemCounts(inventory, item.name);
+            let have = counts.total;
+            let haveInventory = counts.inventory;
+            let haveCase = counts.displayCase;
             if (drugInventory && item.calcType !== 'booster_cans' && inventory !== drugInventory) {
-                have += this.getInventoryItemCount(drugInventory, item.name);
+                const drugCounts = this.collectItemCounts(drugInventory, item.name);
+                have += drugCounts.total;
+                haveInventory += drugCounts.inventory;
+                haveCase += drugCounts.displayCase;
             }
             let need = item.count !== null ? item.count : null;
             let note = '';
@@ -2032,7 +2307,7 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
                 need = Math.ceil(minPerDay * durationDays);
                 note = ` (est. ${Math.ceil(minPerDay * durationDays)}–${Math.ceil(maxPerDay * durationDays)} needed, 3–4 per day)`;
             }
-            return { name: item.name, have, need, note, calcType: item.calcType, energyPerCan };
+            return { name: item.name, have, haveInventory, haveCase, need, note, calcType: item.calcType, energyPerCan };
         },
 
         isEnergyDrink(name) {
@@ -2065,17 +2340,26 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
 
         getAllCans(inventory) {
             const ownedCounts = {};
+            const inventoryCounts = {};
+            const caseCounts = {};
             for (const item of this.getInventoryItems(inventory)) {
                 const name = String(item.name || '').toLowerCase();
                 const count = Number(item.amount ?? item.count ?? item.quantity ?? 0);
                 if (Number.isFinite(count) && this.isEnergyDrink(name)) {
                     ownedCounts[name] = (ownedCounts[name] || 0) + count;
+                    if (item.skDisplayCase === true) {
+                        caseCounts[name] = (caseCounts[name] || 0) + count;
+                    } else {
+                        inventoryCounts[name] = (inventoryCounts[name] || 0) + count;
+                    }
                 }
             }
 
             const allCans = Object.values(ENERGY_DRINKS_BY_ID).map(d => ({
                 name: d.name,
                 count: ownedCounts[d.name.toLowerCase()] || 0,
+                inventoryCount: inventoryCounts[d.name.toLowerCase()] || 0,
+                caseCount: caseCounts[d.name.toLowerCase()] || 0,
             }));
             return allCans.sort((a, b) => b.count - a.count);
         },
@@ -2118,17 +2402,26 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
 
         getAllAlcohols(inventory) {
             const ownedCounts = {};
+            const inventoryCounts = {};
+            const caseCounts = {};
             for (const item of this.getInventoryItems(inventory)) {
                 const name = String(item.name || '').toLowerCase();
                 const count = Number(item.amount ?? item.count ?? item.quantity ?? 0);
                 if (Number.isFinite(count) && this.isAlcohol(name)) {
                     ownedCounts[name] = (ownedCounts[name] || 0) + count;
+                    if (item.skDisplayCase === true) {
+                        caseCounts[name] = (caseCounts[name] || 0) + count;
+                    } else {
+                        inventoryCounts[name] = (inventoryCounts[name] || 0) + count;
+                    }
                 }
             }
 
             const allAlcohols = Object.values(ALCOHOLS_BY_ID).map(d => ({
                 name: d.name,
                 count: ownedCounts[d.name.toLowerCase()] || 0,
+                inventoryCount: inventoryCounts[d.name.toLowerCase()] || 0,
+                caseCount: caseCounts[d.name.toLowerCase()] || 0,
             }));
             return allAlcohols.sort((a, b) => b.count - a.count);
         },
