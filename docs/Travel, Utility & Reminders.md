@@ -44,11 +44,11 @@ Adds a confirmation checkbox before you use an energy or nerve refill, showing y
 
 ---
 
-🏎️ **Racing Alert**
+🏎️ **Racing Notifier**
 
-Where to find it: Settings → Reminders → Racing Alert (toggleable from the toolbar popup) · Off by default · Runs on all Torn pages (status area)
+Where to find it: Settings → Reminders → Racing Notifier (toggleable from the toolbar popup) · Off by default · Runs on all Torn pages (status area + racing page)
 
-If you're in a racing series and overdue for a race, a red racing icon appears (and pulses) in your sidebar status area, linking straight to the raceway — you don't lose your seriesNEXT / streak because you forgot a race.
+While you're not in a race, the racing icon in your sidebar status area flashes — you don't lose your seriesNEXT / streak because you forgot a race. On the racing page it also adds a Track button to each race: tracked races raise an alert before they start, and warn you when two tracked races overlap.
 
 ---
 

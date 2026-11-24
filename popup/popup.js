@@ -61,7 +61,7 @@
         { id: 'chat-alert', name: 'Chat Alert', category: 'Utility', storageKey: 'chat-alert', enabledKey: 'enabled', defaultEnabled: false },
 
         { id: 'travel-blocker', name: 'Travel Blocker', category: 'Reminders', storageKey: 'sidekick_travel_blocker', defaultEnabled: true },
-        { id: 'racing-alert', name: 'Racing Alert', category: 'Reminders', storageKey: 'sidekick_racing_alert', defaultEnabled: false },
+        { id: 'racing-notifier', name: 'Racing Notifier', category: 'Reminders', storageKey: 'sidekick_settings', subKey: 'racing-notifier', defaultEnabled: false },
         { id: 'rehab-warning', name: 'Rehab Warning', category: 'Reminders', storageKey: 'sidekick_rehab_warning', defaultEnabled: false },
         { id: 'blood-bag-reminder', name: 'Blood Bag Reminder', category: 'Reminders', storageKey: 'sidekick_settings', subKey: 'blood-bag-reminder', defaultEnabled: false },
         { id: 'browser-notifications', name: 'Browser Desktop Notifications', category: 'Reminders', storageKey: 'sidekick_notification_prefs', enabledKey: 'windowsNotifications', defaultEnabled: false },

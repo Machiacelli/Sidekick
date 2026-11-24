@@ -528,18 +528,16 @@
             </div>
           </div>
 
-          <div class="sk-row"><div class="sk-row-info"><div class="sk-row-title">Racing Alert</div><div class="sk-row-desc">Flashes the race icon when you are not currently in a race</div></div><label class="sk-tog"><input type="checkbox" id="skp-tog-racing-alert"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
-
           <div class="sk-row" style="align-items:flex-start;gap:12px;margin-top:4px;">
             <div class="sk-row-info">
               <div class="sk-row-title">Racing Notifier</div>
-              <div class="sk-row-desc">Track races and get alerts before they start</div>
+              <div class="sk-row-desc">Flashes the race icon when you are not currently in a race</div>
               <div style="margin-top:5px;"><button class="sk-shelf-toggle" data-shelf="skp-shelf-racing-notifier" style="background:none;border:none;padding:0;color:#5fcc6a;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Settings &#x25BE;</button></div>
             </div>
             <label class="sk-tog" style="flex-shrink:0;margin-top:2px;"><input type="checkbox" id="skp-tog-racing-notifier"><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label>
           </div>
           <div class="sk-shelf" id="skp-shelf-racing-notifier" style="display:none; margin-bottom:10px;">
-            <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Race Tracker</div><div class="sk-row-desc">Enable race tracking</div></div><label class="sk-tog"><input type="checkbox" id="skp-rn-desktop-notif" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
+            <div class="sk-row" style="margin-top:8px;"><div class="sk-row-info"><div class="sk-row-title">Race Tracker</div><div class="sk-row-desc">Track races and get alerts before they start</div></div><label class="sk-tog"><input type="checkbox" id="skp-rn-desktop-notif" checked><div class="sk-tog-track"></div><div class="sk-tog-thumb"></div></label></div>
             <label class="sk-field-label" style="margin-top:10px;">Alert Before Race Start</label>
             <select class="sk-select" id="skp-rn-alert-minutes">
               <option value="5">5 minutes</option>
@@ -2218,7 +2216,7 @@
                 ['#skp-tog-travel-blocker', 'sidekick_travel_blocker', null, true],
                 ['#skp-travelblocker-oc-watcher', 'sidekick_travel_blocker', 'oc_watcher', true],
                 ['#skp-travelblocker-drug-cooldown', 'sidekick_travel_blocker', 'drug_cooldown', true],
-                ['#skp-travelblocker-war-watch', 'sidekick_travel_blocker', 'war_watch', true],                ['#skp-tog-racing-alert', 'sidekick_racing_alert', null, false],
+                ['#skp-travelblocker-war-watch', 'sidekick_travel_blocker', 'war_watch', true],
                 ['#skp-tog-racing-notifier', 'sidekick_settings', 'racing-notifier', false],
                 ['#skp-tog-rehab-warning', 'sidekick_rehab_warning', null, false],
                 ['#skp-tog-blood-bag', 'sidekick_settings', 'blood-bag-reminder', false],

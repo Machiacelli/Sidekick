@@ -295,15 +295,6 @@
                 console.warn('⚠️ Weapon XP Tracker module not available');
             }
 
-            // Initialize Racing Alert Module
-            console.log('🏎️ Sidekick: Initializing Racing Alert...');
-            if (window.SidekickModules.RacingAlert?.initialize) {
-                await window.SidekickModules.RacingAlert.initialize();
-                console.log('✅ Sidekick: Racing Alert initialized');
-            } else {
-                console.warn('⚠️ Racing Alert module not available');
-            }
-
             // Initialize Racing Notifier Module
             console.log('🏁 Sidekick: Initializing Racing Notifier...');
             if (window.SidekickModules.RacingNotifier?.init) {
@@ -530,6 +521,14 @@
                 console.log("✅ Sidekick: Book Planner initialized");
             } else {
                 console.warn("⚠️ Book Planner module not available");
+            }
+
+            // Initialize Book Item Tracker Module
+            if (window.SidekickModules.BookItemTracker?.init) {
+                await window.SidekickModules.BookItemTracker.init();
+                console.log("📦 Sidekick: Book Item Tracker initialized");
+            } else {
+                console.warn("📦 Book Item Tracker module not available");
             }
 
             // Initialize Disposal Module
