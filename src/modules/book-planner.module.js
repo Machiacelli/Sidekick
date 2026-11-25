@@ -689,9 +689,7 @@ helperNote: 'No plan needed',
             cap: null,
             capLabel: null,
             reason: '',
-            helperItems: [
-                { name: 'Energy Drink', count: null, calcType: 'booster_cans' },
-            ],
+helperItems: [],
             helperNote: '',
             durationDays: 31,
             needsBoosterCooldown: true,
@@ -1711,19 +1709,22 @@ const STORAGE_KEY = 'book-planner';
                         resolved.haveInventory = selected.inventoryCount;
                         resolved.haveCase = selected.caseCount;
                     }
-                    push(tab.label, i, resolved);
+                    const isSingleTab = tabs.length <= 1;
+                    push(isSingleTab ? null : tab.label, i, resolved);
                 }
             }
 
-            for (const i of (book.helperItems || [])) {
-                const itemInventory = book.needsDrugInventory ? (data.drugInventory || data.inventory) : data.inventory;
-                const resolved = this.resolveHelperItem(
-                    itemInventory, i, data.boosterCooldown, book.durationDays,
-                    data.perkMultiplier, data.nervePerkMultiplier, data.caffeineConActive,
-                    0, 1, data.drugCooldown,
-                    data.drugInventory
-                );
-                push(null, i, resolved);
+            if (tabs.length === 0) {
+                for (const i of (book.helperItems || [])) {
+                    const itemInventory = book.needsDrugInventory ? (data.drugInventory || data.inventory) : data.inventory;
+                    const resolved = this.resolveHelperItem(
+                        itemInventory, i, data.boosterCooldown, book.durationDays,
+                        data.perkMultiplier, data.nervePerkMultiplier, data.caffeineConActive,
+                        0, 1, data.drugCooldown,
+                        data.drugInventory
+                    );
+                    push(null, i, resolved);
+                }
             }
 
             return {
