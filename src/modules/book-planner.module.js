@@ -617,6 +617,7 @@ helperNote: 'No plan needed',
                     ],
                 },
             ],
+            cooldownReduction: 0.5,
         },
         'hot turkey': {
             name: 'Hot Turkey',
@@ -1718,7 +1719,7 @@ const STORAGE_KEY = 'book-planner';
                     const resolved = this.resolveHelperItem(
                         data.inventory, i, data.boosterCooldown, book.durationDays,
                         data.perkMultiplier, data.nervePerkMultiplier, data.caffeineConActive,
-                        companyReduction, companyNerveMultiplier, 0, null, data.boosterMaxHours || 0
+                        companyReduction, companyNerveMultiplier, 0, null, data.boosterMaxHours || 0, book.cooldownReduction || 0
                     );
                     if (selected && i.calcType === 'booster_cans') {
                         if (selected.isGrouped && selected.members?.length > 0) {
@@ -1856,7 +1857,7 @@ const STORAGE_KEY = 'book-planner';
                 allPaths = this.getAllCompanyBonusPaths(tabType).sort((a, b) => b.percent - a.percent);
                 const hasPaths = allPaths.length > 0;
 
-                const resolvedHelpers = (t.helperItems || []).map(i => this.resolveHelperItem(inventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, companyReduction, companyNerveMultiplier, 0, null, boosterMaxHours || 0));
+                const resolvedHelpers = (t.helperItems || []).map(i => this.resolveHelperItem(inventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, companyReduction, companyNerveMultiplier, 0, null, boosterMaxHours || 0, book.cooldownReduction || 0));
                 const hasHelpers = resolvedHelpers.length > 0;
 
                 const now = Math.floor(Date.now() / 1000);
@@ -2293,9 +2294,9 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
         // Public API
         // ════════════════════════════════════════════════════════════════════════
 
-        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2, boosterMaxHours = 0) {
+        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2, boosterMaxHours = 0, bookReduction = 0) {
             if (!durationDays || durationDays <= 0) return 0;
-            const effectiveCooldownHours = baseCooldownHours * (1 - companyReduction);
+            const effectiveCooldownHours = baseCooldownHours * (1 - companyReduction) * (1 - bookReduction);
             const cansPerDay = boosterMaxHours > 0 ? boosterMaxHours / effectiveCooldownHours : 24 / effectiveCooldownHours;
             return Math.ceil(cansPerDay * durationDays);
         },
@@ -2330,7 +2331,7 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             return this.collectItemCounts(inventory, itemName).total;
         },
 
-        resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1, drugCooldown = 0, drugInventory = null, boosterMaxHours = 0) {
+        resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1, drugCooldown = 0, drugInventory = null, boosterMaxHours = 0, bookReduction = 0) {
             let counts = this.collectItemCounts(inventory, item.name);
             let have = counts.total;
             let haveInventory = counts.inventory;
@@ -2347,12 +2348,12 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             if (item.calcType === 'booster_cans') {
                 if (this.isAlcohol(item.name)) {
                     have = this.getTotalAlcoholCount(inventory);
-                    need = this.calculateBoosterCans(durationDays, 0, 1, boosterMaxHours);
+                    need = this.calculateBoosterCans(durationDays, 0, 1, boosterMaxHours, bookReduction);
                     note = ' (est. by booster cooldown)';
                     energyPerCan = this.getAlcoholNerve(item.name, perkMultiplier * nervePerkMultiplier * companyNerveMultiplier);
                 } else {
                     have = this.getTotalEnergyDrinkCount(inventory);
-                    need = this.calculateBoosterCans(durationDays, companyReduction, 2, boosterMaxHours);
+                    need = this.calculateBoosterCans(durationDays, companyReduction, 2, boosterMaxHours, bookReduction);
                     note = ' (est. by booster cooldown)';
                     energyPerCan = this.getCanEnergy(item.name, perkMultiplier, caffeineConActive);
                 }
@@ -2489,9 +2490,9 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             return Math.round(baseNerve * perkMultiplier);
         },
 
-        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2, boosterMaxHours = 0) {
+        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2, boosterMaxHours = 0, bookReduction = 0) {
             if (!durationDays || durationDays <= 0) return 0;
-            const effectiveCooldownHours = baseCooldownHours * (1 - companyReduction);
+            const effectiveCooldownHours = baseCooldownHours * (1 - companyReduction) * (1 - bookReduction);
             const cansPerDay = boosterMaxHours > 0 ? boosterMaxHours / effectiveCooldownHours : 24 / effectiveCooldownHours;
             return Math.ceil(cansPerDay * durationDays);
         },
