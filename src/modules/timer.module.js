@@ -213,6 +213,9 @@
             this.timers.forEach(timer => {
                 console.log(`🔄 Rendering timer: ${timer.name} (ID: ${timer.id})`);
                 this.renderTimer(timer);
+                if (timer.awaitingRefresh === true && timer.isApiTimer) {
+                    this.updateTimerDisplay(timer.id);
+                }
             });
 
             console.log('✅ All timers rendered successfully');
@@ -658,6 +661,16 @@
             if (hasApiTimers) {
                 this.startApiMonitoring();
             }
+
+            // Recovery pass: check for timers awaiting refresh and schedule auto-rearm
+            if (this.apiKey) {
+                for (const timer of this.timers) {
+                    if (timer.awaitingRefresh === true && timer.isApiTimer && !timer.isRunning) {
+                        console.log(`🔄 Recovery: scheduling auto-rearm for awaiting timer "${timer.name}"`);
+                        this.scheduleAutoRearm(timer);
+                    }
+                }
+            }
         },
 
         // Synchronize timers with actual elapsed time (fix drift from navigation)
@@ -692,7 +705,17 @@
                         if (secsRemaining <= 0) {
                             timer.isRunning = false;
                             timer.remainingTime = 0;
+                            timer.awaitingRefresh = true;
                             console.log(`⏰ Timer ${timer.name} expired while away`);
+                            if (timer.isApiTimer) {
+                                const element = document.getElementById(`sidekick-timer-${timer.id}`);
+                                if (element) {
+                                    const contentArea = element.querySelector('.timer-content');
+                                    if (contentArea) {
+                                        this.renderRefreshPrompt(contentArea, timer);
+                                    }
+                                }
+                            }
                         }
                         hasChanges = true;
                     } else if (timer.lastUpdated) {
@@ -1049,6 +1072,7 @@
                         cooldownType: timer.cooldownType,
                         cooldowns: timer.cooldowns,
                         isVirusTimer: timer.isVirusTimer,
+                        awaitingRefresh: timer.awaitingRefresh === true,
                         endTime: timer.endTime,
                         showEndDate: timer.showEndDate !== undefined ? timer.showEndDate : false
                     })),
@@ -1114,6 +1138,8 @@
                     // If the timer was running, restart it
                     if (timer.isRunning && timer.remainingTime > 0) {
                         this.startTimer(timer.id);
+                    } else if (timer.awaitingRefresh === true && timer.isApiTimer) {
+                        this.updateTimerDisplay(timer.id);
                     }
                 } catch (error) {
                     console.error("❌ Failed to restore timer:", timer.name, error);
@@ -2237,6 +2263,7 @@
             if (!timer) return;
 
             timer.isRunning = true;
+            timer.awaitingRefresh = false;
             timer.modified = new Date().toISOString();
             timer.lastUpdated = new Date().toISOString();
             // Store absolute end time for drift-free synchronization
@@ -2283,10 +2310,7 @@
                                     'success'
                                 );
                             }
-                            // Auto-rearm: poll API so the timer restarts when user takes a drug
-                            if (timer.isApiTimer && this.apiKey) {
-                                this.scheduleAutoRearm(timer);
-                            }
+                            this.handleCooldownTimerFinished(timer);
                         }
                     } else {
                         // Single timer countdown
@@ -2303,6 +2327,9 @@
                                     'success'
                                 );
                             }
+                            if (timer.isApiTimer) {
+                                this.handleCooldownTimerFinished(timer);
+                            }
                         }
                     }
                 } else {
@@ -2316,7 +2343,144 @@
             this.saveTimers();
         },
 
-        // Pause timer
+        // Handle cooldown timer finished - show refresh prompt and schedule auto-rearm
+        handleCooldownTimerFinished(timer) {
+            if (!timer.isApiTimer) return;
+
+            timer.awaitingRefresh = true;
+            timer.isRunning = false;
+            this.intervals.delete(timer.id);
+            this.saveTimers();
+
+            console.log(`🔄 Cooldown finished for "${timer.name}", showing refresh prompt`);
+            this.updateTimerDisplay(timer.id);
+        },
+
+        // Apply cooldowns from API response to a timer
+        applyCooldownsToTimer(timer, newCooldowns) {
+            const cooldownTypes = ['drug', 'medical', 'booster'];
+            let hasChanges = false;
+
+            for (const type of cooldownTypes) {
+                const secs = newCooldowns[type];
+                if (secs && secs > 0 && (!timer.cooldowns || timer.cooldowns[type] !== secs)) {
+                    if (!timer.cooldowns) timer.cooldowns = {};
+                    timer.cooldowns[type] = secs;
+                    hasChanges = true;
+                    console.log(`  → ${type}: ${secs}s`);
+                }
+            }
+
+            if (hasChanges) {
+                timer.remainingTime = timer.cooldowns
+                    ? Math.max(...Object.values(timer.cooldowns))
+                    : timer.remainingTime;
+                timer.duration = timer.remainingTime;
+                timer.awaitingRefresh = false;
+            }
+
+            return hasChanges;
+        },
+
+        // Render the faded refresh prompt in the timer content area
+        renderRefreshPrompt(contentArea, timer) {
+            const cooldownTypes = ['drug', 'medical', 'booster'];
+            const cooldownNames = { drug: 'Drug', medical: 'Medical', booster: 'Booster' };
+
+            let displayContent = '';
+            if (timer.cooldowns && Object.keys(timer.cooldowns).length > 1) {
+                const cooldownItems = Object.entries(timer.cooldowns)
+                    .map(([type, time]) => `<span class="sk-timer-label">${cooldownNames[type] || type}: ${this.formatTime(time)}</span>`)
+                    .join('<br>');
+                displayContent = `<div style="text-align: center; color: #888; font-size: 16px;">` +
+                    `<span class="sk-timer-label">✋ No active cooldowns</span><br><br>⏯️ Click to refresh<br><span style="font-size: 14px;">${cooldownItems}</span>` +
+                    `</div>`;
+            } else {
+                displayContent = `<div style="text-align: center; color: #888;">` +
+                    `<span style="font-size: 18px; font-weight: bold; display: block; margin-bottom: 8px; opacity: 0.8;">📡 Refresh</span>` +
+                    `<span style="font-size: 14px; opacity: 0.6;">Waiting for cooldown...</span>` +
+                    `</div>`;
+            }
+
+            contentArea.innerHTML = displayContent;
+
+            contentArea.style.cursor = 'pointer';
+            contentArea.title = 'Click to refresh cooldown data';
+            contentArea.style.opacity = '0.6';
+            contentArea.style.transition = 'opacity 0.2s';
+
+            contentArea.addEventListener('mouseenter', () => {
+                contentArea.style.opacity = '0.8';
+            });
+            contentArea.addEventListener('mouseleave', () => {
+                contentArea.style.opacity = '0.6';
+            });
+            contentArea.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('🔄 Refresh button clicked for timer:', timer.name);
+                this.refreshCooldownTimer(timer.id);
+            });
+        },
+
+        // Manual refresh of a cooldown timer
+        async refreshCooldownTimer(timerId) {
+            const timer = this.timers.find(t => t.id === timerId);
+            if (!timer) {
+                console.error('⏰ Timer not found for refresh:', timerId);
+                return;
+            }
+
+            if (timer._refreshing) {
+                console.log('⏳ Already refreshing, ignoring duplicate request');
+                return;
+            }
+
+            timer._refreshing = true;
+            console.log('🔄 Fetching cooldown data...');
+
+            try {
+                const apiKey = this.apiKey || await window.SidekickModules?.Core?.ChromeStorage?.get?.('sidekick_api_key');
+                if (!apiKey) {
+                    alert('API key not found. Please save your API key first.');
+                    timer._refreshing = false;
+                    return;
+                }
+
+                const res = await this.makeCooldownApiCallViaBackground(apiKey);
+
+                if (res.success && res.cooldowns) {
+                    const hasChanges = this.applyCooldownsToTimer(timer, res.cooldowns);
+                    if (hasChanges) {
+                        this.saveTimers();
+                        this.startTimer(timer.id);
+                        if (window.SidekickModules?.Core?.NotificationSystem) {
+                            window.SidekickModules.Core.NotificationSystem.show(
+                                'Cooldown Detected',
+                                `${timer.name} restarted automatically!`,
+                                'info'
+                            );
+                        }
+                    } else {
+                        console.log('ℹ️ No active cooldowns found');
+                        if (window.SidekickModules?.Core?.NotificationSystem) {
+                            window.SidekickModules.Core.NotificationSystem.show(
+                                'No Active Cooldown',
+                                'No active cooldowns detected',
+                                'info'
+                            );
+                        }
+                    }
+                } else {
+                    alert('Failed to fetch cooldown data. Please check your API key.');
+                }
+            } catch (err) {
+                console.error('❌ Refresh failed:', err);
+                alert('Refresh failed: ' + err.message);
+            } finally {
+                timer._refreshing = false;
+            }
+        },
+
         // Update timer display
         updateTimerDisplay(id) {
             const timer = this.timers.find(t => t.id === id);
@@ -2350,6 +2514,12 @@
             // Update display content based on timer type
             const contentArea = element.querySelector('.timer-content');
             if (contentArea) {
+                // If timer is awaiting refresh (cooldown finished), show refresh prompt
+                if (timer.awaitingRefresh === true && timer.isApiTimer) {
+                    this.renderRefreshPrompt(contentArea, timer);
+                    return;
+                }
+
                 // Check if rebuild is needed (prevents expansion bug)
                 const needsRebuild = this.checkIfRebuildNeeded(contentArea, timer);
 
@@ -3175,17 +3345,37 @@
         // Poll the API every 2 minutes after a drug timer expires;
         // when a new cooldown is detected the timer restarts automatically.
         scheduleAutoRearm(timer) {
-            if (!this.apiKey) return;
+            if (!this.apiKey) {
+                // Start 5-second poll to get the API key
+                timer._rearmTimer = setInterval(async () => {
+                    const apiKey = this.apiKey || await window.SidekickModules?.Core?.ChromeStorage?.get?.('sidekick_api_key');
+                    if (apiKey) {
+                        this.apiKey = apiKey;
+                        clearInterval(timer._rearmTimer);
+                        timer._rearmTimer = null;
+                        this.scheduleAutoRearm(timer);
+                    }
+                }, 5000);
+                return;
+            }
 
             // Store the cooldown types we're watching
             const watchTypes = timer.cooldowns ? Object.keys(timer.cooldowns) : ['drug'];
             console.log(`⏰ Auto-rearm scheduled for "${timer.name}" – watching: ${watchTypes.join(', ')}`);
 
+            let firstPoll = true;
+
             const pollInterval = setInterval(async () => {
-                if (!this.apiKey) { clearInterval(pollInterval); return; }
+                if (!this.apiKey) {
+                    clearInterval(pollInterval);
+                    return;
+                }
 
                 // If the timer is already running again, stop polling
-                if (timer.isRunning) { clearInterval(pollInterval); return; }
+                if (timer.isRunning) {
+                    clearInterval(pollInterval);
+                    return;
+                }
 
                 try {
                     let cooldowns = null;
@@ -3216,31 +3406,43 @@
 
                     if (Object.keys(newCooldowns).length > 0) {
                         clearInterval(pollInterval);
+                        timer._rearmTimer = null;
                         console.log(`⏰ Auto-rearm triggered for "${timer.name}":`, newCooldowns);
 
-                        // Rehydrate and restart the timer
-                        timer.cooldowns = newCooldowns;
-                        timer.remainingTime = Math.max(...Object.values(newCooldowns));
-                        timer.duration = timer.remainingTime;
-                        timer.isRunning = false; // startTimer will set this
-                        this.startTimer(timer.id);
-                        this.saveTimers();
+                        // Apply cooldowns using the shared method
+                        const hasChanges = this.applyCooldownsToTimer(timer, newCooldowns);
+                        if (hasChanges) {
+                            timer.isRunning = false;
+                            this.startTimer(timer.id);
+                            this.saveTimers();
 
-                        if (window.SidekickModules?.Core?.NotificationSystem) {
-                            window.SidekickModules.Core.NotificationSystem.show(
-                                'Cooldown Detected',
-                                `${timer.name} restarted automatically!`,
-                                'info'
-                            );
+                            if (window.SidekickModules?.Core?.NotificationSystem) {
+                                window.SidekickModules.Core.NotificationSystem.show(
+                                    'Cooldown Detected',
+                                    `${timer.name} restarted automatically!`,
+                                    'info'
+                                );
+                            }
                         }
+                    } else {
+                        // No cooldown found yet - wait longer between polls
+                        firstPoll = false;
                     }
                 } catch (err) {
                     console.warn('⚠️ Auto-rearm poll failed:', err);
                 }
-            }, 120_000); // poll every 2 minutes
+            }, firstPoll ? 5000 : 15000);
 
-            // Safety: cancel after 24 hours to avoid zombie intervals
-            setTimeout(() => clearInterval(pollInterval), 86_400_000);
+            timer._rearmTimer = pollInterval;
+
+            // Safety: cancel after 6 hours to avoid zombie intervals
+            setTimeout(() => {
+                if (timer._rearmTimer === pollInterval) {
+                    clearInterval(pollInterval);
+                    timer._rearmTimer = null;
+                }
+                console.log(`⏰ Auto-rearm safety timeout reached for "${timer.name}"`);
+            }, 21600000);
         },
 
         // Check API for new/updated cooldowns
