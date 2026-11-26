@@ -211,7 +211,7 @@
                 user-select: none;
             `;
             header.innerHTML = `
-                <span class="sk-bit-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Item Tracker — ${this.escapeHtml(bookName)}</span>
+                <span class="sk-bit-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Item Tracker</span>
                 <div style="display:flex; gap:6px; align-items:center;">
                     <button class="sk-bit-refresh" title="Refresh counts" style="background:none; border:none; color:#111; font-size:13px; cursor:pointer; padding:0 4px; font-weight:bold;">⟳</button>
                     <button class="sk-bit-close" title="Close" style="background:none; border:none; color:#111; font-size:18px; cursor:pointer; padding:0 5px; line-height:1;">×</button>
@@ -340,12 +340,17 @@
             if (items.length === 0) {
                 rowsHtml = `<div style="text-align:center; color:#888; padding:16px;">No items needed for this book.</div>`;
             } else {
+                const groupedItems = items.filter(i => i.isGroupedMember);
+                const combinedShortfall = groupedItems.length > 0
+                    ? Math.max(0, groupedItems[0].need - groupedItems.reduce((s, gi) => s + (gi.have || 0), 0))
+                    : null;
                 rowsHtml = items.map(i => {
-                    const shortfall = i.need !== null && i.need !== undefined ? Math.max(0, i.need - i.have) : null;
-                    const status = shortfall === null
+                    const isGroupedMember = i.isGroupedMember === true;
+                    const displayShortfall = isGroupedMember ? combinedShortfall : (i.need !== null && i.need !== undefined ? Math.max(0, i.need - i.have) : null);
+                    const status = displayShortfall === null
                         ? `<span style="color:#9ca3af;">–</span>`
-                        : (shortfall > 0
-                            ? `<span style="color:#fbbf24; font-weight:bold;">short ×${shortfall.toLocaleString()}</span>`
+                        : (displayShortfall > 0
+                            ? `<span style="color:#fbbf24; font-weight:bold;">short ×${displayShortfall.toLocaleString()}</span>`
                             : `<span style="color:#4ade80; font-weight:bold;">ready</span>`);
                     const breakdown = i.haveCase > 0
                         ? ` <span style="color:#9ca3af; font-weight:400;">(${i.haveInventory.toLocaleString()} inv + ${i.haveCase.toLocaleString()} case)</span>`

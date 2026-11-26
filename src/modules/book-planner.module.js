@@ -1652,6 +1652,7 @@ const STORAGE_KEY = 'book-planner';
                     need: resolved.need,
                     note: resolved.note || '',
                     calcType: resolved.calcType || null,
+                    isGroupedMember: resolved.isGroupedMember || false,
                 });
             };
 
@@ -1679,12 +1680,28 @@ const STORAGE_KEY = 'book-planner';
 
                 // Mirror the modal's SELECT CAN / SELECT ALCOHOL choice.
                 let selected = null;
+                let isGroupedSelection = false;
                 if (isEnergyTab) {
                     const allCans = this.getAllCans(data.inventory);
-                    const savedCan = selections.can ? allCans.find(c => c.name === selections.can) : null;
-                    if (savedCan) {
-                        selected = savedCan;
-                    } else if (allCans.length > 0) {
+                    const savedSelection = selections.can;
+                    if (savedSelection === 'Taurine Elite + XMASS') {
+                        isGroupedSelection = true;
+                        const taurine = allCans.find(c => c.name === 'Can of Taurine Elite');
+                        const xmass = allCans.find(c => c.name === 'Can of X-MASS');
+                        if (taurine && xmass) {
+                            selected = {
+                                name: 'Taurine Elite + XMASS',
+                                count: taurine.count + xmass.count,
+                                inventoryCount: taurine.inventoryCount + xmass.inventoryCount,
+                                caseCount: taurine.caseCount + xmass.caseCount,
+                                isGrouped: true,
+                                members: [taurine, xmass],
+                            };
+                        }
+                    } else if (savedSelection) {
+                        selected = allCans.find(c => c.name === savedSelection);
+                    }
+                    if (!selected && allCans.length > 0) {
                         selected = allCans.reduce((a, b) => this.getCanEnergy(b.name, data.perkMultiplier, data.caffeineConActive) > this.getCanEnergy(a.name, data.perkMultiplier, data.caffeineConActive) ? b : a);
                     }
                 } else if (isNerveTab) {
@@ -1701,16 +1718,28 @@ const STORAGE_KEY = 'book-planner';
                     const resolved = this.resolveHelperItem(
                         data.inventory, i, data.boosterCooldown, book.durationDays,
                         data.perkMultiplier, data.nervePerkMultiplier, data.caffeineConActive,
-                        companyReduction, companyNerveMultiplier
+                        companyReduction, companyNerveMultiplier, 0, null, data.boosterMaxHours || 0
                     );
                     if (selected && i.calcType === 'booster_cans') {
-                        resolved.name = selected.name;
-                        resolved.have = selected.count;
-                        resolved.haveInventory = selected.inventoryCount;
-                        resolved.haveCase = selected.caseCount;
+                        if (selected.isGrouped && selected.members?.length > 0) {
+                            selected.members.forEach(member => {
+                                const displayName = member.name.replace(/^Can of /, '');
+                                const memberResolved = { name: displayName, have: member.count, haveInventory: member.inventoryCount || 0, haveCase: member.caseCount || 0, need: resolved.need, note: i.note, calcType: i.calcType, isGroupedMember: true };
+                                const isSingleTab = tabs.length <= 1;
+                                push(isSingleTab ? null : tab.label, i, memberResolved);
+                            });
+                        } else {
+                            resolved.name = selected.name;
+                            resolved.have = selected.count;
+                            resolved.haveInventory = selected.inventoryCount;
+                            resolved.haveCase = selected.caseCount;
+                            const isSingleTab = tabs.length <= 1;
+                            push(isSingleTab ? null : tab.label, i, resolved);
+                        }
+                    } else {
+                        const isSingleTab = tabs.length <= 1;
+                        push(isSingleTab ? null : tab.label, i, resolved);
                     }
-                    const isSingleTab = tabs.length <= 1;
-                    push(isSingleTab ? null : tab.label, i, resolved);
                 }
             }
 
@@ -1827,7 +1856,7 @@ const STORAGE_KEY = 'book-planner';
                 allPaths = this.getAllCompanyBonusPaths(tabType).sort((a, b) => b.percent - a.percent);
                 const hasPaths = allPaths.length > 0;
 
-                const resolvedHelpers = (t.helperItems || []).map(i => this.resolveHelperItem(inventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, companyReduction, companyNerveMultiplier));
+                const resolvedHelpers = (t.helperItems || []).map(i => this.resolveHelperItem(inventory, i, boosterCooldown, book.durationDays, perkMultiplier, nervePerkMultiplier, caffeineConActive, companyReduction, companyNerveMultiplier, 0, null, boosterMaxHours || 0));
                 const hasHelpers = resolvedHelpers.length > 0;
 
                 const now = Math.floor(Date.now() / 1000);
@@ -1850,6 +1879,25 @@ const STORAGE_KEY = 'book-planner';
                         energy: this.getCanEnergy(c.name, perkMultiplier, caffeineConActive)
                     }));
                     cansWithEnergy.sort((a, b) => b.energy - a.energy);
+
+                    // Group Taurine Elite + XMASS (same 30 energy, interchangeable) at top
+                    const taurineIdx = cansWithEnergy.findIndex(c => c.name === 'Can of Taurine Elite');
+                    const xmassIdx = cansWithEnergy.findIndex(c => c.name === 'Can of X-MASS');
+                    if (taurineIdx !== -1 && xmassIdx !== -1) {
+                        const taurine = cansWithEnergy[taurineIdx];
+                        const xmass = cansWithEnergy[xmassIdx];
+                        const grouped = {
+                            name: 'Taurine Elite + XMASS',
+                            count: taurine.count + xmass.count,
+                            inventoryCount: taurine.inventoryCount + xmass.inventoryCount,
+                            caseCount: taurine.caseCount + xmass.caseCount,
+                            energy: taurine.energy,
+                            isGrouped: true,
+                            members: [taurine, xmass],
+                        };
+                        cansWithEnergy = cansWithEnergy.filter(c => c.name !== 'Can of Taurine Elite' && c.name !== 'Can of X-MASS');
+                        cansWithEnergy.unshift(grouped);
+                    }
 
                     defaultCan = allCans.length > 0 ? allCans.reduce((a, b) => this.getCanEnergy(b.name, perkMultiplier, caffeineConActive) > this.getCanEnergy(a.name, perkMultiplier, caffeineConActive) ? b : a) : null;
                     selectedCanNameFinal = selectedCanName || (defaultCan ? defaultCan.name : null);
@@ -1887,7 +1935,7 @@ const STORAGE_KEY = 'book-planner';
                         ${cansWithEnergy.map(c => {
                             const isSelected = selectedCanNameFinal === c.name;
                             const totalEnergy = c.energy !== null && boosterCansNeed !== null ? c.energy * boosterCansNeed : 0;
-                            return `<div class="skbp-item-row skbp-can-row${isSelected ? ' skbp-can-selected' : ''}" data-can-name="${this.escapeHtml(c.name)}"><input type="radio" class="skbp-can-radio" name="skbp-can-${idx}" ${isSelected ? 'checked' : ''} style="margin:0; cursor:pointer; width:16px; height:16px;"/><span class="skbp-item-name">${this.escapeHtml(c.name)}</span><span class="skbp-item-energy">${totalEnergy.toLocaleString()} energy</span><span class="skbp-item-count">×${c.count.toLocaleString()} have</span></div>`;
+                            return `<div class="skbp-item-row skbp-can-row${isSelected ? ' skbp-can-selected' : ''}" data-can-name="${this.escapeHtml(c.name)}"><input type="radio" class="skbp-can-radio" name="skbp-can-${idx}" ${isSelected ? 'checked' : ''} style="margin:0; cursor:pointer; width:16px; height:16px;"/><span class="skbp-item-name">${this.escapeHtml(c.name.replace(/^Can of /, ''))}</span><span class="skbp-item-energy">${totalEnergy.toLocaleString()} energy</span><span class="skbp-item-count">×${c.count.toLocaleString()} have</span></div>`;
                         }).join('')}
                         </div>
                     </div>` : ''}
@@ -1914,12 +1962,21 @@ const STORAGE_KEY = 'book-planner';
                                 return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have${selectedAlc ? this.breakdownText(selectedAlc.inventoryCount, selectedAlc.caseCount) : this.breakdownText(i.haveInventory, i.haveCase)}</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
                             }
                             if (i.calcType === 'booster_cans') {
+                                let selHave = 0;
                                 const selectedCan = allCans.find(c => c.name === selectedCanNameFinal);
-                                const selName = selectedCan ? selectedCan.name : i.name;
-                                const selHave = selectedCan ? selectedCan.count : i.have;
+                                if (selectedCanNameFinal === 'Taurine Elite + XMASS') {
+                                    const taurine = allCans.find(c => c.name === 'Can of Taurine Elite');
+                                    const xmass = allCans.find(c => c.name === 'Can of X-MASS');
+                                    selHave = (taurine ? taurine.count : 0) + (xmass ? xmass.count : 0);
+                                } else if (selectedCan) {
+                                    selHave = selectedCan.count;
+                                } else {
+                                    selHave = i.have;
+                                }
+                                const selName = selectedCanNameFinal === 'Taurine Elite + XMASS' ? 'Taurine Elite + XMASS' : (selectedCan ? selectedCan.name : i.name);
                                 const selNeed = i.need !== null ? i.need : null;
                                 const shortfall = selNeed !== null ? Math.max(0, selNeed - selHave) : 0;
-                                return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have${selectedCan ? this.breakdownText(selectedCan.inventoryCount, selectedCan.caseCount) : this.breakdownText(i.haveInventory, i.haveCase)}</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
+                                return `<div class="skbp-item-row"><span class="skbp-item-name">${this.escapeHtml(selName)}</span><span class="skbp-item-count">×${selHave.toLocaleString()} have</span><span class="skbp-item-needed">${selNeed !== null ? (shortfall > 0 ? '⚠️ ' : '') + '×' + selNeed.toLocaleString() + ' need' : '–'}${shortfall > 0 ? ' (short ×' + shortfall.toLocaleString() + ')' : ''}</span><span class="skbp-item-note">${this.escapeHtml(i.note)}</span></div>`;
                             }
                             const energyText = i.energyPerCan !== null ? ` · ${i.energyPerCan} energy/can` : '';
                             const nerveText = i.energyPerCan !== null ? ` · ${i.energyPerCan} nerve/bottle` : '';
@@ -2236,13 +2293,10 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
         // Public API
         // ════════════════════════════════════════════════════════════════════════
 
-        calculateBoosterCans(durationDays, companyReduction = 0) {
+        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2, boosterMaxHours = 0) {
             if (!durationDays || durationDays <= 0) return 0;
-            const baseCooldownHours = 2;
-            const bookReduction = 0.5;
-            const totalReduction = 1 - (1 - bookReduction) * (1 - companyReduction);
-            const effectiveCooldownHours = baseCooldownHours * (1 - totalReduction);
-            const cansPerDay = 24 / effectiveCooldownHours;
+            const effectiveCooldownHours = baseCooldownHours * (1 - companyReduction);
+            const cansPerDay = boosterMaxHours > 0 ? boosterMaxHours / effectiveCooldownHours : 24 / effectiveCooldownHours;
             return Math.ceil(cansPerDay * durationDays);
         },
 
@@ -2276,7 +2330,7 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             return this.collectItemCounts(inventory, itemName).total;
         },
 
-        resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1, drugCooldown = 0, drugInventory = null) {
+        resolveHelperItem(inventory, item, boosterCooldown, durationDays, perkMultiplier = 1, nervePerkMultiplier = 1, caffeineConActive = false, companyReduction = 0, companyNerveMultiplier = 1, drugCooldown = 0, drugInventory = null, boosterMaxHours = 0) {
             let counts = this.collectItemCounts(inventory, item.name);
             let have = counts.total;
             let haveInventory = counts.inventory;
@@ -2293,12 +2347,12 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             if (item.calcType === 'booster_cans') {
                 if (this.isAlcohol(item.name)) {
                     have = this.getTotalAlcoholCount(inventory);
-                    need = this.calculateBoosterCans(durationDays, 0, 1);
+                    need = this.calculateBoosterCans(durationDays, 0, 1, boosterMaxHours);
                     note = ' (est. by booster cooldown)';
                     energyPerCan = this.getAlcoholNerve(item.name, perkMultiplier * nervePerkMultiplier * companyNerveMultiplier);
                 } else {
                     have = this.getTotalEnergyDrinkCount(inventory);
-                    need = this.calculateBoosterCans(durationDays, companyReduction);
+                    need = this.calculateBoosterCans(durationDays, companyReduction, 2, boosterMaxHours);
                     note = ' (est. by booster cooldown)';
                     energyPerCan = this.getCanEnergy(item.name, perkMultiplier, caffeineConActive);
                 }
@@ -2435,12 +2489,10 @@ ${book.needsCompanyCheck ? `<div class="skbp-section">
             return Math.round(baseNerve * perkMultiplier);
         },
 
-        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2) {
+        calculateBoosterCans(durationDays, companyReduction = 0, baseCooldownHours = 2, boosterMaxHours = 0) {
             if (!durationDays || durationDays <= 0) return 0;
-            const bookReduction = 0.5;
-            const totalReduction = 1 - (1 - bookReduction) * (1 - companyReduction);
-            const effectiveCooldownHours = baseCooldownHours * (1 - totalReduction);
-            const cansPerDay = 24 / effectiveCooldownHours;
+            const effectiveCooldownHours = baseCooldownHours * (1 - companyReduction);
+            const cansPerDay = boosterMaxHours > 0 ? boosterMaxHours / effectiveCooldownHours : 24 / effectiveCooldownHours;
             return Math.ceil(cansPerDay * durationDays);
         },
 
